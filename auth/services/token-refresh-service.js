@@ -52,8 +52,50 @@ class TokenRefreshService {
 
             const tokenData = await response.json();
 
-            // Update the session with new tokens
+            // SECURITY: Verify the refreshed token belongs to the expected user
             const pool = await sql.connect(config.database);
+            
+            // Get the expected user for this session
+            const sessionResult = await pool.request()
+                .input('sessionToken', sql.NVarChar, sessionToken)
+                .query(`
+                    SELECT s.user_id, u.email as expected_email
+                    FROM Sessions s
+                    INNER JOIN Users u ON s.user_id = u.id
+                    WHERE s.session_token = @sessionToken
+                `);
+            
+            if (sessionResult.recordset.length === 0) {
+                console.error('❌ [TOKEN] Session not found for token refresh');
+                return null;
+            }
+            
+            const expectedEmail = sessionResult.recordset[0].expected_email;
+            
+            // Verify the new token belongs to the expected user
+            try {
+                const verifyResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+                    headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+                });
+                
+                if (verifyResponse.ok) {
+                    const userData = await verifyResponse.json();
+                    const actualEmail = userData.mail || userData.userPrincipalName;
+                    
+                    if (actualEmail.toLowerCase() !== expectedEmail.toLowerCase()) {
+                        console.error(`❌ [TOKEN] SECURITY BLOCK: Refreshed token belongs to ${actualEmail} but session expects ${expectedEmail}`);
+                        console.error('❌ [TOKEN] Token refresh rejected to prevent cross-user token contamination');
+                        return null;
+                    }
+                    
+                    console.log(`✅ [TOKEN] Verified: refreshed token belongs to ${actualEmail}`);
+                }
+            } catch (verifyError) {
+                console.warn('⚠️ [TOKEN] Could not verify token owner:', verifyError.message);
+                // Continue with caution - log but allow (token might be valid)
+            }
+            
+            // Update the session with new tokens (only after verification)
             await pool.request()
                 .input('sessionToken', sql.NVarChar, sessionToken)
                 .input('accessToken', sql.NVarChar, tokenData.access_token)
@@ -66,7 +108,7 @@ class TokenRefreshService {
                     WHERE session_token = @sessionToken
                 `);
 
-            console.log('✅ [TOKEN] Access token refreshed successfully');
+            console.log('✅ [TOKEN] Access token refreshed successfully for', expectedEmail);
 
             return {
                 accessToken: tokenData.access_token,

@@ -56,7 +56,28 @@ async function getValidAccessToken(req) {
         const isValid = await TokenRefreshService.isTokenValid(user.accessToken);
         console.log('🔑 [TOKEN] Current token valid:', isValid);
         if (isValid) {
-            return user.accessToken;
+            // SECURITY: Verify the token belongs to the expected user before returning
+            try {
+                const verifyResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+                    headers: { 'Authorization': `Bearer ${user.accessToken}` }
+                });
+                if (verifyResponse.ok) {
+                    const tokenOwner = await verifyResponse.json();
+                    const actualEmail = tokenOwner.mail || tokenOwner.userPrincipalName;
+                    if (actualEmail.toLowerCase() !== user.email.toLowerCase()) {
+                        console.error(`❌ [TOKEN] SECURITY BLOCK: Token belongs to ${actualEmail} but user is ${user.email}`);
+                        console.error(`❌ [TOKEN] Session is corrupted - forcing re-login`);
+                        // Don't return this token - it belongs to wrong user!
+                        // Fall through to try refresh (which will also fail safely)
+                    } else {
+                        return user.accessToken;
+                    }
+                }
+            } catch (verifyErr) {
+                console.warn('⚠️ [TOKEN] Could not verify token ownership:', verifyErr.message);
+                // Token is valid but can't verify owner - proceed with caution
+                return user.accessToken;
+            }
         }
     }
     
