@@ -3143,10 +3143,10 @@ app.post('/api/audits/notification-statuses', requireAuth, requireRole('Admin', 
         
         const notificationsResult = await pool.request()
             .query(`
-                SELECT document_number, notification_type, sent_at, sent_by_name
+                SELECT document_number, notification_type, sent_at, sent_by_name, sent_by_email
                 FROM Notifications
                 WHERE document_number IN (${docNumbersParam})
-                  AND notification_type IN ('ReportPublished', 'FullReportGenerated', 'ActionPlanSubmitted')
+                  AND notification_type IN ('ReportPublished', 'FullReportGenerated', 'AuditReport', 'ActionPlanSubmitted')
                   AND status = 'Sent'
                 ORDER BY document_number, sent_at DESC
             `);
@@ -3158,14 +3158,17 @@ app.post('/api/audits/notification-statuses', requireAuth, requireRole('Admin', 
                 docStatuses[row.document_number] = {};
             }
             
+            // Get sender name - fallback to email username if name is null
+            const senderName = row.sent_by_name || (row.sent_by_email ? row.sent_by_email.split('@')[0].replace('.', ' ') : null);
+            
             // Only keep the first (most recent) of each type
-            if ((row.notification_type === 'ReportPublished' || row.notification_type === 'FullReportGenerated') && !docStatuses[row.document_number].reportSentDate) {
+            if ((row.notification_type === 'ReportPublished' || row.notification_type === 'FullReportGenerated' || row.notification_type === 'AuditReport') && !docStatuses[row.document_number].reportSentDate) {
                 docStatuses[row.document_number].reportSentDate = row.sent_at;
-                docStatuses[row.document_number].reportSentBy = row.sent_by_name || 'Unknown';
+                docStatuses[row.document_number].reportSentBy = senderName;
             }
             if (row.notification_type === 'ActionPlanSubmitted' && !docStatuses[row.document_number].actionPlanSubmittedDate) {
                 docStatuses[row.document_number].actionPlanSubmittedDate = row.sent_at;
-                docStatuses[row.document_number].actionPlanSubmittedBy = row.sent_by_name || 'Unknown';
+                docStatuses[row.document_number].actionPlanSubmittedBy = senderName;
             }
         }
         
