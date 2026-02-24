@@ -2260,6 +2260,18 @@ app.get('/api/admin/escalation-job/logs', requireAuth, requireRole('Admin'), asy
     }
 });
 
+// Preview (dry run) - shows what would be sent without sending
+app.get('/api/admin/escalation-job/preview', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        console.log(`[EscalationJob] Preview requested by ${req.currentUser?.email}`);
+        const result = await escalationJobService.preview();
+        res.json(result);
+    } catch (error) {
+        console.error('[EscalationJob] Error running preview:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Trigger manual run
 app.post('/api/admin/escalation-job/run', requireAuth, requireRole('Admin'), async (req, res) => {
     try {

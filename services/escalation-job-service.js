@@ -304,8 +304,39 @@ class EscalationJobService {
             .query(`
                 SELECT u.id, u.email, u.display_name
                 FROM Users u
-                INNER JOIN AreaManagerAssignments ama ON u.id = ama.UserId
-                WHERE ama.StoreCode = @storeCode
+                INNER JOIN UserAreaAssignments uaa ON u.id = uaa.UserID
+                INNER JOIN Stores s ON uaa.StoreID = s.StoreID
+                WHERE s.StoreCode = @storeCode
+                AND u.is_active = 1
+            `);
+        return result.recordset.length > 0 ? result.recordset[0] : null;
+    }
+
+    /**
+     * Get all active SuperAuditors
+     */
+    async getSuperAuditors() {
+        const pool = await this.getDbPool();
+        const result = await pool.request().query(`
+            SELECT id, email, display_name
+            FROM Users
+            WHERE role = 'SuperAuditor' AND is_active = 1
+        `);
+        return result.recordset;
+    }
+
+    /**
+     * Get the auditor who created the audit (by email from CreatedBy field)
+     */
+    async getAuditCreator(documentNumber) {
+        const pool = await this.getDbPool();
+        const result = await pool.request()
+            .input('docNum', sql.NVarChar, documentNumber)
+            .query(`
+                SELECT u.id, u.email, u.display_name
+                FROM Users u
+                INNER JOIN AuditInstances ai ON u.email = ai.CreatedBy
+                WHERE ai.DocumentNumber = @docNum
                 AND u.is_active = 1
             `);
         return result.recordset.length > 0 ? result.recordset[0] : null;
@@ -326,8 +357,12 @@ class EscalationJobService {
     /**
      * Send email using Microsoft Graph API with delegated permissions
      * Uses the system sender's access token from their session
+     * @param {string} to - Recipient email
+     * @param {string} subject - Email subject
+     * @param {string} htmlBody - HTML email body
+     * @param {Array} ccRecipients - Optional array of CC email addresses
      */
-    async sendEmail(to, subject, htmlBody) {
+    async sendEmail(to, subject, htmlBody, ccRecipients = []) {
         try {
             const token = await this.getSystemSenderToken();
             
@@ -348,6 +383,14 @@ class EscalationJobService {
                 saveToSentItems: true
             };
 
+            // Add CC recipients if provided
+            if (ccRecipients && ccRecipients.length > 0) {
+                emailPayload.message.ccRecipients = ccRecipients.map(email => ({
+                    emailAddress: { address: email }
+                }));
+                console.log(`[EscalationJob] CC recipients: ${ccRecipients.join(', ')}`);
+            }
+
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -363,7 +406,7 @@ class EscalationJobService {
                 return { success: false, error: `${response.status}: ${errorText}` };
             }
 
-            console.log(`[EscalationJob] \u2705 Email sent to: ${to} (from ${this.systemSenderEmail})`);
+            console.log(`[EscalationJob] ✅ Email sent to: ${to}${ccRecipients.length ? ` (CC: ${ccRecipients.length})` : ''} (from ${this.systemSenderEmail})`);
             return { success: true };
             
         } catch (error) {
@@ -486,13 +529,26 @@ class EscalationJobService {
                     dashboardUrl: 'https://fsaudit.gmrlapps.com/dashboard'
                 };
 
-                // Send escalation to Area Manager
+                // Build CC list for escalation: SuperAuditors + Audit Creator
+                const escalationCcRecipients = [];
+                const superAuditors = await this.getSuperAuditors();
+                for (const sa of superAuditors) {
+                    if (sa.email) {
+                        escalationCcRecipients.push(sa.email);
+                    }
+                }
+                const auditCreator = await this.getAuditCreator(ap.DocumentNumber);
+                if (auditCreator && auditCreator.email && !escalationCcRecipients.includes(auditCreator.email)) {
+                    escalationCcRecipients.push(auditCreator.email);
+                }
+
+                // Send escalation to Area Manager with CC
                 if (areaManager && escalationTemplate) {
                     templateData.recipientName = areaManager.display_name || areaManager.email;
                     const subject = this.replacePlaceholders(escalationTemplate.subject_template, templateData);
                     const body = this.replacePlaceholders(escalationTemplate.html_body, templateData);
 
-                    const result = await this.sendEmail(areaManager.email, subject, body);
+                    const result = await this.sendEmail(areaManager.email, subject, body, escalationCcRecipients);
 
                     await this.logActivity(jobRunId, 'Escalation', {
                         documentNumber: ap.DocumentNumber,
@@ -500,6 +556,7 @@ class EscalationJobService {
                         recipientEmail: areaManager.email,
                         recipientRole: 'AreaManager',
                         emailTemplate: 'action_plan_escalation',
+                        ccRecipients: escalationCcRecipients.join(', '),
                         status: result.success ? 'Success' : 'Error',
                         errorMessage: result.error || null
                     });
@@ -507,13 +564,30 @@ class EscalationJobService {
                     if (result.success) sentCount++;
                 }
 
-                // Send overdue notice to Store Manager
+                // Send overdue notice to Store Manager with CC to SuperAuditors and Audit Creator
                 if (storeManager && overdueTemplate) {
                     templateData.recipientName = storeManager.display_name || storeManager.email;
                     const subject = this.replacePlaceholders(overdueTemplate.subject_template, templateData);
                     const body = this.replacePlaceholders(overdueTemplate.html_body, templateData);
 
-                    const result = await this.sendEmail(storeManager.email, subject, body);
+                    // Build CC list: SuperAuditors + Audit Creator
+                    const ccRecipients = [];
+                    
+                    // Add all SuperAuditors
+                    const superAuditors = await this.getSuperAuditors();
+                    for (const sa of superAuditors) {
+                        if (sa.email && !ccRecipients.includes(sa.email)) {
+                            ccRecipients.push(sa.email);
+                        }
+                    }
+                    
+                    // Add the auditor who created the audit
+                    const auditCreator = await this.getAuditCreator(ap.DocumentNumber);
+                    if (auditCreator && auditCreator.email && !ccRecipients.includes(auditCreator.email)) {
+                        ccRecipients.push(auditCreator.email);
+                    }
+
+                    const result = await this.sendEmail(storeManager.email, subject, body, ccRecipients);
 
                     await this.logActivity(jobRunId, 'OverdueNotice', {
                         documentNumber: ap.DocumentNumber,
@@ -522,7 +596,7 @@ class EscalationJobService {
                         recipientRole: 'StoreManager',
                         emailTemplate: 'action_plan_overdue',
                         status: result.success ? 'Success' : 'Error',
-                        errorMessage: result.error || null
+                        errorMessage: result.success ? `CC: ${ccRecipients.join(', ')}` : result.error
                     });
 
                     if (result.success) sentCount++;
@@ -539,6 +613,198 @@ class EscalationJobService {
         }
 
         return sentCount;
+    }
+
+    /**
+     * Preview what the job would do without sending any emails
+     * Returns a list of all actions that would be taken
+     */
+    async preview() {
+        console.log('[EscalationJob] Running preview (dry run)...');
+        const results = {
+            settings: null,
+            reminders: [],
+            escalations: [],
+            overdueNotices: [],
+            summary: {
+                totalReminders: 0,
+                totalEscalations: 0,
+                totalOverdueNotices: 0
+            }
+        };
+
+        try {
+            const settings = await this.getSettings();
+            results.settings = settings;
+
+            // Parse reminder days
+            const reminderDaysArray = (settings.ReminderDaysBefore || '3,1')
+                .split(',')
+                .map(d => parseInt(d.trim()))
+                .filter(d => !isNaN(d));
+
+            // Get email templates
+            const reminderTemplate = await this.getEmailTemplate('action_plan_reminder');
+            const escalationTemplate = await this.getEmailTemplate('action_plan_escalation');
+            const overdueTemplate = await this.getEmailTemplate('action_plan_overdue');
+
+            // Preview reminders
+            for (const reminderDays of reminderDaysArray) {
+                if (!settings.EmailNotificationsEnabled) continue;
+
+                const actionPlans = await this.getActionPlansNeedingReminders(reminderDays);
+                
+                for (const ap of actionPlans) {
+                    const storeManager = await this.getStoreManager(ap.StoreCode);
+                    
+                    // Build template data
+                    const templateData = {
+                        storeName: ap.StoreName,
+                        documentNumber: ap.DocumentNumber,
+                        auditDate: ap.AuditDate ? new Date(ap.AuditDate).toLocaleDateString('en-GB') : '',
+                        deadline: ap.Deadline ? new Date(ap.Deadline).toLocaleDateString('en-GB') : '',
+                        daysRemaining: reminderDays,
+                        recipientName: storeManager?.display_name || storeManager?.email || 'Store Manager',
+                        actionPlanUrl: `https://fsaudit.gmrlapps.com/auditor/action-plan?doc=${ap.DocumentNumber}`,
+                        dashboardUrl: 'https://fsaudit.gmrlapps.com/dashboard'
+                    };
+
+                    // Render email content
+                    let emailPreview = null;
+                    if (reminderTemplate && storeManager) {
+                        emailPreview = {
+                            subject: this.replacePlaceholders(reminderTemplate.subject_template, templateData),
+                            body: this.replacePlaceholders(reminderTemplate.html_body, templateData)
+                        };
+                    }
+
+                    results.reminders.push({
+                        daysRemaining: reminderDays,
+                        documentNumber: ap.DocumentNumber,
+                        storeName: ap.StoreName,
+                        storeCode: ap.StoreCode,
+                        deadline: ap.Deadline,
+                        recipient: storeManager ? {
+                            email: storeManager.email,
+                            name: storeManager.display_name,
+                            role: 'StoreManager'
+                        } : null,
+                        emailPreview: emailPreview,
+                        status: storeManager ? 'Would Send' : 'No Store Manager'
+                    });
+                    
+                    if (storeManager) results.summary.totalReminders++;
+                }
+            }
+
+            // Preview escalations
+            if (settings.AutoEscalationEnabled) {
+                const overdueAPs = await this.getOverdueActionPlans(settings.GracePeriodHours);
+                const superAuditors = await this.getSuperAuditors();
+
+                for (const ap of overdueAPs) {
+                    const storeManager = await this.getStoreManager(ap.StoreCode);
+                    const areaManager = await this.getAreaManager(ap.StoreCode);
+                    const auditCreator = await this.getAuditCreator(ap.DocumentNumber);
+
+                    // Build template data
+                    const templateData = {
+                        storeName: ap.StoreName,
+                        documentNumber: ap.DocumentNumber,
+                        auditDate: ap.AuditDate ? new Date(ap.AuditDate).toLocaleDateString('en-GB') : '',
+                        deadline: ap.Deadline ? new Date(ap.Deadline).toLocaleDateString('en-GB') : '',
+                        daysOverdue: ap.DaysOverdue,
+                        storeManagerName: storeManager?.display_name || 'N/A',
+                        storeManagerEmail: storeManager?.email || 'N/A',
+                        actionPlanUrl: `https://fsaudit.gmrlapps.com/auditor/action-plan?doc=${ap.DocumentNumber}`,
+                        dashboardUrl: 'https://fsaudit.gmrlapps.com/dashboard'
+                    };
+
+                    // Build CC list for escalation preview
+                    const escalationCcRecipients = [];
+                    for (const sa of superAuditors) {
+                        if (sa.email) escalationCcRecipients.push({ email: sa.email, name: sa.display_name, role: 'SuperAuditor' });
+                    }
+                    if (auditCreator && auditCreator.email) {
+                        escalationCcRecipients.push({ email: auditCreator.email, name: auditCreator.display_name, role: 'AuditCreator' });
+                    }
+
+                    // Render escalation email
+                    let escalationEmailPreview = null;
+                    if (escalationTemplate && areaManager) {
+                        const escData = { ...templateData, recipientName: areaManager.display_name || areaManager.email };
+                        escalationEmailPreview = {
+                            subject: this.replacePlaceholders(escalationTemplate.subject_template, escData),
+                            body: this.replacePlaceholders(escalationTemplate.html_body, escData)
+                        };
+                    }
+
+                    // Escalation to Area Manager
+                    results.escalations.push({
+                        documentNumber: ap.DocumentNumber,
+                        storeName: ap.StoreName,
+                        storeCode: ap.StoreCode,
+                        deadline: ap.Deadline,
+                        daysOverdue: ap.DaysOverdue,
+                        recipient: areaManager ? {
+                            email: areaManager.email,
+                            name: areaManager.display_name,
+                            role: 'AreaManager'
+                        } : null,
+                        ccRecipients: escalationCcRecipients,
+                        emailPreview: escalationEmailPreview,
+                        status: areaManager ? 'Would Send' : 'No Area Manager'
+                    });
+                    
+                    if (areaManager) results.summary.totalEscalations++;
+
+                    // Build CC list for overdue notice
+                    const ccRecipients = [];
+                    for (const sa of superAuditors) {
+                        if (sa.email) ccRecipients.push({ email: sa.email, name: sa.display_name, role: 'SuperAuditor' });
+                    }
+                    if (auditCreator && auditCreator.email) {
+                        ccRecipients.push({ email: auditCreator.email, name: auditCreator.display_name, role: 'AuditCreator' });
+                    }
+
+                    // Render overdue email
+                    let overdueEmailPreview = null;
+                    if (overdueTemplate && storeManager) {
+                        const odData = { ...templateData, recipientName: storeManager.display_name || storeManager.email };
+                        overdueEmailPreview = {
+                            subject: this.replacePlaceholders(overdueTemplate.subject_template, odData),
+                            body: this.replacePlaceholders(overdueTemplate.html_body, odData)
+                        };
+                    }
+
+                    // Overdue notice to Store Manager
+                    results.overdueNotices.push({
+                        documentNumber: ap.DocumentNumber,
+                        storeName: ap.StoreName,
+                        storeCode: ap.StoreCode,
+                        deadline: ap.Deadline,
+                        daysOverdue: ap.DaysOverdue,
+                        recipient: storeManager ? {
+                            email: storeManager.email,
+                            name: storeManager.display_name,
+                            role: 'StoreManager'
+                        } : null,
+                        ccRecipients: ccRecipients,
+                        emailPreview: overdueEmailPreview,
+                        status: storeManager ? 'Would Send' : 'No Store Manager'
+                    });
+                    
+                    if (storeManager) results.summary.totalOverdueNotices++;
+                }
+            }
+
+            console.log(`[EscalationJob] Preview complete: ${results.summary.totalReminders} reminders, ${results.summary.totalEscalations} escalations, ${results.summary.totalOverdueNotices} overdue notices`);
+            return { success: true, preview: results };
+
+        } catch (error) {
+            console.error('[EscalationJob] Preview error:', error);
+            return { success: false, error: error.message };
+        }
     }
 
     /**
