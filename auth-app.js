@@ -3109,7 +3109,7 @@ app.get('/api/audits/list', requireAuth, requireRole('Admin', 'SuperAuditor', 'A
 });
 
 // Get notification statuses for multiple audits
-app.post('/api/audits/notification-statuses', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/notification-statuses', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
     try {
         const { auditIds } = req.body;
         
@@ -3247,6 +3247,109 @@ app.post('/api/audits/action-plan-stats', requireAuth, async (req, res) => {
         res.json({ success: true, stats });
     } catch (error) {
         console.error('Error getting action plan stats:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// Report View Tracking APIs
+// ==========================================
+
+// Log when a user views a report
+app.post('/api/audits/:auditId/log-view', requireAuth, async (req, res) => {
+    try {
+        const auditId = parseInt(req.params.auditId);
+        const user = req.currentUser;
+        
+        if (!auditId || isNaN(auditId)) {
+            return res.status(400).json({ success: false, error: 'Valid audit ID required' });
+        }
+        
+        // Only log views for specific roles (AreaManager, HeadOfOperations, StoreManager)
+        const trackableRoles = ['AreaManager', 'HeadOfOperations', 'StoreManager'];
+        if (!trackableRoles.includes(user.role)) {
+            // Don't log but still return success (Admin/Auditor views not tracked)
+            return res.json({ success: true, logged: false, reason: 'Role not tracked' });
+        }
+        
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        // Check if this user already viewed this audit in the last 5 minutes (prevent duplicate logs)
+        const recentView = await pool.request()
+            .input('auditId', sql.Int, auditId)
+            .input('userId', sql.Int, user.id)
+            .query(`
+                SELECT TOP 1 ViewID FROM ReportViews 
+                WHERE AuditID = @auditId AND ViewedByUserID = @userId 
+                AND ViewedAt > DATEADD(MINUTE, -5, GETDATE())
+            `);
+        
+        if (recentView.recordset.length > 0) {
+            return res.json({ success: true, logged: false, reason: 'Recently logged' });
+        }
+        
+        // Log the view
+        await pool.request()
+            .input('auditId', sql.Int, auditId)
+            .input('userId', sql.Int, user.id)
+            .input('userName', sql.NVarChar, user.displayName || user.email)
+            .input('userRole', sql.NVarChar, user.role)
+            .query(`
+                INSERT INTO ReportViews (AuditID, ViewedByUserID, ViewedByName, ViewedByRole, ViewedAt)
+                VALUES (@auditId, @userId, @userName, @userRole, GETDATE())
+            `);
+        
+        console.log(`📊 Report view logged: Audit ${auditId} viewed by ${user.displayName} (${user.role})`);
+        res.json({ success: true, logged: true });
+    } catch (error) {
+        console.error('Error logging report view:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get report view history for multiple audits
+app.post('/api/audits/report-views', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
+    try {
+        const { auditIds } = req.body;
+        
+        if (!auditIds || !Array.isArray(auditIds) || auditIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'auditIds array is required' });
+        }
+        
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const auditIdsParam = auditIds.join(',');
+        
+        // Get all views for these audits, ordered by most recent first
+        const viewsResult = await pool.request()
+            .query(`
+                SELECT AuditID, ViewedByUserID, ViewedByName, ViewedByRole, ViewedAt
+                FROM ReportViews
+                WHERE AuditID IN (${auditIdsParam})
+                ORDER BY AuditID, ViewedAt DESC
+            `);
+        
+        // Group by audit ID
+        const views = {};
+        for (const row of viewsResult.recordset) {
+            if (!views[row.AuditID]) {
+                views[row.AuditID] = [];
+            }
+            views[row.AuditID].push({
+                userId: row.ViewedByUserID,
+                name: row.ViewedByName,
+                role: row.ViewedByRole,
+                viewedAt: row.ViewedAt
+            });
+        }
+        
+        res.json({ success: true, views });
+    } catch (error) {
+        console.error('Error getting report views:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
