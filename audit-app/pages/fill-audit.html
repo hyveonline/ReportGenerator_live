@@ -1764,6 +1764,24 @@
                 </div>
             </div>
 
+            <!-- Picture Category Selector -->
+            <div class="image-category-selector" id="categorySelector" style="display: none;">
+                <div class="image-type-label">📁 Picture Category:</div>
+                <select class="image-category-dropdown" id="imageCategoryDropdown" onchange="handleImageCategoryChange(this.value)">
+                    <option value="">-- Select Category --</option>
+                    <option value="Cheese and Deli Section">Cheese and Deli Section</option>
+                    <option value="Butchery Section">Butchery Section</option>
+                    <option value="Fishery Section">Fishery Section</option>
+                    <option value="Store">Store</option>
+                    <option value="Retail Section">Retail Section</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Restrooms">Restrooms</option>
+                    <option value="Staff Room">Staff Room</option>
+                    <option value="Others">Others</option>
+                </select>
+                <input type="text" class="image-category-custom" id="imageCategoryCustom" placeholder="Enter custom category..." style="display: none;">
+            </div>
+
             <!-- Actions -->
             <div class="image-modal-actions">
                 <button class="modal-btn cancel" onclick="closeImageModal()">Cancel</button>
@@ -2633,16 +2651,22 @@
         let currentImageResponseId = null;
         let selectedImageFile = null;
         let selectedImageType = null;
+        let selectedImageCategory = null;
 
         // Open image modal
         function takePicture(responseId, defaultType = null) {
             currentImageResponseId = responseId;
             selectedImageFile = null;
             selectedImageType = defaultType;
+            selectedImageCategory = null;
             
             // Reset modal state
             document.getElementById('previewContainer').style.display = 'none';
             document.getElementById('typeSelector').style.display = 'none';
+            document.getElementById('categorySelector').style.display = 'none';
+            document.getElementById('imageCategoryDropdown').value = '';
+            document.getElementById('imageCategoryCustom').value = '';
+            document.getElementById('imageCategoryCustom').style.display = 'none';
             document.getElementById('uploadBtn').disabled = true;
             document.querySelectorAll('.image-type-btn').forEach(btn => btn.classList.remove('selected'));
             document.getElementById('fileInput').value = '';
@@ -2688,6 +2712,7 @@
                 document.getElementById('imagePreview').src = e.target.result;
                 document.getElementById('previewContainer').style.display = 'block';
                 document.getElementById('typeSelector').style.display = 'block';
+                document.getElementById('categorySelector').style.display = 'block';
             };
             reader.readAsDataURL(file);
         }
@@ -2697,7 +2722,30 @@
             selectedImageType = type;
             document.querySelectorAll('.image-type-btn').forEach(btn => btn.classList.remove('selected'));
             event.target.classList.add('selected');
-            document.getElementById('uploadBtn').disabled = !selectedImageFile;
+            updateUploadButtonState();
+        }
+
+        // Handle image category change
+        function handleImageCategoryChange(value) {
+            const customInput = document.getElementById('imageCategoryCustom');
+            if (value === 'Others') {
+                customInput.style.display = 'block';
+                customInput.focus();
+                selectedImageCategory = customInput.value || null;
+            } else {
+                customInput.style.display = 'none';
+                customInput.value = '';
+                selectedImageCategory = value || null;
+            }
+            updateUploadButtonState();
+        }
+
+        // Update upload button state based on selections
+        function updateUploadButtonState() {
+            const hasFile = !!selectedImageFile;
+            const hasType = !!selectedImageType;
+            // Category is optional, so we don't require it
+            document.getElementById('uploadBtn').disabled = !(hasFile && hasType);
         }
 
         // Upload image
@@ -2712,6 +2760,11 @@
                 reader.onload = async function(e) {
                     const base64 = e.target.result.split(',')[1];
                     
+                    // Get category value (check custom input for Others)
+                    const categoryDropdown = document.getElementById('imageCategoryDropdown');
+                    const categoryCustom = document.getElementById('imageCategoryCustom');
+                    const category = categoryDropdown.value === 'Others' ? categoryCustom.value : categoryDropdown.value;
+                    
                     const response = await fetch(`/api/audits/pictures`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2721,6 +2774,7 @@
                             fileName: selectedImageFile.name,
                             contentType: selectedImageFile.type,
                             pictureType: selectedImageType,
+                            category: category || null,
                             fileData: base64
                         })
                     });
@@ -2755,11 +2809,16 @@
                     // Reset upload form
                     document.getElementById('previewContainer').style.display = 'none';
                     document.getElementById('typeSelector').style.display = 'none';
+                    document.getElementById('categorySelector').style.display = 'none';
+                    document.getElementById('imageCategoryDropdown').value = '';
+                    document.getElementById('imageCategoryCustom').value = '';
+                    document.getElementById('imageCategoryCustom').style.display = 'none';
                     document.getElementById('uploadBtn').disabled = true;
                     document.querySelectorAll('.image-type-btn').forEach(btn => btn.classList.remove('selected'));
                     document.getElementById('fileInput').value = '';
                     selectedImageFile = null;
                     selectedImageType = null;
+                    selectedImageCategory = null;
                     
                     // Re-render section to update picture button
                     renderSection(currentSectionIndex);
@@ -2787,6 +2846,7 @@
                             <img src="data:${pic.contentType};base64,${pic.fileData}" class="existing-image-thumb" alt="${pic.fileName}">
                             <div class="existing-image-info">
                                 <div class="existing-image-type type-${pic.pictureType.toLowerCase()}">${getTypeLabel(pic.pictureType)}</div>
+                                ${pic.category ? `<div class="existing-image-category">📁 ${pic.category}</div>` : ''}
                                 <div class="existing-image-name">${pic.fileName}</div>
                             </div>
                             <button class="delete-image-btn" onclick="deleteImage(${pic.pictureId})">🗑️</button>
