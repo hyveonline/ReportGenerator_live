@@ -2345,12 +2345,12 @@ console.log('[APP] Menu settings API loaded');
 // ==========================================
 
 // Serve org hierarchy page
-app.get('/admin/org-hierarchy', requireAuth, requireAutoRole('Admin'), (req, res) => {
+app.get('/admin/org-hierarchy', requireAuth, requirePagePermission('/admin/org-hierarchy', 'Admin'), (req, res) => {
     res.sendFile(path.join(__dirname, 'admin', 'pages', 'org-hierarchy.html'));
 });
 
 // Get organization hierarchy data
-app.get('/api/admin/org-hierarchy', requireAuth, requirePagePermission('orgTreeBtn', 'Admin'), async (req, res) => {
+app.get('/api/admin/org-hierarchy', requireAuth, requirePagePermission('/admin/org-hierarchy', 'Admin'), async (req, res) => {
     try {
         const sql = require('mssql');
         const brandFilter = req.query.brand;
