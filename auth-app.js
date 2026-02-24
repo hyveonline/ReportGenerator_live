@@ -2215,6 +2215,90 @@ app.get('/api/escalation-settings/log', requireAuth, requirePagePermission(ESCAL
 console.log('[APP] Escalation settings API loaded');
 
 // ==========================================
+// Escalation Job API (Admin Only)
+// ==========================================
+
+// Import escalation job service
+const escalationJobService = require('./services/escalation-job-service');
+
+// Serve job monitor page
+app.get('/admin/job-monitor', requireAuth, requirePagePermission('/admin/job-monitor', 'Admin'), (req, res) => {
+    res.sendFile(path.join(__dirname, 'pages', 'job-monitor.html'));
+});
+
+// Get job status
+app.get('/api/admin/escalation-job/status', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        const status = escalationJobService.getStatus();
+        res.json(status);
+    } catch (error) {
+        console.error('[EscalationJob] Error getting status:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get escalation settings for job monitor
+app.get('/api/admin/escalation-job/settings', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        const settings = await escalationJobService.getSettings();
+        res.json(settings);
+    } catch (error) {
+        console.error('[EscalationJob] Error getting settings:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get job logs
+app.get('/api/admin/escalation-job/logs', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const logs = await escalationJobService.getRecentLogs(limit);
+        res.json({ success: true, logs });
+    } catch (error) {
+        console.error('[EscalationJob] Error getting logs:', error);
+        res.status(500).json({ success: false, error: error.message, logs: [] });
+    }
+});
+
+// Trigger manual run
+app.post('/api/admin/escalation-job/run', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        console.log(`[EscalationJob] Manual run triggered by ${req.currentUser?.email}`);
+        const result = await escalationJobService.run(true);
+        res.json(result);
+    } catch (error) {
+        console.error('[EscalationJob] Error running job:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Start scheduler
+app.post('/api/admin/escalation-job/start', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        console.log(`[EscalationJob] Scheduler start requested by ${req.currentUser?.email}`);
+        escalationJobService.start();
+        res.json({ success: true, message: 'Scheduler started' });
+    } catch (error) {
+        console.error('[EscalationJob] Error starting scheduler:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Stop scheduler
+app.post('/api/admin/escalation-job/stop', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        console.log(`[EscalationJob] Scheduler stop requested by ${req.currentUser?.email}`);
+        escalationJobService.stop();
+        res.json({ success: true, message: 'Scheduler stopped' });
+    } catch (error) {
+        console.error('[EscalationJob] Error stopping scheduler:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+console.log('[APP] Escalation job API loaded');
+
+// ==========================================
 // Menu Settings API (Admin Only)
 // ==========================================
 

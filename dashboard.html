@@ -714,6 +714,28 @@
             background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%);
         }
 
+        .job-monitor-btn {
+            background: linear-gradient(135deg, #475569 0%, #334155 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(71, 85, 105, 0.3);
+        }
+
+        .job-monitor-btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(51, 65, 85, 0.4);
+            background: linear-gradient(135deg, #334155 0%, #475569 100%);
+        }
+
         .email-templates-btn {
             background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
             color: white;
@@ -2316,6 +2338,10 @@
                             <span>🏢</span>
                             Org Tree
                         </button>
+                        <button class="job-monitor-btn" id="jobMonitorBtn" onclick="window.location.href='/admin/job-monitor'" style="display: none;">
+                            <span>⚙️</span>
+                            Job Monitor
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2751,7 +2777,8 @@
                 { id: 'dbInspectorBtn', elementId: 'dbInspectorBtn' },
                 { id: 'menuSettingsBtn', elementId: 'menuSettingsBtn' },
                 { id: 'roleManagementBtn', elementId: 'roleManagementBtn' },
-                { id: 'orgTreeBtn', elementId: 'orgTreeBtn' }
+                { id: 'orgTreeBtn', elementId: 'orgTreeBtn' },
+                { id: 'jobMonitorBtn', elementId: 'jobMonitorBtn' }
             ];
 
             let usedDatabase = false;
