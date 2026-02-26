@@ -3881,6 +3881,23 @@ app.post('/api/audits/send-report-with-recipients', requireAuth, requireRole('Ad
             }));
         } catch (e) { /* use default */ }
         
+        // Get overall passing grade from SystemSettings
+        let passingGrade = 87; // default
+        try {
+            const pgResult = await pool.request()
+                .input('auditId', sql.Int, auditId)
+                .query(`
+                    SELECT ISNULL(ss.PassingGrade, 87) AS PassingGrade
+                    FROM AuditInstances ai
+                    LEFT JOIN SystemSettings ss ON ss.SchemaID = ai.SchemaID 
+                        AND ss.SettingType = 'Overall'
+                    WHERE ai.AuditID = @auditId
+                `);
+            if (pgResult.recordset.length > 0) {
+                passingGrade = pgResult.recordset[0].PassingGrade || 87;
+            }
+        } catch (e) { /* use default */ }
+        
         // Get valid access token for sending email
         const user = req.currentUser;
         const userEmail = user?.email;
@@ -3898,8 +3915,10 @@ app.post('/api/audits/send-report-with-recipients', requireAuth, requireRole('Ad
         // Build email content
         const reportUrl = `https://fsaudit.gmrlapps.com/api/audits/reports/Audit_Report_${documentNumber}.html`;
         const score = parseFloat(totalScore) || 0;
-        const scoreStatus = score >= 83 ? 'PASS ✅' : 'FAIL ❌';
-        const scoreColor = score >= 83 ? '#10b981' : '#ef4444';
+        const roundedScore = Math.round(score);
+        const isPassing = roundedScore >= passingGrade;
+        const scoreStatus = isPassing ? 'PASS ✅' : 'FAIL ❌';
+        const scoreColor = isPassing ? '#10b981' : '#ef4444';
         
         // Build section scores HTML chart (email-compatible using bgcolor and fixed heights)
         let sectionScoresHtml = '';
@@ -3996,6 +4015,12 @@ app.post('/api/audits/send-report-with-recipients', requireAuth, requireRole('Ad
             documentNumber: documentNumber,
             auditDate: auditDate,
             score: Math.round(score) + '%',
+            scoreColor: scoreColor,
+            statusText: isPassing ? 'PASS' : 'FAIL',
+            statusEmoji: isPassing ? '&#9989;' : '&#10060;',
+            statusColor: scoreColor,
+            statusBgColor: isPassing ? '#dcfce7' : '#fee2e2',
+            passingGrade: passingGrade + '%',
             sectionScores: sectionScoresHtml,
             customMessage: customMessageHtml,
             reportUrl: reportUrl,
@@ -6539,9 +6564,33 @@ app.post('/api/audits/save-report-for-store-manager', requireAuth, requireRole('
                     // Use dynamic email template from database
                     const emailTemplateService = require('./services/email-template-service');
                     
+                    // Get passing grade for this audit's schema
+                    let passingGrade = 87; // default
+                    try {
+                        const pgResult = await pool.request()
+                            .input('auditId', sql.Int, auditId)
+                            .query(`
+                                SELECT ISNULL(ss.PassingGrade, 87) AS PassingGrade
+                                FROM AuditInstances a
+                                LEFT JOIN SystemSettings ss ON ss.SchemaID = a.SchemaID AND ss.SettingType = 'Overall'
+                                WHERE a.AuditID = @auditId
+                            `);
+                        if (pgResult.recordset.length > 0) {
+                            passingGrade = pgResult.recordset[0].PassingGrade || 87;
+                        }
+                    } catch (e) {
+                        console.log(`📧 [EMAIL] Could not get passing grade, using default 87`);
+                    }
+                    
                     for (const manager of managers) {
                         const recipientName = manager.display_name || manager.email.split('@')[0];
-                        const scoreColor = totalScore >= 83 ? '#10b981' : '#ef4444';
+                        const roundedScore = totalScore ? Math.round(totalScore) : null;
+                        const isPassing = roundedScore !== null && roundedScore >= passingGrade;
+                        const scoreColor = isPassing ? '#10b981' : '#ef4444';
+                        const statusText = isPassing ? 'PASS' : 'FAIL';
+                        const statusEmoji = isPassing ? '✅' : '❌';
+                        const statusColor = isPassing ? '#10b981' : '#ef4444';
+                        const statusBgColor = isPassing ? '#dcfce7' : '#fee2e2';
                         
                         // Build email using dynamic template
                         const emailData = await emailTemplateService.buildEmail('report_notification', {
@@ -6549,10 +6598,16 @@ app.post('/api/audits/save-report-for-store-manager', requireAuth, requireRole('
                             storeName: storeName,
                             documentNumber: documentNumber,
                             auditDate: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-                            score: totalScore ? Math.round(totalScore) + '%' : 'N/A',
+                            score: roundedScore !== null ? roundedScore + '%' : 'N/A',
                             scoreColor: scoreColor,
+                            statusText: statusText,
+                            statusEmoji: statusEmoji,
+                            statusColor: statusColor,
+                            statusBgColor: statusBgColor,
+                            passingGrade: passingGrade + '%',
                             reportUrl: reportUrl,
-                            dashboardUrl: baseUrl + '/dashboard'
+                            dashboardUrl: baseUrl + '/dashboard',
+                            auditorName: user.displayName || 'Food Safety Team'
                         });
                         
                         let emailSubject, emailHtml;

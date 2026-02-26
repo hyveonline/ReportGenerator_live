@@ -110,15 +110,18 @@ function redirectToLogin(req, res) {
     res.clearCookie('auth_token');
     res.clearCookie('impersonation');
     
-    // For API requests, return JSON
-    if (req.path.startsWith('/api/')) {
+    // Check if this is a report file request (should redirect, not return JSON)
+    const isReportFile = req.path.match(/^\/api\/audits\/reports\/.+\.(html|pdf)$/i);
+    
+    // For regular API requests (not report files), return JSON
+    if (req.path.startsWith('/api/') && !isReportFile) {
         return res.status(401).json({
             error: 'Not authenticated',
             message: 'Please login to access this resource'
         });
     }
     
-    // For page requests, redirect to login
+    // For page requests and report files, redirect to login with returnUrl
     const returnUrl = encodeURIComponent(req.originalUrl);
     res.redirect(`/auth/login?returnUrl=${returnUrl}`);
 }

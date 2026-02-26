@@ -339,8 +339,14 @@ class EmailNotificationService {
             try {
                 console.log(`📧 [EMAIL] Sending to: ${recipient.email} (${recipient.role})`);
 
-                // Determine score color
-                const scoreColor = overallScore >= 83 ? '#10b981' : '#ef4444';
+                // Determine score color and status based on passing grade (default 87%)
+                const passingGrade = reportData.passingGrade || 87;
+                const isPassing = overallScore >= passingGrade;
+                const scoreColor = isPassing ? '#10b981' : '#ef4444';
+                const statusText = isPassing ? 'PASS' : 'FAIL';
+                const statusEmoji = isPassing ? '✅' : '❌';
+                const statusColor = isPassing ? '#10b981' : '#ef4444';
+                const statusBgColor = isPassing ? '#dcfce7' : '#fee2e2';
                 
                 // Try to use dynamic template from database first
                 let subject, emailHtml;
@@ -351,6 +357,11 @@ class EmailNotificationService {
                     auditDate: auditDate,
                     score: `${overallScore}%`,
                     scoreColor: scoreColor,
+                    statusText: statusText,
+                    statusEmoji: statusEmoji,
+                    statusColor: statusColor,
+                    statusBgColor: statusBgColor,
+                    passingGrade: `${passingGrade}%`,
                     reportUrl: reportUrl || dashboardUrl,
                     dashboardUrl: dashboardUrl,
                     auditorName: auditor || 'Food Safety Team'
