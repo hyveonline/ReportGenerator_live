@@ -5,7 +5,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-const { escapeHtml, formatDate, formatTime, getSectionIcon, cleanText, formatFindingWithGoodObservation } = require('./utilities');
+const { escapeHtml, formatDate, formatTime, getSectionIcon, cleanText, formatFindingWithGoodObservation, extractPictureId } = require('./utilities');
 
 class TemplateEngine {
     constructor() {
@@ -508,7 +508,10 @@ class TemplateEngine {
                 return type === 'good';
             });
             const picturesHtml = goodPictures.length > 0 
-                ? goodPictures.map(p => `<img src="${p.dataUrl}" class="item-picture" onclick="scrollToGallery('good-pictures-gallery')" title="Click to view in Good Observation Gallery" />`).join('')
+                ? goodPictures.map(p => {
+                    const pictureId = extractPictureId(p.dataUrl);
+                    return `<img src="${p.dataUrl}" class="item-picture" onclick="scrollToGallery('good-pictures-gallery', '${pictureId}')" title="Click to view in Good Observation Gallery" />`;
+                }).join('')
                 : '';
 
             // Display value (numeric) for Yes/Partially/No, blank for NA
@@ -586,12 +589,14 @@ class TemplateEngine {
                 return type === 'finding' || type === 'corrective';
             });
             // Generate pictures with appropriate gallery links based on picture type
+            // Each picture gets a unique ID to scroll to the specific image in the gallery
             const picturesHtml = findingPictures.length > 0 
                 ? findingPictures.map(p => {
                     const type = (p.pictureType || '').toLowerCase();
                     const galleryId = type === 'corrective' ? 'corrective-pictures-gallery' : 'finding-pictures-gallery';
                     const galleryTitle = type === 'corrective' ? 'Corrective Action Gallery' : 'Finding Picture Gallery';
-                    return `<img src="${p.dataUrl}" class="finding-picture" onclick="scrollToGallery('${galleryId}')" title="Click to view in ${galleryTitle}" />`;
+                    const pictureId = extractPictureId(p.dataUrl);
+                    return `<img src="${p.dataUrl}" class="finding-picture" onclick="scrollToGallery('${galleryId}', '${pictureId}')" title="Click to view in ${galleryTitle}" />`;
                 }).join('')
                 : '-';
 
@@ -735,9 +740,10 @@ class TemplateEngine {
             const categoryBadge = pic.category 
                 ? `<span class="category-badge">📁 ${escapeHtml(pic.category)}</span>` 
                 : '';
+            const pictureId = extractPictureId(pic.dataUrl);
 
             return `
-                <div class="finding-picture-card">
+                <div class="finding-picture-card" id="${pictureId}">
                     <div class="finding-picture-header">
                         <a href="#ref-${(pic.referenceValue || '').replace(/\./g, '-')}" onclick="scrollToRef('${(pic.referenceValue || '').replace(/\./g, '-')}'); return false;" class="finding-ref-badge" style="text-decoration: none; cursor: pointer;" title="Click to scroll to finding">#${escapeHtml(pic.referenceValue)}</a>
                         ${categoryBadge}
@@ -932,8 +938,9 @@ class TemplateEngine {
             const categoryBadge = pic.category 
                 ? `<span class="good-category-badge">📁 ${escapeHtml(pic.category)}</span>` 
                 : '';
+            const pictureId = extractPictureId(pic.dataUrl);
             return `
-                <div class="good-picture-card">
+                <div class="good-picture-card" id="${pictureId}">
                     <div class="good-picture-header">
                         <a href="#ref-${(pic.referenceValue || '').replace(/\./g, '-')}" onclick="scrollToRef('${(pic.referenceValue || '').replace(/\./g, '-')}'); return false;" class="good-ref-badge" style="text-decoration: none; cursor: pointer;" title="Click to scroll to item">#${escapeHtml(pic.referenceValue)}</a>
                         ${categoryBadge}
@@ -1118,9 +1125,10 @@ class TemplateEngine {
             const categoryBadge = pic.category 
                 ? `<span class="corrective-category-badge">📁 ${escapeHtml(pic.category)}</span>` 
                 : '';
+            const pictureId = extractPictureId(pic.dataUrl);
 
             return `
-                <div class="corrective-picture-card">
+                <div class="corrective-picture-card" id="${pictureId}">
                     <div class="corrective-picture-header">
                         <a href="#ref-${(pic.referenceValue || '').replace(/\./g, '-')}" onclick="scrollToRef('${(pic.referenceValue || '').replace(/\./g, '-')}'); return false;" class="corrective-ref-badge" style="text-decoration: none; cursor: pointer;" title="Click to scroll to finding">#${escapeHtml(pic.referenceValue)}</a>
                         ${categoryBadge}
@@ -2971,11 +2979,27 @@ class TemplateEngine {
                     }
                 }
 
-                function scrollToGallery(galleryId) {
+                function scrollToGallery(galleryId, pictureId) {
+                    // If a specific picture ID is provided, scroll to that picture
+                    if (pictureId) {
+                        const picture = document.getElementById(pictureId);
+                        if (picture) {
+                            picture.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Highlight the specific picture
+                            picture.style.boxShadow = '0 0 25px 8px rgba(245, 158, 11, 0.8)';
+                            picture.style.transform = 'scale(1.02)';
+                            picture.style.transition = 'all 0.3s ease';
+                            setTimeout(() => { 
+                                picture.style.boxShadow = ''; 
+                                picture.style.transform = '';
+                            }, 2500);
+                            return;
+                        }
+                    }
+                    // Fallback: scroll to gallery section
                     const gallery = document.getElementById(galleryId);
                     if (gallery) {
                         gallery.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        // Highlight the gallery briefly
                         gallery.style.boxShadow = '0 0 20px 5px rgba(245, 158, 11, 0.6)';
                         gallery.style.transition = 'box-shadow 0.3s ease';
                         setTimeout(() => { 

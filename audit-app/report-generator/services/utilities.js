@@ -190,6 +190,27 @@ function formatFindingWithGoodObservation(text) {
     return html;
 }
 
+/**
+ * Extract unique picture ID from image URL
+ * @param {string} url - Image URL like '/api/pictures/file/audits/59/responses/10114/3315_947e5a7c.jpg'
+ * @returns {string} - Picture ID like 'pic-3315_947e5a7c'
+ */
+function extractPictureId(url) {
+    if (!url) return '';
+    // Extract filename without extension from URL
+    const match = url.match(/\/([^/]+)\.[^.]+$/);
+    if (match) {
+        return 'pic-' + match[1];
+    }
+    // Fallback: generate hash from URL
+    let hash = 0;
+    for (let i = 0; i < url.length; i++) {
+        hash = ((hash << 5) - hash) + url.charCodeAt(i);
+        hash |= 0;
+    }
+    return 'pic-' + Math.abs(hash);
+}
+
 module.exports = {
     cleanText,
     escapeHtml,
@@ -201,5 +222,6 @@ module.exports = {
     roundPercentage,
     generateId,
     truncateText,
-    formatFindingWithGoodObservation
+    formatFindingWithGoodObservation,
+    extractPictureId
 };
