@@ -731,6 +731,14 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label>Country <span class="required">*</span></label>
+                            <select id="storeCountry" required>
+                                <option value="">Select a country...</option>
+                                <option value="Lebanon">🇱🇧 Lebanon</option>
+                                <option value="Iraq">🇮🇶 Iraq</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label>Location</label>
                             <input type="text" id="storeLocation" placeholder="e.g., Downtown Mall, Floor 2">
                         </div>
@@ -759,6 +767,11 @@
                 <select id="brandFilter" class="brand-filter" onchange="filterStores()">
                     <option value="">All Brands</option>
                     <!-- Brands loaded dynamically -->
+                </select>
+                <select id="countryFilter" class="brand-filter" onchange="filterStores()">
+                    <option value="">All Countries</option>
+                    <option value="Lebanon">🇱🇧 Lebanon</option>
+                    <option value="Iraq">🇮🇶 Iraq</option>
                 </select>
                 <div class="search-stats" id="searchStats">Showing all stores</div>
                 <button class="clear-search-btn" onclick="clearSearch()">Clear</button>
@@ -794,6 +807,14 @@
                     <label>Brand <span class="required">*</span></label>
                     <select id="editStoreBrand" required>
                         <option value="">Select a brand...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Country <span class="required">*</span></label>
+                    <select id="editStoreCountry" required>
+                        <option value="">Select a country...</option>
+                        <option value="Lebanon">🇱🇧 Lebanon</option>
+                        <option value="Iraq">🇮🇶 Iraq</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1075,6 +1096,7 @@
                             <th>#</th>
                             <th>Code</th>
                             <th>Store Name</th>
+                            <th>Country</th>
                             <th>Location</th>
                             <th>Schema</th>
                             <th>Head of Ops</th>
@@ -1095,6 +1117,7 @@
                                 <td><strong>${index + 1}</strong></td>
                                 <td><strong>${store.storeCode}</strong></td>
                                 <td>${store.storeName}</td>
+                                <td>${store.country || '-'}</td>
                                 <td>${store.location || '-'}</td>
                                 <td><span class="schema-badge">${store.schemaName}</span></td>
                                     <td class="managers-cell">
@@ -1141,6 +1164,7 @@
         function filterStores() {
             const searchTerm = document.getElementById('storeSearch').value.toLowerCase().trim();
             const brandFilter = document.getElementById('brandFilter').value.toLowerCase();
+            const countryFilter = document.getElementById('countryFilter').value;
             
             let filtered = stores;
             
@@ -1156,6 +1180,11 @@
                     const code = store.storeCode.toLowerCase();
                     return name.includes(brandFilter) || code.includes(brandFilter);
                 });
+            }
+            
+            // Filter by country
+            if (countryFilter) {
+                filtered = filtered.filter(store => store.country === countryFilter);
             }
             
             // Filter by search term
@@ -1175,6 +1204,7 @@
         function clearSearch() {
             document.getElementById('storeSearch').value = '';
             document.getElementById('brandFilter').value = '';
+            document.getElementById('countryFilter').value = '';
             renderStoresTable(stores);
             updateSearchStats(stores.length, stores.length);
         }
@@ -1197,6 +1227,7 @@
                 storeCode: document.getElementById('storeCode').value,
                 storeName: document.getElementById('storeName').value,
                 brand: document.getElementById('storeBrand').value,
+                country: document.getElementById('storeCountry').value,
                 location: document.getElementById('storeLocation').value,
                 schemaId: parseInt(document.getElementById('storeSchema').value)
             };
@@ -1233,6 +1264,7 @@
             document.getElementById('editStoreCode').value = store.storeCode;
             document.getElementById('editStoreName').value = store.storeName;
             document.getElementById('editStoreBrand').value = store.brand || '';
+            document.getElementById('editStoreCountry').value = store.country || '';
             document.getElementById('editStoreLocation').value = store.location || '';
             document.getElementById('editStoreSchema').value = store.schemaId;
             document.getElementById('editStoreActive').value = store.isActive ? 'true' : 'false';
@@ -1430,6 +1462,7 @@
                 location: document.getElementById('editStoreLocation').value,
                 schemaId: parseInt(document.getElementById('editStoreSchema').value),
                 brand: document.getElementById('editStoreBrand').value || null,
+                country: document.getElementById('editStoreCountry').value || null,
                 isActive: document.getElementById('editStoreActive').value === 'true'
             };
 

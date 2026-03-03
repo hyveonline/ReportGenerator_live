@@ -74,6 +74,7 @@ class StoreService {
                 schemaId: row.SchemaID,
                 schemaName: row.SchemaName,
                 brand: row.Brand,
+                country: row.Country,
                 isActive: row.IsActive,
                 createdAt: row.CreatedAt,
                 createdBy: row.CreatedBy
@@ -99,6 +100,7 @@ class StoreService {
                 schemaId: row.SchemaID,
                 schemaName: row.SchemaName,
                 brand: row.Brand,
+                country: row.Country,
                 isActive: row.IsActive
             }));
         } catch (error) {
@@ -119,6 +121,7 @@ class StoreService {
                 .input('Location', sql.NVarChar(500), storeData.location || null)
                 .input('SchemaID', sql.Int, storeData.schemaId)
                 .input('Brand', sql.NVarChar(100), storeData.brand || null)
+                .input('Country', sql.NVarChar(50), storeData.country || null)
                 .input('CreatedBy', sql.NVarChar(200), storeData.createdBy || null)
                 .execute('sp_CreateStore');
             
@@ -142,6 +145,7 @@ class StoreService {
                 .input('Location', sql.NVarChar(500), storeData.location || null)
                 .input('SchemaID', sql.Int, storeData.schemaId)
                 .input('Brand', sql.NVarChar(100), storeData.brand || null)
+                .input('Country', sql.NVarChar(50), storeData.country || null)
                 .input('IsActive', sql.Bit, storeData.isActive !== false)
                 .execute('sp_UpdateStore');
             
