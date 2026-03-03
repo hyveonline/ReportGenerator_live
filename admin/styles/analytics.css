@@ -495,13 +495,13 @@ body {
 
 .calendar-card .last-audit-date {
     font-size: 0.9rem;
-    color: #e2e8f0;
+    color: #fff;
     font-weight: 600;
 }
 
 .calendar-card .status-text {
     font-size: 0.8rem;
-    color: #94a3b8;
+    color: #fff;
     margin-top: 0.25rem;
 }
 
