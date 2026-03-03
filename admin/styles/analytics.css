@@ -11,20 +11,20 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    background: #f8fafc;
     min-height: 100vh;
-    color: #e2e8f0;
+    color: #1e293b;
 }
 
 /* Header */
 .header {
-    background: rgba(26, 26, 46, 0.95);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
     padding: 1rem 2rem;
     position: sticky;
     top: 0;
     z-index: 100;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .header-content {
@@ -37,12 +37,12 @@ body {
 
 .logo-section h1 {
     font-size: 1.5rem;
-    color: #fff;
+    color: #1e293b;
 }
 
 .logo-section .subtitle {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: #64748b;
 }
 
 .user-section {
@@ -52,7 +52,7 @@ body {
 }
 
 .user-name {
-    color: #94a3b8;
+    color: #475569;
     font-size: 0.9rem;
 }
 
@@ -69,18 +69,18 @@ body {
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
+    background: #f1f5f9;
+    color: #475569;
     padding: 0.5rem 1rem;
     border-radius: 8px;
     text-decoration: none;
     font-size: 0.85rem;
     transition: all 0.2s;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #e2e8f0;
 }
 
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: #e2e8f0;
 }
 
 .btn-logout {
@@ -105,7 +105,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(26, 26, 46, 0.9);
+    background: rgba(255, 255, 255, 0.9);
     display: none;
     justify-content: center;
     align-items: center;
@@ -128,7 +128,7 @@ body {
 
 .loading-overlay p {
     margin-top: 1rem;
-    color: #94a3b8;
+    color: #475569;
 }
 
 /* Container */
@@ -147,19 +147,20 @@ body {
 }
 
 .summary-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 1.5rem;
     display: flex;
     align-items: center;
     gap: 1rem;
     transition: all 0.3s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .summary-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
 .summary-card.pass {
@@ -174,12 +175,12 @@ body {
 .card-content h3 {
     font-size: 1.8rem;
     font-weight: 700;
-    color: #fff;
+    color: #1e293b;
 }
 
 .card-content p {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: #64748b;
 }
 
 /* Filter Section */
@@ -189,9 +190,10 @@ body {
     gap: 1.5rem;
     margin-bottom: 2rem;
     padding: 1rem 1.5rem;
-    background: rgba(255, 255, 255, 0.05);
+    background: #ffffff;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .filter-group {
@@ -202,13 +204,13 @@ body {
 
 .filter-group label {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: #475569;
 }
 
 .filter-group select {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #e2e8f0;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
     padding: 0.5rem 1rem;
     border-radius: 8px;
     font-size: 0.9rem;
@@ -245,10 +247,11 @@ body {
 }
 
 .chart-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .chart-card.full-width {
@@ -257,10 +260,10 @@ body {
 
 .chart-card h2 {
     font-size: 1.1rem;
-    color: #fff;
+    color: #1e293b;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .chart-container {
@@ -289,12 +292,12 @@ body {
 .data-table td {
     padding: 0.5rem 0.75rem;
     text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .data-table th {
-    background: rgba(255, 255, 255, 0.05);
-    color: #94a3b8;
+    background: #f8fafc;
+    color: #475569;
     font-weight: 600;
     position: sticky;
     top: 0;
@@ -330,24 +333,26 @@ body {
 .heatmap-table td {
     padding: 0.5rem;
     text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #e2e8f0;
     white-space: nowrap;
 }
 
 .heatmap-table .store-header {
-    background: rgba(255, 255, 255, 0.1);
+    background: #f1f5f9;
     font-weight: 600;
     position: sticky;
     left: 0;
     z-index: 2;
+    color: #1e293b;
 }
 
 .heatmap-table .section-header {
-    background: rgba(255, 255, 255, 0.1);
+    background: #f1f5f9;
     font-weight: 600;
     max-width: 100px;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: #1e293b;
 }
 
 .heatmap-table .overall-header {
@@ -356,12 +361,13 @@ body {
 }
 
 .heatmap-table .store-name {
-    background: rgba(255, 255, 255, 0.05);
+    background: #ffffff;
     font-weight: 600;
     text-align: left;
     position: sticky;
     left: 0;
     z-index: 1;
+    color: #1e293b;
 }
 
 .heatmap-cell {
@@ -394,7 +400,7 @@ body {
     gap: 1.5rem;
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid #e2e8f0;
     justify-content: center;
 }
 
@@ -403,7 +409,7 @@ body {
     align-items: center;
     gap: 0.5rem;
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: #475569;
 }
 
 .legend-color {
@@ -454,17 +460,18 @@ body {
 }
 
 .calendar-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px solid rgba(255, 255, 255, 0.1);
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
     border-radius: 12px;
     padding: 1.25rem;
     text-align: center;
     transition: all 0.3s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .calendar-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
 
 .calendar-card.status-good {
@@ -489,19 +496,19 @@ body {
 
 .calendar-card h3 {
     font-size: 1rem;
-    color: #fff;
+    color: #1e293b;
     margin-bottom: 0.5rem;
 }
 
 .calendar-card .last-audit-date {
     font-size: 0.9rem;
-    color: #fff;
+    color: #1e293b;
     font-weight: 600;
 }
 
 .calendar-card .status-text {
     font-size: 0.8rem;
-    color: #fff;
+    color: #475569;
     margin-top: 0.25rem;
 }
 
@@ -534,7 +541,7 @@ body {
 .no-data,
 .loading-text {
     text-align: center;
-    color: #64748b;
+    color: #94a3b8;
     padding: 2rem;
     font-style: italic;
 }
@@ -589,19 +596,20 @@ body {
    ============================================= */
 
 .query-builder-section {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 1.5rem;
     margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .query-builder-section h2 {
     font-size: 1.2rem;
-    color: #fff;
+    color: #1e293b;
     margin-bottom: 1.5rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .query-builder {
@@ -625,14 +633,14 @@ body {
 
 .query-group label {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: #475569;
     font-weight: 500;
 }
 
 .query-group select {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #e2e8f0;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
     padding: 0.75rem 1rem;
     border-radius: 8px;
     font-size: 0.95rem;
@@ -670,19 +678,19 @@ body {
     gap: 0.75rem;
     flex-wrap: wrap;
     padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid #e2e8f0;
 }
 
 .quick-label {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: #475569;
     font-weight: 500;
 }
 
 .quick-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #e2e8f0;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #475569;
     padding: 0.5rem 1rem;
     border-radius: 20px;
     font-size: 0.85rem;
@@ -691,16 +699,16 @@ body {
 }
 
 .quick-btn:hover {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: rgba(139, 92, 246, 0.5);
-    color: #fff;
+    background: #ede9fe;
+    border-color: #8b5cf6;
+    color: #6d28d9;
 }
 
 /* Query Results */
 .query-results {
     margin-top: 2rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 12px;
     padding: 1.5rem;
 }
@@ -711,12 +719,12 @@ body {
     align-items: center;
     margin-bottom: 1.5rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .results-header h3 {
     font-size: 1.1rem;
-    color: #fff;
+    color: #1e293b;
 }
 
 .btn-export {
@@ -753,19 +761,19 @@ body {
 .query-table td {
     padding: 0.75rem 1rem;
     text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .query-table th {
-    background: rgba(255, 255, 255, 0.05);
-    color: #94a3b8;
+    background: #f8fafc;
+    color: #475569;
     font-weight: 600;
     position: sticky;
     top: 0;
 }
 
 .query-table tr:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: #f8fafc;
 }
 
 .query-table td.pass {
@@ -851,9 +859,9 @@ body {
 }
 
 .modal-content {
-    background: #1e293b;
+    background: #ffffff;
     border-radius: 16px;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
     max-height: 90vh;
     overflow: hidden;
     animation: modalSlide 0.3s ease;
@@ -924,9 +932,9 @@ body {
 .modal-filters input,
 .modal-filters select {
     padding: 10px 15px;
-    border: 2px solid #334155;
-    background: #0f172a;
-    color: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #1e293b;
     border-radius: 8px;
     font-size: 14px;
 }
@@ -948,7 +956,7 @@ body {
 
 .modal-stats {
     margin-bottom: 15px;
-    color: #94a3b8;
+    color: #64748b;
     font-size: 14px;
 }
 
@@ -967,12 +975,12 @@ body {
 .unsolved-table td {
     padding: 12px 15px;
     text-align: left;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .unsolved-table th {
-    background: #0f172a;
-    color: #94a3b8;
+    background: #f8fafc;
+    color: #475569;
     font-weight: 600;
     text-transform: uppercase;
     font-size: 11px;
