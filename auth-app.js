@@ -29,6 +29,33 @@ const { activityLogService, logLogin, logLogout, logReportGenerated, logEmailSen
 const FileStorageService = require('./services/file-storage-service');
 
 /**
+ * Get friendly greeting name from full name
+ * If name contains role keywords (manager, auditor, etc.), use full name
+ * Otherwise use first name only for a friendlier greeting
+ * @param {string} fullName - Full name like "Muhammad Shammas" or "Hamra Store Manager"
+ * @returns {string} - Greeting name like "Muhammad" or "Hamra Store Manager"
+ */
+function getGreetingName(fullName) {
+    if (!fullName) return 'Team';
+    
+    const name = String(fullName).trim();
+    if (!name) return 'Team';
+    
+    // Keywords that indicate this is a role/title, not a person's name
+    const roleKeywords = ['manager', 'auditor', 'supervisor', 'head', 'director', 'team', 'admin', 'coordinator'];
+    const lowerName = name.toLowerCase();
+    
+    // If it contains role keywords, use the full name
+    if (roleKeywords.some(keyword => lowerName.includes(keyword))) {
+        return name;
+    }
+    
+    // Otherwise, use first name only for a friendlier greeting
+    const firstName = name.split(' ')[0];
+    return firstName || name;
+}
+
+/**
  * Helper function to get a valid access token, refreshing if expired
  * @param {object} req - Express request object with currentUser and sessionToken
  * @returns {Promise<string|null>} Valid access token or null
@@ -4008,7 +4035,7 @@ app.post('/api/audits/send-report-with-recipients', requireAuth, requireRole('Ad
         }
         
         // Build placeholders for first recipient (for recipientName)
-        const firstRecipientName = toRecipients[0]?.name || 'Store Manager';
+        const firstRecipientName = getGreetingName(toRecipients[0]?.name || 'Store Manager');
         const placeholders = {
             recipientName: firstRecipientName,
             storeName: storeName,
@@ -4251,7 +4278,7 @@ app.post('/api/broadcast/send', requireAuth, requirePagePermission(BROADCAST_PAG
                     message: message,
                     sender_name: senderName,
                     sender_email: senderEmail,
-                    recipient_name: recipient.display_name || recipient.email
+                    recipient_name: getGreetingName(recipient.display_name || recipient.email)
                 });
                 
                 const emailSubject = emailData.subject;
@@ -6583,7 +6610,7 @@ app.post('/api/audits/save-report-for-store-manager', requireAuth, requireRole('
                     }
                     
                     for (const manager of managers) {
-                        const recipientName = manager.display_name || manager.email.split('@')[0];
+                        const recipientName = getGreetingName(manager.display_name || manager.email.split('@')[0]);
                         const roundedScore = totalScore ? Math.round(totalScore) : null;
                         const isPassing = roundedScore !== null && roundedScore >= passingGrade;
                         const scoreColor = isPassing ? '#10b981' : '#ef4444';

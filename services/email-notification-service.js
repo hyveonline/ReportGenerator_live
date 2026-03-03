@@ -9,6 +9,33 @@ const sql = require('mssql');
 const EmailTemplates = require('./email-templates'); // Legacy static templates (fallback)
 const emailTemplateService = require('./email-template-service'); // Dynamic templates from database
 
+/**
+ * Get friendly greeting name from full name
+ * If name contains role keywords (manager, auditor, etc.), use full name
+ * Otherwise use first name only for a friendlier greeting
+ * @param {string} fullName - Full name like "Muhammad Shammas" or "Hamra Store Manager"
+ * @returns {string} - Greeting name like "Muhammad" or "Hamra Store Manager"
+ */
+function getGreetingName(fullName) {
+    if (!fullName) return 'Team';
+    
+    const name = String(fullName).trim();
+    if (!name) return 'Team';
+    
+    // Keywords that indicate this is a role/title, not a person's name
+    const roleKeywords = ['manager', 'auditor', 'supervisor', 'head', 'director', 'team', 'admin', 'coordinator'];
+    const lowerName = name.toLowerCase();
+    
+    // If it contains role keywords, use the full name
+    if (roleKeywords.some(keyword => lowerName.includes(keyword))) {
+        return name;
+    }
+    
+    // Otherwise, use first name only for a friendlier greeting
+    const firstName = name.split(' ')[0];
+    return firstName || name;
+}
+
 class EmailNotificationService {
     constructor(connector) {
         this.connector = connector; // SimpleGraphConnector instance
@@ -351,7 +378,7 @@ class EmailNotificationService {
                 // Try to use dynamic template from database first
                 let subject, emailHtml;
                 const templateData = {
-                    recipientName: recipient.name,
+                    recipientName: getGreetingName(recipient.name),
                     storeName: storeName,
                     documentNumber: documentNumber,
                     auditDate: auditDate,
@@ -383,7 +410,7 @@ class EmailNotificationService {
                         auditDate,
                         overallScore,
                         auditor,
-                        recipientName: recipient.name,
+                        recipientName: getGreetingName(recipient.name),
                         recipientRole: recipient.role,
                         dashboardUrl,
                         reportUrl
