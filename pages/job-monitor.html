@@ -367,12 +367,27 @@
             color: #dc2626;
         }
 
+        .event-badge.ReportViewed {
+            background: #ede9fe;
+            color: #7c3aed;
+        }
+
+        .event-badge.ActionPlanToAM {
+            background: #fce7f3;
+            color: #be185d;
+        }
+
         .status-badge {
             display: inline-flex;
             padding: 0.25rem 0.5rem;
             border-radius: 4px;
             font-size: 0.75rem;
             font-weight: 600;
+        }
+
+        .status-badge.Sent {
+            background: #d1fae5;
+            color: #059669;
         }
 
         .status-badge.Success {
@@ -896,6 +911,52 @@
             </div>
         </div>
 
+        <!-- Automated Notifications Panel -->
+        <div class="logs-panel" style="margin-bottom: 2rem;">
+            <div class="logs-header">
+                <h2><i class="fas fa-bell"></i> Automated Notifications</h2>
+                <div class="logs-filter">
+                    <button class="filter-btn active" data-filter="all-auto" onclick="filterAutoLogs('all')">All</button>
+                    <button class="filter-btn" data-filter="ReportViewed" onclick="filterAutoLogs('ReportViewed')">Report Viewed</button>
+                    <button class="filter-btn" data-filter="ActionPlanSubmittedToAreaManager" onclick="filterAutoLogs('ActionPlanSubmittedToAreaManager')">Action Plan to AM</button>
+                </div>
+            </div>
+            
+            <!-- Auto Notification Stats -->
+            <div class="status-grid" style="margin-bottom: 1rem; padding: 0;">
+                <div class="status-card" style="background: var(--gray-50); padding: 1rem;">
+                    <h3 style="font-size: 0.75rem;">Report Viewed (30 days)</h3>
+                    <div class="status-value" id="autoReportViewedCount" style="font-size: 1.25rem; color: #3b82f6;">0</div>
+                </div>
+                <div class="status-card" style="background: var(--gray-50); padding: 1rem;">
+                    <h3 style="font-size: 0.75rem;">Action Plan to AM (30 days)</h3>
+                    <div class="status-value" id="autoActionPlanCount" style="font-size: 1.25rem; color: #8b5cf6;">0</div>
+                </div>
+            </div>
+            
+            <table class="logs-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Document</th>
+                        <th>Store</th>
+                        <th>Recipient</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="autoLogsBody">
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <i class="fas fa-clock"></i>
+                            <p>Loading automated notifications...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
         <!-- Logs Panel -->
         <div class="logs-panel">
             <div class="logs-header">
@@ -1122,6 +1183,93 @@
                 console.error('Error fetching sender status:', error);
                 document.getElementById('senderStatus').innerHTML = '<span style="color: var(--gray-500);">Unable to check</span>';
             }
+        }
+
+        // Automated notifications data
+        let allAutoLogs = [];
+        let currentAutoFilter = 'all';
+
+        // Fetch automated notifications
+        async function fetchAutomatedNotifications() {
+            try {
+                const response = await fetch('/api/admin/automated-notifications/logs?limit=50');
+                const data = await response.json();
+                
+                if (data.success) {
+                    allAutoLogs = data.logs || [];
+                    
+                    // Update stats
+                    document.getElementById('autoReportViewedCount').textContent = 
+                        data.summary?.reportViewed?.count || 0;
+                    document.getElementById('autoActionPlanCount').textContent = 
+                        data.summary?.actionPlanToAreaManager?.count || 0;
+                    
+                    renderAutoLogs();
+                }
+            } catch (error) {
+                console.error('Error fetching automated notifications:', error);
+                document.getElementById('autoLogsBody').innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i>
+                            <p>Error loading notifications</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Render automated notifications table
+        function renderAutoLogs() {
+            const tbody = document.getElementById('autoLogsBody');
+            let logs = allAutoLogs;
+
+            // Apply filter
+            if (currentAutoFilter !== 'all') {
+                logs = logs.filter(l => l.notificationType === currentAutoFilter);
+            }
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <p>No automated notifications found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => {
+                const typeClass = log.notificationType === 'ReportViewed' ? 'JobStart' : 'Escalation';
+                const typeLabel = log.notificationType === 'ReportViewed' ? '👁️ Report Viewed' : '📋 AP to Area Manager';
+                return `
+                    <tr>
+                        <td class="timestamp">${formatDateTime(log.sentAt)}</td>
+                        <td><span class="event-badge ${typeClass}" style="font-size: 0.7rem;">${typeLabel}</span></td>
+                        <td>${log.documentNumber || '-'}</td>
+                        <td>${log.storeName || '-'}</td>
+                        <td>${log.recipientEmail || '-'}</td>
+                        <td style="font-size: 0.75rem;">${log.recipientRole || '-'}</td>
+                        <td><span class="status-badge ${log.status}">${log.status}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Filter automated notifications
+        function filterAutoLogs(filter) {
+            currentAutoFilter = filter;
+            document.querySelectorAll('[data-filter]').forEach(btn => {
+                if (btn.dataset.filter === 'all-auto' || btn.dataset.filter === 'ReportViewed' || btn.dataset.filter === 'ActionPlanSubmittedToAreaManager') {
+                    btn.classList.toggle('active', 
+                        (filter === 'all' && btn.dataset.filter === 'all-auto') || 
+                        btn.dataset.filter === filter
+                    );
+                }
+            });
+            renderAutoLogs();
         }
 
         // Fetch settings
@@ -1577,7 +1725,7 @@
 
         // Refresh all data
         async function refreshData() {
-            await Promise.all([fetchStatus(), fetchSettings(), fetchLogs()]);
+            await Promise.all([fetchStatus(), fetchSettings(), fetchLogs(), fetchAutomatedNotifications()]);
         }
 
         // Initialize

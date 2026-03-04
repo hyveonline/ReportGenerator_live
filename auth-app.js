@@ -2743,6 +2743,89 @@ app.get('/api/admin/escalation-job/sender-status', requireAuth, requireRole('Adm
     }
 });
 
+// Get automated notifications logs (ReportViewed, ActionPlanSubmittedToAreaManager)
+app.get('/api/admin/automated-notifications/logs', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const limit = parseInt(req.query.limit) || 50;
+        const notificationType = req.query.type; // Optional filter
+        
+        let query = `
+            SELECT TOP (@limit)
+                n.id,
+                n.document_number as documentNumber,
+                n.recipient_email as recipientEmail,
+                n.recipient_name as recipientName,
+                n.recipient_role as recipientRole,
+                n.notification_type as notificationType,
+                n.email_subject as emailSubject,
+                n.sent_by_email as sentByEmail,
+                n.status,
+                n.sent_at as sentAt,
+                ai.StoreName as storeName,
+                ai.TotalScore as score
+            FROM Notifications n
+            LEFT JOIN AuditInstances ai ON ai.DocumentNumber = n.document_number
+            WHERE n.notification_type IN ('ReportViewed', 'ActionPlanSubmittedToAreaManager')
+        `;
+        
+        if (notificationType) {
+            query += ` AND n.notification_type = @notificationType`;
+        }
+        
+        query += ` ORDER BY n.sent_at DESC`;
+        
+        const request = pool.request()
+            .input('limit', sql.Int, limit);
+        
+        if (notificationType) {
+            request.input('notificationType', sql.NVarChar(50), notificationType);
+        }
+        
+        const result = await request.query(query);
+        
+        // Get summary counts
+        const summaryResult = await pool.request()
+            .query(`
+                SELECT 
+                    notification_type,
+                    COUNT(*) as count,
+                    MAX(sent_at) as lastSent
+                FROM Notifications
+                WHERE notification_type IN ('ReportViewed', 'ActionPlanSubmittedToAreaManager')
+                AND sent_at >= DATEADD(day, -30, GETDATE())
+                GROUP BY notification_type
+            `);
+        
+        const summary = {
+            reportViewed: { count: 0, lastSent: null },
+            actionPlanToAreaManager: { count: 0, lastSent: null }
+        };
+        
+        for (const row of summaryResult.recordset) {
+            if (row.notification_type === 'ReportViewed') {
+                summary.reportViewed = { count: row.count, lastSent: row.lastSent };
+            } else if (row.notification_type === 'ActionPlanSubmittedToAreaManager') {
+                summary.actionPlanToAreaManager = { count: row.count, lastSent: row.lastSent };
+            }
+        }
+        
+        res.json({
+            success: true,
+            logs: result.recordset,
+            summary,
+            total: result.recordset.length
+        });
+        
+    } catch (error) {
+        console.error('[AutomatedNotifications] Error fetching logs:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Preview (dry run) - shows what would be sent without sending
 app.get('/api/admin/escalation-job/preview', requireAuth, requireRole('Admin'), async (req, res) => {
     try {
@@ -4100,6 +4183,194 @@ async function sendReportViewNotification(auditId, viewerName, viewerRole, pool)
         
     } catch (error) {
         console.error(`[ReportViewNotification] Error sending notification:`, error.message);
+        // Don't throw - we don't want to fail the main request if notification fails
+    }
+}
+
+/**
+ * Send notification to Area Managers when Store Manager submits action plan
+ * Uses spnotification system sender
+ */
+async function sendActionPlanSubmittedToAreaManagers(documentNumber, storeName, submitterName, submitterRole, pool) {
+    try {
+        const sql = require('mssql');
+        
+        // Get audit details
+        const auditResult = await pool.request()
+            .input('documentNumber', sql.NVarChar(50), documentNumber)
+            .query(`
+                SELECT ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.AuditDate, ai.TotalScore, ai.StoreID
+                FROM AuditInstances ai
+                WHERE ai.DocumentNumber = @documentNumber
+            `);
+        
+        if (auditResult.recordset.length === 0) {
+            console.log(`[ActionPlanAreaManagerNotification] Audit ${documentNumber} not found`);
+            return;
+        }
+        
+        const audit = auditResult.recordset[0];
+        
+        // Get Area Managers assigned to this store
+        // Area Managers can be assigned via:
+        // 1. assigned_stores JSON column in Users table (contains store names)
+        // 2. StoreManagerAssignments table (StoreID -> UserID mapping)
+        const areaManagersResult = await pool.request()
+            .input('storeName', sql.NVarChar(255), storeName)
+            .query(`
+                SELECT DISTINCT u.id, u.email, u.display_name 
+                FROM Users u
+                WHERE u.role = 'AreaManager' 
+                AND u.is_active = 1 
+                AND u.email IS NOT NULL
+                AND (
+                    -- Check assigned_stores JSON column (contains store names)
+                    u.assigned_stores LIKE '%' + @storeName + '%'
+                    OR EXISTS (
+                        SELECT 1 FROM StoreManagerAssignments sma 
+                        INNER JOIN Stores s ON s.StoreID = sma.StoreID
+                        WHERE sma.UserID = u.id 
+                        AND s.StoreName = @storeName
+                    )
+                )
+            `);
+        
+        // Build recipient list
+        const recipients = [];
+        
+        for (const am of areaManagersResult.recordset) {
+            recipients.push({
+                email: am.email,
+                name: am.display_name || am.email,
+                role: 'AreaManager'
+            });
+        }
+        
+        if (recipients.length === 0) {
+            console.log(`[ActionPlanAreaManagerNotification] No Area Managers found for store: ${storeName}`);
+            return;
+        }
+        
+        // Get system sender token
+        const { token: accessToken, email: senderEmail } = await getSystemSenderToken();
+        
+        // Build email content
+        const submittedAt = new Date().toLocaleString('en-US', { 
+            year: 'numeric', month: 'long', day: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+        });
+        const auditDate = audit.AuditDate ? new Date(audit.AuditDate).toLocaleDateString('en-US', { 
+            year: 'numeric', month: 'long', day: 'numeric' 
+        }) : 'N/A';
+        const score = audit.TotalScore ? Math.round(audit.TotalScore) + '%' : 'N/A';
+        
+        const emailSubject = `📝 Action Plan Submitted - ${storeName} (${documentNumber})`;
+        
+        const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h2 style="margin: 0;">📝 Action Plan Submitted</h2>
+                </div>
+                <div style="padding: 25px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none;">
+                    <div style="background: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                        <strong style="color: #065f46;">👤 ${submitterName}</strong>
+                        <span style="color: #065f46;"> (${submitterRole})</span>
+                        <p style="margin: 8px 0 0 0; color: #047857;">has submitted the action plan for your review.</p>
+                    </div>
+                    
+                    <div style="background: #fef3c7; border: 2px solid #f59e0b; padding: 15px; margin-bottom: 20px; border-radius: 8px; text-align: center;">
+                        <strong style="color: #b45309; font-size: 1.1em;">⚠️ Please confirm that you have reviewed the action plan</strong>
+                    </div>
+                    
+                    <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6; width: 35%;"><strong>🏪 Store</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${storeName}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>📋 Document #</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${documentNumber}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>📅 Audit Date</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${auditDate}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>🎯 Score</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${score}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>🕐 Submitted At</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${submittedAt}</td>
+                        </tr>
+                    </table>
+                    
+                    <p style="text-align: center; margin-top: 20px;">
+                        <a href="https://fsaudit.gmrlapps.com/auditor/action-plan?doc=${encodeURIComponent(documentNumber)}" 
+                           style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                            Review Action Plan
+                        </a>
+                    </p>
+                </div>
+                <div style="background: #1f2937; color: #9ca3af; padding: 15px; text-align: center; font-size: 12px; border-radius: 0 0 8px 8px;">
+                    Food Safety Audit System - Automated Notification
+                </div>
+            </div>
+        `;
+        
+        // Send email via Microsoft Graph
+        const graphEndpoint = `https://graph.microsoft.com/v1.0/me/sendMail`;
+        
+        const emailPayload = {
+            message: {
+                subject: emailSubject,
+                body: {
+                    contentType: 'HTML',
+                    content: emailHtml
+                },
+                toRecipients: recipients.map(r => ({
+                    emailAddress: { address: r.email, name: r.name }
+                }))
+            },
+            saveToSentItems: true
+        };
+        
+        const graphResponse = await fetch(graphEndpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(emailPayload)
+        });
+        
+        if (!graphResponse.ok) {
+            const errorText = await graphResponse.text();
+            throw new Error(`Graph API error: ${graphResponse.status} - ${errorText}`);
+        }
+        
+        // Log notification in database
+        for (const recipient of recipients) {
+            await pool.request()
+                .input('documentNumber', sql.NVarChar(50), documentNumber)
+                .input('recipientEmail', sql.NVarChar(255), recipient.email)
+                .input('recipientName', sql.NVarChar(255), recipient.name)
+                .input('recipientRole', sql.NVarChar(50), 'AreaManager')
+                .input('notificationType', sql.NVarChar(50), 'ActionPlanSubmittedToAreaManager')
+                .input('emailSubject', sql.NVarChar(255), emailSubject)
+                .input('sentByEmail', sql.NVarChar(255), senderEmail)
+                .input('status', sql.NVarChar(50), 'Sent')
+                .input('sentAt', sql.DateTime, new Date())
+                .query(`
+                    INSERT INTO Notifications (document_number, recipient_email, recipient_name, recipient_role, notification_type, email_subject, sent_by_email, status, sent_at)
+                    VALUES (@documentNumber, @recipientEmail, @recipientName, @recipientRole, @notificationType, @emailSubject, @sentByEmail, @status, @sentAt)
+                `);
+        }
+        
+        console.log(`📧 [ActionPlanAreaManagerNotification] Sent to ${recipients.length} Area Manager(s) for ${documentNumber}`);
+        
+    } catch (error) {
+        console.error(`[ActionPlanAreaManagerNotification] Error sending notification:`, error.message);
         // Don't throw - we don't want to fail the main request if notification fails
     }
 }
@@ -8791,6 +9062,10 @@ app.post('/api/action-plan/submit-to-auditor', requireAuth, async (req, res) => 
             
             // Log the activity
             logActionPlanSubmitted(req.currentUser, documentNumber, req);
+            
+            // Send notification to Area Managers (async, don't wait)
+            sendActionPlanSubmittedToAreaManagers(documentNumber, storeName, user.displayName || user.email, user.role || 'StoreManager', pool)
+                .catch(err => console.error('[ActionPlanAreaManagerNotification] Background error:', err.message));
             
             res.json({
                 success: true,
