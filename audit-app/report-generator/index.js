@@ -131,9 +131,18 @@ class ReportGenerator {
             console.log('📂 Step 7.6: Fetching categories...');
             const categories = await this.dataService.getCategoriesWithSections(auditData.schemaId);
 
-            // 7.7 Fetch historical findings for repetitive issue detection
+            // 7.7 Fetch historical findings for repetitive issue detection (legacy)
             console.log('🔄 Step 7.7: Fetching historical findings...');
             const historicalFindings = await this.dataService.getHistoricalFindings(auditData.storeId, auditId);
+
+            // 7.75 Fetch recurring issues (new - same schema, tracks specific cycles)
+            console.log('🔁 Step 7.75: Fetching recurring issues...');
+            const recurringIssues = await this.dataService.getRecurringIssues(
+                auditData.storeId, 
+                auditData.schemaId, 
+                auditId, 
+                auditData.cycle
+            );
 
             // 7.8 Fetch schema colors
             console.log('🎨 Step 7.8: Fetching schema colors...');
@@ -178,6 +187,7 @@ class ReportGenerator {
                 historicalAudits,
                 categories,
                 historicalFindings,
+                recurringIssues,  // New: tracks which cycles each issue appeared in
                 schemaColors,
                 
                 // Metadata

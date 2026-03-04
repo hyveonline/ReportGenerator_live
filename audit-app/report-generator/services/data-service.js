@@ -432,6 +432,102 @@ class DataService {
     }
 
     /**
+     * Get recurring issues for a store - detects items that failed in multiple cycles
+     * Matches by: Same Store + Same Schema + SectionName + ReferenceValue + Title
+     * Returns which specific cycles each issue appeared in
+     * @param {number} storeId - Store ID
+     * @param {number} schemaId - Schema ID (same template type)
+     * @param {number} currentAuditId - Current audit ID to exclude from history
+     * @param {number} currentCycle - Current cycle number
+     * @returns {Promise<Object>} - Map of unique key -> cycle occurrences
+     */
+    async getRecurringIssues(storeId, schemaId, currentAuditId, currentCycle) {
+        try {
+            console.log(`🔄 Fetching recurring issues for store: ${storeId}, schema: ${schemaId}`);
+
+            // Get all failed items from previous audits for same store and schema
+            const result = await this.pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .input('SchemaID', sql.Int, schemaId)
+                .input('CurrentAuditID', sql.Int, currentAuditId)
+                .query(`
+                    SELECT 
+                        r.SectionName,
+                        r.ReferenceValue,
+                        r.Title,
+                        r.SelectedChoice,
+                        ai.Cycle,
+                        ai.Year,
+                        ai.DocumentNumber,
+                        ai.AuditDate,
+                        ai.AuditID
+                    FROM AuditResponses r
+                    INNER JOIN AuditInstances ai ON r.AuditID = ai.AuditID
+                    WHERE ai.StoreID = @StoreID
+                        AND ai.SchemaID = @SchemaID
+                        AND ai.AuditID != @CurrentAuditID
+                        AND ai.Status = 'Completed'
+                        AND r.SelectedChoice IN ('No', 'Partially')
+                    ORDER BY r.SectionName, r.ReferenceValue, ai.Cycle DESC
+                `);
+
+            // Group by Section + ReferenceValue + Title (composite key)
+            const recurringMap = {};
+            
+            for (const row of result.recordset) {
+                // Create unique key: SectionName|ReferenceValue|Title
+                const key = `${row.SectionName}|${row.ReferenceValue || ''}|${row.Title || ''}`;
+                
+                if (!recurringMap[key]) {
+                    recurringMap[key] = {
+                        sectionName: row.SectionName,
+                        referenceValue: row.ReferenceValue,
+                        title: row.Title,
+                        cycles: [],          // Array of cycle numbers where this failed
+                        occurrences: [],     // Detailed occurrence info
+                        count: 0
+                    };
+                }
+                
+                // Add this cycle if not already added (avoid duplicates)
+                const cycleKey = `${row.Year}-C${row.Cycle}`;
+                if (!recurringMap[key].cycles.includes(row.Cycle)) {
+                    recurringMap[key].cycles.push(row.Cycle);
+                    recurringMap[key].occurrences.push({
+                        cycle: row.Cycle,
+                        year: row.Year,
+                        cycleDisplay: cycleKey,
+                        documentNumber: row.DocumentNumber,
+                        auditDate: row.AuditDate,
+                        selectedChoice: row.SelectedChoice
+                    });
+                    recurringMap[key].count++;
+                }
+            }
+
+            // Filter to items that appeared in 1+ PREVIOUS audits
+            // (current audit also failing = 2+ total occurrences = truly recurring)
+            const recurringIssues = {};
+            for (const [key, data] of Object.entries(recurringMap)) {
+                if (data.count >= 1) {  // 1+ previous = recurring (since current also fails)
+                    // Sort cycles in ascending order for display
+                    data.cycles.sort((a, b) => a - b);
+                    data.occurrences.sort((a, b) => a.cycle - b.cycle);
+                    data.cyclesDisplay = data.cycles.map(c => `C${c}`).join(', ');
+                    recurringIssues[key] = data;
+                }
+            }
+
+            console.log(`   ✅ Found ${Object.keys(recurringIssues).length} recurring issues (1+ previous cycles)`);
+
+            return recurringIssues;
+        } catch (error) {
+            console.error('❌ Error fetching recurring issues:', error);
+            return {};
+        }
+    }
+
+    /**
      * Get historical findings for a store to detect repetitive issues
      * Returns findings from previous audits grouped by ReferenceValue
      * @param {number} storeId - Store ID

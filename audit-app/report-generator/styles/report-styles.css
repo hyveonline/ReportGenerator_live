@@ -605,6 +605,147 @@ td.answer-col {
     margin-left: 10px;
 }
 
+/* Recurring Issues Section - Top of Report */
+.recurring-issues-section {
+    background: linear-gradient(135deg, #fef2f2 0%, #fff5f5 100%);
+    border: 2px solid #fecaca;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.1);
+}
+
+.recurring-header {
+    margin-bottom: 15px;
+}
+
+.recurring-title-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #991b1b;
+    margin: 0 0 5px 0;
+}
+
+.recurring-icon {
+    font-size: 1.5rem;
+}
+
+.recurring-subtitle {
+    color: #b91c1c;
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.recurring-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.recurring-table th {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    color: white;
+    padding: 12px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.recurring-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #fecaca;
+    font-size: 0.875rem;
+}
+
+.recurring-table tr:last-child td {
+    border-bottom: none;
+}
+
+.recurring-table tr:hover {
+    background: #fef2f2;
+}
+
+.recurring-num {
+    width: 40px;
+    text-align: center;
+    font-weight: 600;
+    color: #991b1b;
+}
+
+.recurring-section {
+    width: 15%;
+    font-weight: 500;
+}
+
+.recurring-ref {
+    width: 60px;
+    text-align: center;
+    font-family: monospace;
+    font-weight: 600;
+}
+
+.recurring-title {
+    width: auto;
+}
+
+.recurring-cycles {
+    width: 140px;
+}
+
+.recurring-count {
+    width: 70px;
+    text-align: center;
+}
+
+.cycle-badge {
+    display: inline-block;
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 2px;
+}
+
+.cycle-badge .doc-num-small {
+    font-weight: 400;
+    font-size: 0.65rem;
+    opacity: 0.85;
+}
+
+.count-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+/* Print styles for recurring issues */
+@media print {
+    .recurring-issues-section {
+        page-break-inside: avoid;
+        background: #fff5f5 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .recurring-table th {
+        background: #dc2626 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
+
 .section-findings .findings-table {
     background: white;
     border-radius: 8px;

@@ -104,6 +104,7 @@ class TemplateEngine {
             const header = this.buildHeader(reportData);
             const auditInfo = this.buildAuditInfo(reportData);
             const performanceBanner = this.buildPerformanceBanner(reportData);
+            const recurringIssuesSection = this.buildRecurringIssuesSection(reportData);
             const dataTable = this.buildDataTable(reportData);
             const chartSection = this.buildChart(reportData);
             const sectionsHtml = this.buildSections(reportData);
@@ -163,6 +164,7 @@ class TemplateEngine {
                 header,
                 auditInfo,
                 performanceBanner,
+                recurringIssuesSection,
                 dataTable,
                 chart: chartSection,
                 sections: sectionsHtml,
@@ -294,6 +296,103 @@ class TemplateEngine {
     }
 
     /**
+     * Build recurring issues section - shows items that failed in multiple cycles
+     * Displayed at the top of the report for visibility
+     */
+    buildRecurringIssuesSection(data) {
+        const recurringIssues = data.recurringIssues || {};
+        const issuesList = Object.values(recurringIssues);
+        
+        console.log('🔁 buildRecurringIssuesSection: recurringIssues count:', Object.keys(recurringIssues).length);
+        
+        // If no recurring issues, return empty
+        if (issuesList.length === 0) {
+            console.log('   ⚠️ No recurring issues in map, returning empty');
+            return '';
+        }
+
+        // Also check if any of the current findings match recurring issues
+        const currentFindings = [];
+        console.log('   📊 Checking sections count:', (data.sections || []).length);
+        if (data.sections) {
+            for (const section of data.sections) {
+                for (const item of section.items || []) {
+                    if (item.selectedChoice === 'No' || item.selectedChoice === 'Partially') {
+                        const key = `${section.sectionName}|${item.referenceValue || ''}|${item.title || ''}`;
+                        if (recurringIssues[key]) {
+                            console.log('   ✅ MATCH found:', key.substring(0, 60));
+                            currentFindings.push({
+                                ...item,
+                                sectionName: section.sectionName,
+                                recurringData: recurringIssues[key]
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        console.log('   🔍 Current findings matching recurring:', currentFindings.length);
+
+        // If no current findings match recurring issues, don't show section
+        if (currentFindings.length === 0) {
+            console.log('   ⚠️ No current findings match recurring issues, returning empty');
+            return '';
+        }
+
+        // Sort by number of occurrences (most recurring first)
+        currentFindings.sort((a, b) => b.recurringData.count - a.recurringData.count);
+
+        // Build table rows
+        const rows = currentFindings.map((item, index) => {
+            const count = item.recurringData.count || 0;
+            
+            // Build cycle badges with document numbers
+            const cycleBadges = item.recurringData.occurrences
+                .map(occ => `<span class="cycle-badge" title="${escapeHtml(occ.documentNumber || '')}">${occ.cycle} <span class="doc-num-small">(${escapeHtml(occ.documentNumber || '')})</span></span>`)
+                .join(' ');
+            
+            return `
+                <tr>
+                    <td class="recurring-num">${index + 1}</td>
+                    <td class="recurring-section">${escapeHtml(item.sectionName || '')}</td>
+                    <td class="recurring-ref">${escapeHtml(item.referenceValue || '')}</td>
+                    <td class="recurring-title">${escapeHtml(item.title || '')}</td>
+                    <td class="recurring-cycles">${cycleBadges}</td>
+                    <td class="recurring-count"><span class="count-badge">${count + 1}x</span></td>
+                </tr>
+            `;
+        }).join('\n');
+
+        return `
+            <div class="recurring-issues-section">
+                <div class="recurring-header">
+                    <h2 class="recurring-title-main">
+                        <span class="recurring-icon">🔁</span>
+                        Recurring Issues (${currentFindings.length})
+                    </h2>
+                    <p class="recurring-subtitle">These findings have occurred in multiple audit cycles for this store</p>
+                </div>
+                <table class="recurring-table">
+                    <thead>
+                        <tr>
+                            <th class="recurring-num">#</th>
+                            <th class="recurring-section">Section</th>
+                            <th class="recurring-ref">Ref</th>
+                            <th class="recurring-title">Criteria / Requirement</th>
+                            <th class="recurring-cycles">Previous Cycles</th>
+                            <th class="recurring-count">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    /**
      * Build sections HTML
      */
     buildSections(data) {
@@ -333,7 +432,7 @@ class TemplateEngine {
         `;
 
         const itemsTable = this.buildSectionTable(section.items, reportData.pictures);
-        const sectionFindings = this.buildSectionFindings(section.items, reportData.pictures, reportData.historicalFindings);
+        const sectionFindings = this.buildSectionFindings(section.items, reportData.pictures, reportData.historicalFindings, reportData.recurringIssues, section.sectionName);
         
         // Get temperature readings for this section (based on ResponseID matching section items)
         const sectionTemps = this.filterTemperaturesBySection(reportData.temperatureReadings, section.items);
@@ -568,9 +667,11 @@ class TemplateEngine {
      * Build section findings - shows No/Partially items with finding pictures
      * @param {Array} items - Section items
      * @param {Object} pictures - Pictures indexed by responseId
-     * @param {Object} historicalFindings - Historical findings map by referenceValue
+     * @param {Object} historicalFindings - Historical findings map by referenceValue (legacy)
+     * @param {Object} recurringIssues - New recurring issues map (Section|Ref|Title -> cycles)
+     * @param {string} sectionName - Current section name for recurring lookup
      */
-    buildSectionFindings(items, pictures = {}, historicalFindings = {}) {
+    buildSectionFindings(items, pictures = {}, historicalFindings = {}, recurringIssues = {}, sectionName = '') {
         // Filter to only No and Partially answers
         const findings = items.filter(item => 
             item.selectedChoice === 'No' || item.selectedChoice === 'Partially'
@@ -606,18 +707,27 @@ class TemplateEngine {
             // Answer display for findings (No = 0, Partially = half of coeff)
             const answerText = item.selectedChoice === 'No' ? 'No' : 'Partially';
 
-            // Check if this finding is repetitive (appeared in historical audits)
+            // Check if this finding is recurring (appeared in previous cycles - new system)
+            const recurringKey = `${sectionName}|${item.referenceValue || ''}|${item.title || ''}`;
+            const recurringData = recurringIssues[recurringKey];
+            const isRecurring = recurringData && recurringData.count >= 1;  // 1+ previous cycles
+            
+            // Also check legacy historical findings (fallback)
             const refKey = item.referenceValue || item.title;
             const historicalData = historicalFindings[refKey];
-            const isRepetitive = historicalData && historicalData.count > 0;
+            const isRepetitive = isRecurring || (historicalData && historicalData.count > 0);
             
-            // Build tooltip with document numbers
+            // Build recurring badge with specific cycles
             let repetitiveBadge = '';
-            if (isRepetitive) {
+            if (isRecurring) {
+                const cyclesText = recurringData.cyclesDisplay || recurringData.cycles.map(c => `C${c}`).join(', ');
+                repetitiveBadge = `<span class="repetitive-badge" title="Recurring issue - also failed in: ${cyclesText}">🔁 ${cyclesText}</span>`;
+            } else if (historicalData && historicalData.count > 0) {
+                // Fallback to legacy badge
                 const docNumbers = historicalData.occurrences
                     .map(o => o.documentNumber)
-                    .filter((v, i, a) => a.indexOf(v) === i) // Unique document numbers
-                    .slice(0, 5) // Limit to 5 for readability
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .slice(0, 5)
                     .join(', ');
                 const moreText = historicalData.count > 5 ? ` (+${historicalData.count - 5} more)` : '';
                 repetitiveBadge = `<span class="repetitive-badge" title="Found in ${historicalData.count} previous audit(s): ${docNumbers}${moreText}">🔄 ${historicalData.count}x</span>`;
@@ -636,13 +746,15 @@ class TemplateEngine {
             `;
         }).join('\n');
 
-        // Count repetitive findings
-        const repetitiveCount = findings.filter(item => {
+        // Count recurring findings (new system + legacy fallback)
+        const recurringCount = findings.filter(item => {
+            const recurringKey = `${sectionName}|${item.referenceValue || ''}|${item.title || ''}`;
             const refKey = item.referenceValue || item.title;
-            return historicalFindings[refKey] && historicalFindings[refKey].count > 0;
+            return (recurringIssues[recurringKey] && recurringIssues[recurringKey].count >= 1) ||
+                   (historicalFindings[refKey] && historicalFindings[refKey].count > 0);
         }).length;
-        const repetitiveNote = repetitiveCount > 0 
-            ? `<span class="repetitive-summary">🔄 ${repetitiveCount} repetitive issue(s)</span>` 
+        const repetitiveNote = recurringCount > 0 
+            ? `<span class="repetitive-summary">🔁 ${recurringCount} recurring issue(s)</span>` 
             : '';
 
         return `
@@ -3057,6 +3169,7 @@ class TemplateEngine {
         {{header}}
         {{auditInfo}}
         {{performanceBanner}}
+        {{recurringIssuesSection}}
         {{chart}}
         {{sections}}
         {{findings}}
