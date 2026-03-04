@@ -2688,6 +2688,61 @@ app.get('/api/admin/escalation-job/logs', requireAuth, requireRole('Admin'), asy
     }
 });
 
+// Check system sender session status
+app.get('/api/admin/escalation-job/sender-status', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'spnotification@spinneys-lebanon.com';
+        
+        const result = await pool.request()
+            .input('email', sql.NVarChar, systemSenderEmail)
+            .query(`
+                SELECT TOP 1 
+                    s.expires_at, 
+                    s.created_at,
+                    u.email,
+                    u.display_name,
+                    CASE WHEN s.azure_access_token IS NOT NULL THEN 1 ELSE 0 END as hasAccessToken,
+                    CASE WHEN s.azure_refresh_token IS NOT NULL THEN 1 ELSE 0 END as hasRefreshToken
+                FROM Sessions s
+                INNER JOIN Users u ON s.user_id = u.id
+                WHERE u.email = @email
+                ORDER BY s.created_at DESC
+            `);
+        
+        if (result.recordset.length === 0) {
+            return res.json({
+                success: true,
+                hasSession: false,
+                email: systemSenderEmail,
+                message: 'No session found. Please login with this account.'
+            });
+        }
+        
+        const session = result.recordset[0];
+        const isExpired = new Date(session.expires_at) < new Date();
+        
+        res.json({
+            success: true,
+            hasSession: true,
+            email: session.email,
+            displayName: session.display_name,
+            expiresAt: session.expires_at,
+            isExpired: isExpired,
+            hasAccessToken: session.hasAccessToken === 1,
+            hasRefreshToken: session.hasRefreshToken === 1,
+            canSendEmails: !isExpired && session.hasAccessToken === 1
+        });
+        
+    } catch (error) {
+        console.error('[EscalationJob] Error checking sender status:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Preview (dry run) - shows what would be sent without sending
 app.get('/api/admin/escalation-job/preview', requireAuth, requireRole('Admin'), async (req, res) => {
     try {
@@ -3779,6 +3834,276 @@ app.post('/api/audits/action-plan-stats', requireAuth, async (req, res) => {
 // Report View Tracking APIs
 // ==========================================
 
+/**
+ * Get system sender token for automated notifications
+ * Uses spnotification@spinneys-lebanon.com session
+ */
+async function getSystemSenderToken() {
+    const sql = require('mssql');
+    const dbConfig = require('./config/default').database;
+    const pool = await sql.connect(dbConfig);
+    
+    const systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'spnotification@spinneys-lebanon.com';
+    
+    // Find active session for system sender
+    const result = await pool.request()
+        .input('email', sql.NVarChar, systemSenderEmail)
+        .query(`
+            SELECT TOP 1 s.session_token, s.azure_access_token, s.azure_refresh_token, s.expires_at, u.email
+            FROM Sessions s
+            INNER JOIN Users u ON s.user_id = u.id
+            WHERE u.email = @email
+            AND s.expires_at > GETDATE()
+            ORDER BY s.created_at DESC
+        `);
+    
+    if (result.recordset.length === 0) {
+        throw new Error(`No active session for system sender: ${systemSenderEmail}. Please login with this account first.`);
+    }
+    
+    const session = result.recordset[0];
+    const tokenExpiry = new Date(session.expires_at);
+    const now = new Date();
+    
+    // Check if access token is still valid (with 5 min buffer)
+    if (tokenExpiry > new Date(now.getTime() + 5 * 60 * 1000) && session.azure_access_token) {
+        return { token: session.azure_access_token, email: systemSenderEmail };
+    }
+    
+    // Token expired or about to expire, need to refresh
+    if (!session.azure_refresh_token) {
+        throw new Error(`No refresh token for ${systemSenderEmail}. Please login again with offline_access scope.`);
+    }
+    
+    console.log(`[ReportViewNotification] Refreshing access token for ${systemSenderEmail}...`);
+    
+    const tokenEndpoint = `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`;
+    
+    const params = new URLSearchParams({
+        client_id: process.env.AZURE_CLIENT_ID,
+        client_secret: process.env.AZURE_CLIENT_SECRET,
+        refresh_token: session.azure_refresh_token,
+        grant_type: 'refresh_token',
+        scope: 'User.Read User.ReadBasic.All Mail.Send offline_access'
+    });
+
+    const response = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Token refresh failed: ${response.status} - ${errorText}`);
+    }
+
+    const tokenData = await response.json();
+    
+    // Update the session with new tokens
+    const newExpiry = new Date(Date.now() + (tokenData.expires_in * 1000));
+    await pool.request()
+        .input('sessionToken', sql.NVarChar, session.session_token)
+        .input('accessToken', sql.NVarChar, tokenData.access_token)
+        .input('refreshToken', sql.NVarChar, tokenData.refresh_token || session.azure_refresh_token)
+        .input('expiresAt', sql.DateTime, newExpiry)
+        .query(`
+            UPDATE Sessions 
+            SET azure_access_token = @accessToken,
+                azure_refresh_token = @refreshToken,
+                expires_at = @expiresAt
+            WHERE session_token = @sessionToken
+        `);
+    
+    console.log(`[ReportViewNotification] Token refreshed successfully for ${systemSenderEmail}`);
+    return { token: tokenData.access_token, email: systemSenderEmail };
+}
+
+/**
+ * Send report view notification to audit creator and SuperAuditors (except Danielle Melhem)
+ */
+async function sendReportViewNotification(auditId, viewerName, viewerRole, pool) {
+    try {
+        // Get audit details and creator
+        const auditResult = await pool.request()
+            .input('auditId', sql.Int, auditId)
+            .query(`
+                SELECT ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.AuditDate, ai.TotalScore, ai.CreatedBy,
+                       u.id as CreatorId, u.email as CreatorEmail, u.display_name as CreatorName
+                FROM AuditInstances ai
+                LEFT JOIN Users u ON u.email = ai.CreatedBy
+                WHERE ai.AuditID = @auditId
+            `);
+        
+        if (auditResult.recordset.length === 0) {
+            console.log(`[ReportViewNotification] Audit ${auditId} not found`);
+            return;
+        }
+        
+        const audit = auditResult.recordset[0];
+        
+        // Get SuperAuditors (except Danielle Melhem)
+        const superAuditorsResult = await pool.request()
+            .query(`
+                SELECT id, email, display_name 
+                FROM Users 
+                WHERE role = 'SuperAuditor' 
+                AND is_active = 1 
+                AND email IS NOT NULL
+                AND email != 'Danielle.Melhem@gmrlgroup.com'
+            `);
+        
+        // Build recipient list
+        const recipients = [];
+        
+        // Add audit creator if exists
+        if (audit.CreatorEmail) {
+            recipients.push({
+                email: audit.CreatorEmail,
+                name: audit.CreatorName || audit.CreatorEmail,
+                role: 'AuditCreator'
+            });
+        }
+        
+        // Add SuperAuditors (except Danielle)
+        for (const sa of superAuditorsResult.recordset) {
+            // Avoid duplicate if creator is also a SuperAuditor
+            if (!recipients.find(r => r.email.toLowerCase() === sa.email.toLowerCase())) {
+                recipients.push({
+                    email: sa.email,
+                    name: sa.display_name || sa.email,
+                    role: 'SuperAuditor'
+                });
+            }
+        }
+        
+        if (recipients.length === 0) {
+            console.log(`[ReportViewNotification] No recipients found for audit ${auditId}`);
+            return;
+        }
+        
+        // Get system sender token
+        const { token: accessToken, email: senderEmail } = await getSystemSenderToken();
+        
+        // Build email content
+        const viewedAt = new Date().toLocaleString('en-US', { 
+            year: 'numeric', month: 'long', day: 'numeric', 
+            hour: '2-digit', minute: '2-digit' 
+        });
+        const auditDate = audit.AuditDate ? new Date(audit.AuditDate).toLocaleDateString('en-US', { 
+            year: 'numeric', month: 'long', day: 'numeric' 
+        }) : 'N/A';
+        const score = audit.TotalScore ? Math.round(audit.TotalScore) + '%' : 'N/A';
+        
+        const emailSubject = `📋 Report Viewed: ${audit.StoreName} (${audit.DocumentNumber})`;
+        
+        const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h2 style="margin: 0;">📋 Report Viewed Notification</h2>
+                </div>
+                <div style="padding: 25px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none;">
+                    <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 20px; border-radius: 0 8px 8px 0;">
+                        <strong style="color: #1e40af;">👤 ${viewerName}</strong>
+                        <span style="color: #1e40af;"> (${viewerRole})</span>
+                        <p style="margin: 8px 0 0 0; color: #1e3a8a;">has viewed the audit report.</p>
+                    </div>
+                    
+                    <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6; width: 35%;"><strong>🏪 Store</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${audit.StoreName}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>📋 Document #</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${audit.DocumentNumber}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>📅 Audit Date</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${auditDate}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>🎯 Score</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${score}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb; background: #f3f4f6;"><strong>🕐 Viewed At</strong></td>
+                            <td style="padding: 10px; border: 1px solid #e5e7eb;">${viewedAt}</td>
+                        </tr>
+                    </table>
+                    
+                    <p style="text-align: center; margin-top: 20px;">
+                        <a href="https://fsaudit.gmrlapps.com/api/audits/reports/Audit_Report_${audit.DocumentNumber}.html" 
+                           style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                            View Report
+                        </a>
+                    </p>
+                </div>
+                <div style="background: #1f2937; color: #9ca3af; padding: 15px; text-align: center; font-size: 12px; border-radius: 0 0 8px 8px;">
+                    Food Safety Audit System - Automated Notification
+                </div>
+            </div>
+        `;
+        
+        // Send email via Microsoft Graph
+        const toEmails = recipients.map(r => r.email);
+        
+        const graphEndpoint = `https://graph.microsoft.com/v1.0/me/sendMail`;
+        
+        const emailPayload = {
+            message: {
+                subject: emailSubject,
+                body: {
+                    contentType: 'HTML',
+                    content: emailHtml
+                },
+                toRecipients: recipients.map(r => ({
+                    emailAddress: { address: r.email, name: r.name }
+                }))
+            },
+            saveToSentItems: true
+        };
+        
+        const graphResponse = await fetch(graphEndpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(emailPayload)
+        });
+        
+        if (!graphResponse.ok) {
+            const errorText = await graphResponse.text();
+            throw new Error(`Graph API error: ${graphResponse.status} - ${errorText}`);
+        }
+        
+        // Log notification in database
+        for (const recipient of recipients) {
+            await pool.request()
+                .input('documentNumber', sql.NVarChar(50), audit.DocumentNumber)
+                .input('recipientEmail', sql.NVarChar(255), recipient.email)
+                .input('recipientName', sql.NVarChar(255), recipient.name)
+                .input('recipientRole', sql.NVarChar(50), recipient.role)
+                .input('notificationType', sql.NVarChar(50), 'ReportViewed')
+                .input('emailSubject', sql.NVarChar(255), emailSubject)
+                .input('sentByEmail', sql.NVarChar(255), senderEmail)
+                .input('status', sql.NVarChar(50), 'Sent')
+                .input('sentAt', sql.DateTime, new Date())
+                .query(`
+                    INSERT INTO Notifications (document_number, recipient_email, recipient_name, recipient_role, notification_type, email_subject, sent_by_email, status, sent_at)
+                    VALUES (@documentNumber, @recipientEmail, @recipientName, @recipientRole, @notificationType, @emailSubject, @sentByEmail, @status, @sentAt)
+                `);
+        }
+        
+        console.log(`📧 [ReportViewNotification] Sent to ${recipients.length} recipients for audit ${auditId}`);
+        
+    } catch (error) {
+        console.error(`[ReportViewNotification] Error sending notification:`, error.message);
+        // Don't throw - we don't want to fail the main request if notification fails
+    }
+}
+
 // Log when a user views a report
 app.post('/api/audits/:auditId/log-view', requireAuth, async (req, res) => {
     try {
@@ -3826,6 +4151,11 @@ app.post('/api/audits/:auditId/log-view', requireAuth, async (req, res) => {
             `);
         
         console.log(`📊 Report view logged: Audit ${auditId} viewed by ${user.displayName} (${user.role})`);
+        
+        // Send notification to audit creator and SuperAuditors (async, don't wait)
+        sendReportViewNotification(auditId, user.displayName || user.email, user.role, pool)
+            .catch(err => console.error('[ReportViewNotification] Background error:', err.message));
+        
         res.json({ success: true, logged: true });
     } catch (error) {
         console.error('Error logging report view:', error);
