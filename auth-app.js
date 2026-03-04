@@ -857,6 +857,101 @@ app.delete('/api/stores/:storeId/managers/:userId', requireAuth, requirePagePerm
     }
 });
 
+// ==========================================
+// Store-Schema Assignment Endpoints (Multiple schemas per store)
+// ==========================================
+
+// Get all store-schema assignments (for admin view)
+app.get('/api/stores/schema-assignments', requireAuth, requirePagePermission(STORE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const assignments = await StoreService.getAllStoreSchemaAssignments();
+        res.json({ success: true, data: assignments });
+    } catch (error) {
+        console.error('Error getting store schema assignments:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get schemas for a specific store
+app.get('/api/stores/:storeId/schemas', requireAuth, async (req, res) => {
+    try {
+        const schemas = await StoreService.getStoreSchemas(parseInt(req.params.storeId));
+        res.json({ success: true, data: schemas });
+    } catch (error) {
+        console.error('Error getting store schemas:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Set schemas for a store (replaces existing)
+app.post('/api/stores/:storeId/schemas', requireAuth, requirePagePermission(STORE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { schemaIds, defaultSchemaId } = req.body;
+        console.log(`📝 [STORE-SCHEMA] User ${req.currentUser?.email} setting schemas for store ${req.params.storeId}:`, schemaIds);
+        
+        if (!Array.isArray(schemaIds)) {
+            return res.status(400).json({ success: false, error: 'schemaIds must be an array' });
+        }
+        
+        const result = await StoreService.setStoreSchemas(
+            parseInt(req.params.storeId),
+            schemaIds,
+            defaultSchemaId || null,
+            req.currentUser?.email || 'Admin'
+        );
+        console.log(`✅ [STORE-SCHEMA] Assignment successful:`, result);
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('❌ [STORE-SCHEMA] Error setting store schemas:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add a single schema to a store
+app.put('/api/stores/:storeId/schemas/:schemaId', requireAuth, requirePagePermission(STORE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { isDefault } = req.body;
+        const result = await StoreService.addSchemaToStore(
+            parseInt(req.params.storeId),
+            parseInt(req.params.schemaId),
+            isDefault || false,
+            req.currentUser?.email || 'Admin'
+        );
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error adding schema to store:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Remove a schema from a store
+app.delete('/api/stores/:storeId/schemas/:schemaId', requireAuth, requirePagePermission(STORE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const result = await StoreService.removeSchemaFromStore(
+            parseInt(req.params.storeId),
+            parseInt(req.params.schemaId)
+        );
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error removing schema from store:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Set default schema for a store
+app.patch('/api/stores/:storeId/schemas/:schemaId/default', requireAuth, requirePagePermission(STORE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const result = await StoreService.setDefaultSchema(
+            parseInt(req.params.storeId),
+            parseInt(req.params.schemaId)
+        );
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error setting default schema:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get assigned stores for current StoreManager
 app.get('/api/store-manager/my-stores', requireAuth, async (req, res) => {
     try {

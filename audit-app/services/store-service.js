@@ -483,6 +483,214 @@ class StoreService {
             throw error;
         }
     }
+
+    // ==========================================
+    // Store-Schema Assignment Methods (Multiple schemas per store)
+    // ==========================================
+
+    /**
+     * Get all schemas assigned to a store
+     */
+    async getStoreSchemas(storeId) {
+        try {
+            const pool = await this.getPool();
+            const result = await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .query(`
+                    SELECT ss.StoreSchemaID, ss.SchemaID, ss.IsDefault, ss.CreatedAt,
+                           s.SchemaName, s.Description, s.DocumentPrefix
+                    FROM StoreSchemas ss
+                    INNER JOIN AuditSchemas s ON ss.SchemaID = s.SchemaID
+                    WHERE ss.StoreID = @StoreID AND s.IsActive = 1
+                    ORDER BY ss.IsDefault DESC, s.SchemaName
+                `);
+            return result.recordset.map(row => ({
+                storeSchemaId: row.StoreSchemaID,
+                schemaId: row.SchemaID,
+                schemaName: row.SchemaName,
+                description: row.Description,
+                documentPrefix: row.DocumentPrefix,
+                isDefault: row.IsDefault,
+                createdAt: row.CreatedAt
+            }));
+        } catch (error) {
+            console.error('Error getting store schemas:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all store-schema assignments (for admin view)
+     */
+    async getAllStoreSchemaAssignments() {
+        try {
+            const pool = await this.getPool();
+            const result = await pool.request()
+                .query(`
+                    SELECT ss.StoreID, ss.SchemaID, ss.IsDefault,
+                           sc.SchemaName
+                    FROM StoreSchemas ss
+                    INNER JOIN AuditSchemas sc ON ss.SchemaID = sc.SchemaID
+                    WHERE sc.IsActive = 1
+                    ORDER BY ss.StoreID, ss.IsDefault DESC
+                `);
+            
+            // Group by storeId
+            const assignments = {};
+            for (const row of result.recordset) {
+                if (!assignments[row.StoreID]) {
+                    assignments[row.StoreID] = [];
+                }
+                assignments[row.StoreID].push({
+                    schemaId: row.SchemaID,
+                    schemaName: row.SchemaName,
+                    isDefault: row.IsDefault
+                });
+            }
+            return assignments;
+        } catch (error) {
+            console.error('Error getting all store schema assignments:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Set schemas for a store (replaces existing assignments)
+     * @param {number} storeId - Store ID
+     * @param {Array} schemaIds - Array of schema IDs
+     * @param {number} defaultSchemaId - The default schema ID (optional, first one if not provided)
+     * @param {string} createdBy - User who made the change
+     */
+    async setStoreSchemas(storeId, schemaIds, defaultSchemaId = null, createdBy = null) {
+        try {
+            const pool = await this.getPool();
+            const transaction = new sql.Transaction(pool);
+            await transaction.begin();
+
+            try {
+                // Remove existing schema assignments
+                await transaction.request()
+                    .input('StoreID', sql.Int, storeId)
+                    .query('DELETE FROM StoreSchemas WHERE StoreID = @StoreID');
+
+                // Add new schema assignments
+                for (let i = 0; i < schemaIds.length; i++) {
+                    const schemaId = schemaIds[i];
+                    const isDefault = defaultSchemaId ? (schemaId === defaultSchemaId) : (i === 0);
+                    
+                    await transaction.request()
+                        .input('StoreID', sql.Int, storeId)
+                        .input('SchemaID', sql.Int, schemaId)
+                        .input('IsDefault', sql.Bit, isDefault)
+                        .input('CreatedBy', sql.NVarChar(255), createdBy)
+                        .query(`
+                            INSERT INTO StoreSchemas (StoreID, SchemaID, IsDefault, CreatedBy)
+                            VALUES (@StoreID, @SchemaID, @IsDefault, @CreatedBy)
+                        `);
+                }
+
+                // Also update the legacy SchemaID column in Stores table for backward compatibility
+                if (schemaIds.length > 0) {
+                    const primarySchemaId = defaultSchemaId || schemaIds[0];
+                    await transaction.request()
+                        .input('StoreID', sql.Int, storeId)
+                        .input('SchemaID', sql.Int, primarySchemaId)
+                        .query('UPDATE Stores SET SchemaID = @SchemaID WHERE StoreID = @StoreID');
+                }
+
+                await transaction.commit();
+                return { success: true, count: schemaIds.length };
+            } catch (err) {
+                await transaction.rollback();
+                throw err;
+            }
+        } catch (error) {
+            console.error('Error setting store schemas:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Add a single schema to a store
+     */
+    async addSchemaToStore(storeId, schemaId, isDefault = false, createdBy = null) {
+        try {
+            const pool = await this.getPool();
+            
+            // If this is set as default, unset other defaults first
+            if (isDefault) {
+                await pool.request()
+                    .input('StoreID', sql.Int, storeId)
+                    .query('UPDATE StoreSchemas SET IsDefault = 0 WHERE StoreID = @StoreID');
+            }
+            
+            await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .input('SchemaID', sql.Int, schemaId)
+                .input('IsDefault', sql.Bit, isDefault)
+                .input('CreatedBy', sql.NVarChar(255), createdBy)
+                .query(`
+                    INSERT INTO StoreSchemas (StoreID, SchemaID, IsDefault, CreatedBy)
+                    VALUES (@StoreID, @SchemaID, @IsDefault, @CreatedBy)
+                `);
+            
+            return { success: true };
+        } catch (error) {
+            if (error.message.includes('UQ_StoreSchemas') || error.message.includes('UNIQUE')) {
+                throw new Error('This schema is already assigned to this store');
+            }
+            console.error('Error adding schema to store:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Remove a schema from a store
+     */
+    async removeSchemaFromStore(storeId, schemaId) {
+        try {
+            const pool = await this.getPool();
+            await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .input('SchemaID', sql.Int, schemaId)
+                .query('DELETE FROM StoreSchemas WHERE StoreID = @StoreID AND SchemaID = @SchemaID');
+            return { success: true };
+        } catch (error) {
+            console.error('Error removing schema from store:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Set default schema for a store
+     */
+    async setDefaultSchema(storeId, schemaId) {
+        try {
+            const pool = await this.getPool();
+            
+            // Unset all defaults for this store
+            await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .query('UPDATE StoreSchemas SET IsDefault = 0 WHERE StoreID = @StoreID');
+            
+            // Set the new default
+            await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .input('SchemaID', sql.Int, schemaId)
+                .query('UPDATE StoreSchemas SET IsDefault = 1 WHERE StoreID = @StoreID AND SchemaID = @SchemaID');
+            
+            // Update legacy column
+            await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .input('SchemaID', sql.Int, schemaId)
+                .query('UPDATE Stores SET SchemaID = @SchemaID WHERE StoreID = @StoreID');
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Error setting default schema:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = new StoreService();

@@ -294,6 +294,83 @@
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            display: inline-block;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle;
+            margin: 2px;
+        }
+
+        .schema-badge.default {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: 2px solid #047857;
+        }
+
+        .assign-schemas-btn {
+            background: none;
+            border: 1px solid #667eea;
+            color: #667eea;
+            padding: 3px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+            vertical-align: middle;
+            transition: all 0.2s;
+        }
+
+        .assign-schemas-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .schema-checkbox-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .schema-checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .schema-checkbox-item:hover {
+            background: #e0f2fe;
+        }
+
+        .schema-checkbox-item.selected {
+            background: #dbeafe;
+            border: 2px solid #667eea;
+        }
+
+        .schema-checkbox-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        .schema-checkbox-item label {
+            flex: 1;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .schema-checkbox-item .default-star {
+            color: #f59e0b;
+            font-size: 16px;
+            margin-left: 8px;
         }
 
         .status-badge {
@@ -878,6 +955,33 @@
         </div>
     </div>
 
+    <!-- Assign Schemas Modal -->
+    <div id="assignSchemasModal" class="modal-overlay">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📋 Manage Audit Schemas</h3>
+                <button class="modal-close" onclick="closeSchemasModal()">&times;</button>
+            </div>
+            <div id="assignSchemasContent">
+                <input type="hidden" id="schemaStoreId">
+                <p id="schemaStoreName" style="font-weight: 600; margin-bottom: 15px;"></p>
+                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+                    Select one or more audit schemas/checklists for this store. The first selected schema will be the default.
+                </p>
+                <div class="form-group">
+                    <label>Available Schemas</label>
+                    <div id="schemaCheckboxes" class="schema-checkbox-list">
+                        <!-- Checkboxes populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" onclick="closeSchemasModal()" style="background: #6b7280; color: white;">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="saveSchemaAssignments()">💾 Save Schemas</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Impersonation Panel Script -->
     <script src="/auth/scripts/impersonation-panel.js?v=9"></script>
 
@@ -888,10 +992,12 @@
         let brands = [];
         let availableManagers = [];
         let managerAssignments = {};
+        let schemaAssignments = {}; // { storeId: [{ schemaId, schemaName, isDefault }] }
         let areaManagerAssignments = {}; // { storeId: [{ userId, email, displayName }] }
         let headOfOpsAssignments = {}; // { brand: [{ userId, email, displayName }] }
         let selectedEditManagers = [];
         let selectedAssignManagers = [];
+        let selectedSchemas = []; // For schema assignment modal
         let managerSearchTerm = '';
 
         // Initialize
@@ -906,6 +1012,7 @@
             loadAvailableManagers();
             loadAreaManagerAssignments();
             loadHeadOfOpsAssignments();
+            loadSchemaAssignments();
             loadStores();
             
             // Close dropdowns when clicking outside
@@ -952,6 +1059,18 @@
                 console.log('[DEBUG] Loaded head of ops assignments');
             } catch (error) {
                 console.error('Error loading head of ops assignments:', error);
+            }
+        }
+
+        // Load schema assignments for all stores
+        async function loadSchemaAssignments() {
+            try {
+                const response = await fetch('/api/stores/schema-assignments');
+                const result = await response.json();
+                schemaAssignments = result.data || {};
+                console.log('[DEBUG] Loaded schema assignments');
+            } catch (error) {
+                console.error('Error loading schema assignments:', error);
             }
         }
 
@@ -1119,7 +1238,17 @@
                                 <td>${store.storeName}</td>
                                 <td>${store.country || '-'}</td>
                                 <td>${store.location || '-'}</td>
-                                <td><span class="schema-badge">${store.schemaName}</span></td>
+                                <td>
+                                    ${(() => {
+                                        const storeSchemaList = schemaAssignments[store.storeId] || [];
+                                        if (storeSchemaList.length > 0) {
+                                            return storeSchemaList.map(s => `<span class="schema-badge ${s.isDefault ? 'default' : ''}">${s.schemaName}${s.isDefault ? ' ⭐' : ''}</span>`).join(' ');
+                                        } else {
+                                            return `<span class="schema-badge">${store.schemaName || 'No schema'}</span>`;
+                                        }
+                                    })()}
+                                    <button class="assign-schemas-btn" onclick="openSchemasModal(${store.storeId})" title="Manage Schemas">⚙️</button>
+                                </td>
                                     <td class="managers-cell">
                                         ${headsOfOps.length > 0 ? headsOfOps.map(ho => `
                                             <span class="manager-badge head-of-ops">
@@ -1531,6 +1660,116 @@
                 closeAssignModal();
             }
         });
+
+        document.getElementById('assignSchemasModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeSchemasModal();
+            }
+        });
+
+        // ==========================================
+        // Schema Assignment Functions
+        // ==========================================
+
+        // Open schemas modal
+        async function openSchemasModal(storeId) {
+            const store = stores.find(s => s.storeId === storeId);
+            if (!store) return;
+
+            document.getElementById('schemaStoreId').value = storeId;
+            document.getElementById('schemaStoreName').textContent = `🏪 ${store.storeName} (${store.storeCode})`;
+
+            // Get current schemas for this store
+            try {
+                const response = await fetch(`/api/stores/${storeId}/schemas`);
+                const result = await response.json();
+                const currentSchemas = result.data || [];
+                selectedSchemas = currentSchemas.map(s => s.schemaId);
+                
+                // Build checkbox list
+                const container = document.getElementById('schemaCheckboxes');
+                container.innerHTML = schemas.map(schema => {
+                    const isSelected = selectedSchemas.includes(schema.schemaId);
+                    const currentSchema = currentSchemas.find(s => s.schemaId === schema.schemaId);
+                    const isDefault = currentSchema?.isDefault || false;
+                    
+                    return `
+                        <div class="schema-checkbox-item ${isSelected ? 'selected' : ''}" onclick="toggleSchemaCheckbox(${schema.schemaId})">
+                            <input type="checkbox" id="schema_${schema.schemaId}" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleSchemaCheckbox(${schema.schemaId})">
+                            <label for="schema_${schema.schemaId}">${schema.schemaName}</label>
+                            ${isDefault ? '<span class="default-star" title="Default schema">⭐</span>' : ''}
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading store schemas:', error);
+                selectedSchemas = store.schemaId ? [store.schemaId] : [];
+            }
+
+            document.getElementById('assignSchemasModal').classList.add('active');
+        }
+
+        // Close schemas modal
+        function closeSchemasModal() {
+            document.getElementById('assignSchemasModal').classList.remove('active');
+            selectedSchemas = [];
+        }
+
+        // Toggle schema checkbox
+        function toggleSchemaCheckbox(schemaId) {
+            const index = selectedSchemas.indexOf(schemaId);
+            if (index === -1) {
+                selectedSchemas.push(schemaId);
+            } else {
+                selectedSchemas.splice(index, 1);
+            }
+            
+            // Update UI
+            const item = document.querySelector(`#schema_${schemaId}`).closest('.schema-checkbox-item');
+            const checkbox = document.getElementById(`schema_${schemaId}`);
+            
+            if (selectedSchemas.includes(schemaId)) {
+                item.classList.add('selected');
+                checkbox.checked = true;
+            } else {
+                item.classList.remove('selected');
+                checkbox.checked = false;
+            }
+        }
+
+        // Save schema assignments
+        async function saveSchemaAssignments() {
+            const storeId = document.getElementById('schemaStoreId').value;
+            
+            if (selectedSchemas.length === 0) {
+                showToast('Please select at least one schema', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/stores/${storeId}/schemas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        schemaIds: selectedSchemas,
+                        defaultSchemaId: selectedSchemas[0] // First selected is default
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to assign schemas');
+                }
+
+                showToast('Schemas assigned successfully!', 'success');
+                closeSchemasModal();
+                await loadSchemaAssignments();
+                loadStores();
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
     </script>
 </body>
 </html>

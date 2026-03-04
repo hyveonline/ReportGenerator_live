@@ -22,7 +22,7 @@ const config = {
 };
 
 const DOCUMENT_NUMBER = 'GMRL-FSACSG-1221-0027';
-const CORRECT_DATE = '2026-03-27'; // March 27, 2026
+const CORRECT_DATE = '2026-02-27'; // February 27, 2026
 
 async function fixAuditDate() {
     let pool;

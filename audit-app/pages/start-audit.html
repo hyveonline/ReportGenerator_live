@@ -326,9 +326,15 @@
                                 <span class="label">Location:</span>
                                 <span class="value" id="storeLocation">-</span>
                             </div>
-                            <div class="store-info-item">
+                            <div class="store-info-item" id="singleSchemaDisplay">
                                 <span class="label">Template:</span>
                                 <span class="schema-badge" id="storeSchema">-</span>
+                            </div>
+                            <div class="store-info-item" id="multiSchemaSelect" style="display: none;">
+                                <span class="label">Select Checklist <span class="required">*</span></span>
+                                <select id="schemaSelect" required onchange="onSchemaChange()">
+                                    <option value="">Select a checklist...</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -404,6 +410,8 @@
     <script>
         let stores = [];
         let selectedStore = null;
+        let selectedSchemaId = null;
+        let storeSchemas = []; // Schemas for currently selected store
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -497,7 +505,7 @@
         }
 
         // Handle store selection change
-        function onStoreChange() {
+        async function onStoreChange() {
             const storeId = parseInt(document.getElementById('storeSelect').value);
             const storeInfo = document.getElementById('storeInfo');
             
@@ -506,13 +514,76 @@
                 
                 if (selectedStore) {
                     document.getElementById('storeLocation').textContent = selectedStore.location || 'N/A';
-                    document.getElementById('storeSchema').textContent = selectedStore.schemaName;
+                    
+                    // Fetch schemas for this store
+                    try {
+                        const response = await fetch(`/api/stores/${storeId}/schemas`);
+                        const result = await response.json();
+                        storeSchemas = result.data || [];
+                        
+                        if (storeSchemas.length === 0) {
+                            // Fallback to store's default schema
+                            storeSchemas = [{
+                                schemaId: selectedStore.schemaId,
+                                schemaName: selectedStore.schemaName,
+                                isDefault: true
+                            }];
+                        }
+                        
+                        if (storeSchemas.length === 1) {
+                            // Single schema - show badge
+                            document.getElementById('singleSchemaDisplay').style.display = 'flex';
+                            document.getElementById('multiSchemaSelect').style.display = 'none';
+                            document.getElementById('storeSchema').textContent = storeSchemas[0].schemaName;
+                            selectedSchemaId = storeSchemas[0].schemaId;
+                        } else {
+                            // Multiple schemas - show dropdown
+                            document.getElementById('singleSchemaDisplay').style.display = 'none';
+                            document.getElementById('multiSchemaSelect').style.display = 'flex';
+                            
+                            const schemaSelect = document.getElementById('schemaSelect');
+                            schemaSelect.innerHTML = '<option value="">Select a checklist...</option>';
+                            
+                            storeSchemas.forEach(schema => {
+                                const option = document.createElement('option');
+                                option.value = schema.schemaId;
+                                option.textContent = schema.schemaName + (schema.isDefault ? ' ⭐' : '');
+                                if (schema.isDefault) option.selected = true;
+                                schemaSelect.appendChild(option);
+                            });
+                            
+                            // Auto-select default
+                            const defaultSchema = storeSchemas.find(s => s.isDefault);
+                            if (defaultSchema) {
+                                selectedSchemaId = defaultSchema.schemaId;
+                                schemaSelect.value = defaultSchema.schemaId;
+                            } else {
+                                selectedSchemaId = null;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading store schemas:', error);
+                        // Fallback
+                        document.getElementById('singleSchemaDisplay').style.display = 'flex';
+                        document.getElementById('multiSchemaSelect').style.display = 'none';
+                        document.getElementById('storeSchema').textContent = selectedStore.schemaName || 'N/A';
+                        selectedSchemaId = selectedStore.schemaId;
+                    }
+                    
                     storeInfo.classList.add('show');
                 }
             } else {
                 selectedStore = null;
+                selectedSchemaId = null;
+                storeSchemas = [];
                 storeInfo.classList.remove('show');
             }
+        }
+
+        // Handle schema selection change
+        function onSchemaChange() {
+            const schemaId = parseInt(document.getElementById('schemaSelect').value);
+            selectedSchemaId = schemaId || null;
         }
 
         // Start audit
@@ -524,12 +595,21 @@
                 return;
             }
 
+            if (!selectedSchemaId) {
+                showToast('Please select a checklist', 'error');
+                return;
+            }
+
+            // Get selected schema name
+            const selectedSchema = storeSchemas.find(s => s.schemaId === selectedSchemaId);
+            const schemaName = selectedSchema?.schemaName || selectedStore.schemaName;
+
             const auditData = {
                 storeId: selectedStore.storeId,
                 storeCode: selectedStore.storeCode,
                 storeName: selectedStore.storeName,
-                schemaId: selectedStore.schemaId,
-                schemaName: selectedStore.schemaName,
+                schemaId: selectedSchemaId,
+                schemaName: schemaName,
                 auditDate: document.getElementById('auditDate').value,
                 timeIn: document.getElementById('timeIn').value,
                 timeOut: document.getElementById('timeOut').value || null,
