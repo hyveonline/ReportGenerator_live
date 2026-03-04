@@ -30,14 +30,19 @@ class DataService {
         try {
             console.log(`📊 Fetching audit data for ID: ${auditId}`);
 
-            // Get audit header
+            // Get audit header with cycle display name
             const auditResult = await this.pool.request()
                 .input('AuditID', sql.Int, auditId)
                 .query(`
                     SELECT a.*, s.SchemaName, s.Description as SchemaDescription,
-                           s.ReportTitle, s.DocumentPrefix, s.Edition, s.CreationDate, s.RevisionDate
+                           s.ReportTitle, s.DocumentPrefix, s.Edition, s.CreationDate, s.RevisionDate,
+                           s.CycleTypeID, ct.TypeName as CycleTypeName, ct.TypeCode as CycleTypeCode,
+                           cd.CycleName as CycleDisplayName
                     FROM AuditInstances a
                     INNER JOIN AuditSchemas s ON a.SchemaID = s.SchemaID
+                    LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                    LEFT JOIN CycleDefinitions cd ON ct.CycleTypeID = cd.CycleTypeID 
+                        AND cd.CycleNumber = a.Cycle
                     WHERE a.AuditID = @AuditID
                 `);
 
@@ -47,6 +52,11 @@ class DataService {
 
             const audit = auditResult.recordset[0];
             console.log(`   ✅ Found audit: ${audit.DocumentNumber}`);
+
+            // Build cycle display: "C3 (May-Jun)" or just "C3" if no definition found
+            const cycleDisplay = audit.CycleDisplayName 
+                ? `${audit.Cycle} (${audit.CycleDisplayName})`
+                : audit.Cycle;
 
             return {
                 auditId: audit.AuditID,
@@ -66,6 +76,8 @@ class DataService {
                 timeIn: audit.TimeIn,
                 timeOut: audit.TimeOut,
                 cycle: audit.Cycle,
+                cycleDisplay: cycleDisplay,  // New field with full display name
+                cycleTypeName: audit.CycleTypeName,
                 year: audit.Year,
                 auditors: audit.Auditors,
                 accompaniedBy: audit.AccompaniedBy,

@@ -25,6 +25,7 @@ const AuditReportGenerator = require('./audit-app/report-generator');
 const ScoreCalculatorService = require('./audit-app/services/score-calculator-service');
 const TokenRefreshService = require('./auth/services/token-refresh-service');
 const SessionManager = require('./auth/services/session-manager');
+const CycleService = require('./audit-app/services/cycle-service');
 const { activityLogService, logLogin, logLogout, logReportGenerated, logEmailSent, logBroadcast, logActionPlanSaved, logActionPlanSubmitted, logUserRoleChanged, logTemplateUpdated } = require('./services/activity-log-service');
 const FileStorageService = require('./services/file-storage-service');
 
@@ -228,8 +229,8 @@ app.get('/api/audit-templates/schemas', requireAuth, requirePagePermission(TEMPL
 // Create schema
 app.post('/api/audit-templates/schemas', requireAuth, requirePagePermission(TEMPLATE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
     try {
-        const { schemaName, description } = req.body;
-        const result = await auditTemplateService.createSchema(schemaName, description, req.currentUser.email);
+        const { schemaName, description, cycleTypeId } = req.body;
+        const result = await auditTemplateService.createSchema(schemaName, description, req.currentUser.email, cycleTypeId);
         res.json({ success: true, data: result });
     } catch (error) {
         console.error('Error creating schema:', error);
@@ -251,7 +252,7 @@ app.get('/api/audit-templates/schemas/:schemaId', requireAuth, requirePagePermis
 // Update schema (rename)
 app.put('/api/audit-templates/schemas/:schemaId', requireAuth, requirePagePermission(TEMPLATE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
     try {
-        const { schemaName, description } = req.body;
+        const { schemaName, description, cycleTypeId } = req.body;
         if (!schemaName || schemaName.trim() === '') {
             return res.status(400).json({ success: false, error: 'Schema name is required' });
         }
@@ -259,7 +260,8 @@ app.put('/api/audit-templates/schemas/:schemaId', requireAuth, requirePagePermis
             parseInt(req.params.schemaId),
             schemaName.trim(),
             description || '',
-            req.currentUser.email
+            req.currentUser.email,
+            cycleTypeId
         );
         res.json({ success: true, data: result });
     } catch (error) {
@@ -645,6 +647,11 @@ app.get('/admin/store-management', requireAuth, requireAutoRole('Admin', 'SuperA
     res.sendFile(path.join(__dirname, 'audit-app/pages/store-management.html'));
 });
 
+// Serve Cycle Management page
+app.get('/admin/cycle-management', requireAuth, requireRole('Admin', 'SuperAuditor'), (req, res) => {
+    res.sendFile(path.join(__dirname, 'audit-app/pages/cycle-management.html'));
+});
+
 // Get all stores
 app.get('/api/stores', requireAuth, async (req, res) => {
     try {
@@ -948,6 +955,176 @@ app.patch('/api/stores/:storeId/schemas/:schemaId/default', requireAuth, require
         res.json({ success: true, data: result });
     } catch (error) {
         console.error('Error setting default schema:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// Cycle Management Endpoints
+// ==========================================
+
+// Get all cycle types
+app.get('/api/cycle-types', requireAuth, async (req, res) => {
+    try {
+        const cycleTypes = await CycleService.getAllCycleTypes();
+        res.json({ success: true, data: cycleTypes });
+    } catch (error) {
+        console.error('Error getting cycle types:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get a single cycle type with definitions
+app.get('/api/cycle-types/:id', requireAuth, async (req, res) => {
+    try {
+        const cycleType = await CycleService.getCycleTypeById(parseInt(req.params.id));
+        if (!cycleType) {
+            return res.status(404).json({ success: false, error: 'Cycle type not found' });
+        }
+        res.json({ success: true, data: cycleType });
+    } catch (error) {
+        console.error('Error getting cycle type:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Create a new cycle type
+app.post('/api/cycle-types', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { typeName, typeCode, cyclesPerYear, description } = req.body;
+        
+        if (!typeName || !typeCode) {
+            return res.status(400).json({ success: false, error: 'typeName and typeCode are required' });
+        }
+        
+        const cycleTypeId = await CycleService.createCycleType({
+            typeName,
+            typeCode,
+            cyclesPerYear: cyclesPerYear || 12,
+            description,
+            createdBy: req.currentUser?.email || 'Admin'
+        });
+        
+        res.json({ success: true, data: { cycleTypeId } });
+    } catch (error) {
+        console.error('Error creating cycle type:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Update a cycle type
+app.put('/api/cycle-types/:id', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { typeName, typeCode, cyclesPerYear, description, isActive } = req.body;
+        await CycleService.updateCycleType(parseInt(req.params.id), {
+            typeName,
+            typeCode,
+            cyclesPerYear,
+            description,
+            isActive
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error updating cycle type:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Delete a cycle type
+app.delete('/api/cycle-types/:id', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        await CycleService.deleteCycleType(parseInt(req.params.id));
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting cycle type:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get cycle definitions for a cycle type
+app.get('/api/cycle-types/:id/definitions', requireAuth, async (req, res) => {
+    try {
+        const definitions = await CycleService.getCycleDefinitions(parseInt(req.params.id));
+        res.json({ success: true, data: definitions });
+    } catch (error) {
+        console.error('Error getting cycle definitions:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add a cycle definition
+app.post('/api/cycle-types/:id/definitions', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { cycleNumber, cycleName, startMonth, endMonth, displayOrder } = req.body;
+        
+        if (!cycleNumber || !cycleName || !startMonth || !endMonth) {
+            return res.status(400).json({ success: false, error: 'cycleNumber, cycleName, startMonth, and endMonth are required' });
+        }
+        
+        const cycleDefId = await CycleService.addCycleDefinition(parseInt(req.params.id), {
+            cycleNumber,
+            cycleName,
+            startMonth,
+            endMonth,
+            displayOrder
+        });
+        
+        res.json({ success: true, data: { cycleDefId } });
+    } catch (error) {
+        console.error('Error adding cycle definition:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Update a cycle definition
+app.put('/api/cycle-definitions/:defId', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { cycleNumber, cycleName, startMonth, endMonth, displayOrder, isActive } = req.body;
+        await CycleService.updateCycleDefinition(parseInt(req.params.defId), {
+            cycleNumber,
+            cycleName,
+            startMonth,
+            endMonth,
+            displayOrder,
+            isActive
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error updating cycle definition:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Delete a cycle definition
+app.delete('/api/cycle-definitions/:defId', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        await CycleService.deleteCycleDefinition(parseInt(req.params.defId));
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting cycle definition:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get cycles for a specific schema (used by Start Audit page)
+app.get('/api/schemas/:schemaId/cycles', requireAuth, async (req, res) => {
+    try {
+        const cycles = await CycleService.getCyclesForSchema(parseInt(req.params.schemaId));
+        res.json({ success: true, data: cycles });
+    } catch (error) {
+        console.error('Error getting cycles for schema:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get current cycle suggestion based on date
+app.get('/api/schemas/:schemaId/current-cycle', requireAuth, async (req, res) => {
+    try {
+        const date = req.query.date ? new Date(req.query.date) : new Date();
+        const currentCycle = await CycleService.getCurrentCycle(parseInt(req.params.schemaId), date);
+        res.json({ success: true, data: currentCycle });
+    } catch (error) {
+        console.error('Error getting current cycle:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

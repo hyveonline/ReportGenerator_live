@@ -43,8 +43,12 @@ class SchemaService {
                     s.CreatedBy as createdBy,
                     s.CreatedDate as createdAt,
                     s.IsActive as isActive,
+                    s.CycleTypeID as cycleTypeId,
+                    ct.TypeName as cycleTypeName,
+                    ct.CyclesPerYear as cyclesPerYear,
                     (SELECT COUNT(*) FROM AuditSections WHERE SchemaID = s.SchemaID AND IsActive = 1) as sectionCount
                 FROM AuditSchemas s
+                LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
                 WHERE s.IsActive = 1
                 ORDER BY s.SchemaName
             `);
@@ -67,14 +71,18 @@ class SchemaService {
                 .input('SchemaID', sql.Int, schemaId)
                 .query(`
                     SELECT 
-                        SchemaID as schemaId,
-                        SchemaName as schemaName,
-                        Description as description,
-                        CreatedBy as createdBy,
-                        CreatedDate as createdAt,
-                        IsActive as isActive
-                    FROM AuditSchemas
-                    WHERE SchemaID = @SchemaID
+                        s.SchemaID as schemaId,
+                        s.SchemaName as schemaName,
+                        s.Description as description,
+                        s.CreatedBy as createdBy,
+                        s.CreatedDate as createdAt,
+                        s.IsActive as isActive,
+                        s.CycleTypeID as cycleTypeId,
+                        ct.TypeName as cycleTypeName,
+                        ct.CyclesPerYear as cyclesPerYear
+                    FROM AuditSchemas s
+                    LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                    WHERE s.SchemaID = @SchemaID
                 `);
 
             if (result.recordset.length === 0) {
@@ -91,22 +99,34 @@ class SchemaService {
     /**
      * Create a new schema
      */
-    async createSchema(schemaName, description, createdBy) {
+    async createSchema(schemaName, description, createdBy, cycleTypeId = null) {
         try {
             const pool = await this.getPool();
+            
+            // If no cycleTypeId provided, default to Monthly
+            let actualCycleTypeId = cycleTypeId;
+            if (!actualCycleTypeId) {
+                const monthlyResult = await pool.request()
+                    .query("SELECT CycleTypeID FROM CycleTypes WHERE TypeCode = 'MONTHLY'");
+                if (monthlyResult.recordset.length > 0) {
+                    actualCycleTypeId = monthlyResult.recordset[0].CycleTypeID;
+                }
+            }
             
             const result = await pool.request()
                 .input('SchemaName', sql.NVarChar(255), schemaName)
                 .input('Description', sql.NVarChar(500), description || '')
                 .input('CreatedBy', sql.NVarChar(255), createdBy || 'System')
+                .input('CycleTypeID', sql.Int, actualCycleTypeId)
                 .query(`
-                    INSERT INTO AuditSchemas (SchemaName, Description, CreatedBy, IsActive)
+                    INSERT INTO AuditSchemas (SchemaName, Description, CreatedBy, IsActive, CycleTypeID)
                     OUTPUT INSERTED.SchemaID as schemaId, 
                            INSERTED.SchemaName as schemaName, 
                            INSERTED.Description as description,
                            INSERTED.CreatedBy as createdBy,
-                           INSERTED.CreatedDate as createdAt
-                    VALUES (@SchemaName, @Description, @CreatedBy, 1)
+                           INSERTED.CreatedDate as createdAt,
+                           INSERTED.CycleTypeID as cycleTypeId
+                    VALUES (@SchemaName, @Description, @CreatedBy, 1, @CycleTypeID)
                 `);
 
             return {
@@ -123,7 +143,7 @@ class SchemaService {
     /**
      * Update an existing schema
      */
-    async updateSchema(schemaId, schemaName, description, updatedBy) {
+    async updateSchema(schemaId, schemaName, description, updatedBy, cycleTypeId = null) {
         try {
             const pool = await this.getPool();
             
@@ -142,15 +162,18 @@ class SchemaService {
                 .input('SchemaName', sql.NVarChar(255), schemaName)
                 .input('Description', sql.NVarChar(500), description || '')
                 .input('ModifiedBy', sql.NVarChar(255), updatedBy || 'System')
+                .input('CycleTypeID', sql.Int, cycleTypeId)
                 .query(`
                     UPDATE AuditSchemas 
                     SET SchemaName = @SchemaName,
                         Description = @Description,
                         ModifiedDate = GETDATE(),
-                        ModifiedBy = @ModifiedBy
+                        ModifiedBy = @ModifiedBy,
+                        CycleTypeID = COALESCE(@CycleTypeID, CycleTypeID)
                     OUTPUT INSERTED.SchemaID as schemaId, 
                            INSERTED.SchemaName as schemaName, 
-                           INSERTED.Description as description
+                           INSERTED.Description as description,
+                           INSERTED.CycleTypeID as cycleTypeId
                     WHERE SchemaID = @SchemaID
                 `);
 

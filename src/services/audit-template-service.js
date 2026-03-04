@@ -32,8 +32,16 @@ class AuditTemplateService {
         try {
             const pool = await sql.connect(dbConfig);
             const result = await pool.request()
-                .input('ActiveOnly', sql.Bit, activeOnly)
-                .execute('sp_GetAllSchemas');
+                .query(`
+                    SELECT s.SchemaID, s.SchemaName, s.Description, s.IsActive, 
+                           s.CreatedBy, s.CreatedDate, s.CycleTypeID,
+                           ct.TypeName as CycleTypeName, ct.CyclesPerYear,
+                           (SELECT COUNT(*) FROM AuditSections WHERE SchemaID = s.SchemaID AND IsActive = 1) as SectionCount
+                    FROM AuditSchemas s
+                    LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                    WHERE s.IsActive = 1
+                    ORDER BY s.SchemaName
+                `);
             
             return result.recordset.map(s => ({
                 schemaId: s.SchemaID,
@@ -42,7 +50,10 @@ class AuditTemplateService {
                 isActive: s.IsActive,
                 createdBy: s.CreatedBy,
                 createdDate: s.CreatedDate,
-                sectionCount: s.SectionCount
+                sectionCount: s.SectionCount,
+                cycleTypeId: s.CycleTypeID,
+                cycleTypeName: s.CycleTypeName || 'Monthly',
+                cyclesPerYear: s.CyclesPerYear
             }));
         } catch (error) {
             console.error('Error fetching schemas:', error);
@@ -72,7 +83,7 @@ class AuditTemplateService {
     /**
      * Update an existing schema
      */
-    async updateSchema(schemaId, schemaName, description, modifiedBy) {
+    async updateSchema(schemaId, schemaName, description, modifiedBy, cycleTypeId = null) {
         try {
             const pool = await sql.connect(dbConfig);
             await pool.request()
@@ -80,12 +91,14 @@ class AuditTemplateService {
                 .input('SchemaName', sql.NVarChar(100), schemaName)
                 .input('Description', sql.NVarChar(500), description || '')
                 .input('ModifiedBy', sql.NVarChar(255), modifiedBy)
+                .input('CycleTypeID', sql.Int, cycleTypeId)
                 .query(`
                     UPDATE AuditSchemas 
                     SET SchemaName = @SchemaName,
                         Description = @Description,
                         ModifiedBy = @ModifiedBy,
-                        ModifiedDate = GETDATE()
+                        ModifiedDate = GETDATE(),
+                        CycleTypeID = COALESCE(@CycleTypeID, CycleTypeID)
                     WHERE SchemaID = @SchemaID
                 `);
             

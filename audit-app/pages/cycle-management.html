@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cycle Management - Food Safety Audit System</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .page-header {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 25px 30px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-header h1 {
+            font-size: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Panels */
+        .panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 25px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: rgba(255,255,255,0.05);
+            padding: 20px 25px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 18px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-body {
+            padding: 25px;
+        }
+
+        /* Grid layout */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        th {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+
+        /* Badges */
+        .badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-purple {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .badge-green {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .badge-blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+        }
+
+        .badge-orange {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #a0a0a0;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            color: white;
+            font-size: 14px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: #1e1e2e;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            color: #667eea;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 25px;
+        }
+
+        .modal-footer {
+            padding: 15px 25px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Selected state */
+        tr.selected {
+            background: rgba(102, 126, 234, 0.2);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            transform: translateX(120%);
+            transition: transform 0.3s;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .toast.error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        /* Action buttons */
+        .action-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Clickable row */
+        .clickable-row {
+            cursor: pointer;
+        }
+
+        /* Stats */
+        .cycle-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            flex: 1;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* Back link */
+        .back-link {
+            color: #667eea;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Month display */
+        .month-range {
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+        
+        <div class="page-header">
+            <h1>⚙️ Cycle Management</h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="openAddTypeModal()">➕ Add Cycle Type</button>
+            </div>
+        </div>
+
+        <div class="cycle-stats" id="cycleStats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalTypes">-</div>
+                <div class="stat-label">Cycle Types</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalDefinitions">-</div>
+                <div class="stat-label">Total Cycles</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="schemasUsing">-</div>
+                <div class="stat-label">Schemas Using</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Cycle Types Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>📋 Cycle Types</h2>
+                </div>
+                <div class="panel-body">
+                    <div class="table-container" id="cycleTypesTable">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⏳</div>
+                            <p>Loading cycle types...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cycle Definitions Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>📅 Cycle Definitions</h2>
+                    <button class="btn btn-primary btn-sm" onclick="openAddDefinitionModal()" id="addDefBtn" disabled>➕ Add Cycle</button>
+                </div>
+                <div class="panel-body">
+                    <div id="selectedTypeName" style="margin-bottom: 15px; color: #888;">
+                        Select a cycle type to view its definitions
+                    </div>
+                    <div class="table-container" id="cycleDefinitionsTable">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">👈</div>
+                            <p>Select a cycle type from the left panel</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Cycle Type Modal -->
+    <div class="modal-overlay" id="typeModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="typeModalTitle">Add Cycle Type</h3>
+                <button class="modal-close" onclick="closeTypeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editTypeId">
+                <div class="form-group">
+                    <label>Type Name *</label>
+                    <input type="text" class="form-control" id="typeName" placeholder="e.g., Monthly, Bi-Monthly, Quarterly">
+                </div>
+                <div class="form-group">
+                    <label>Type Code *</label>
+                    <input type="text" class="form-control" id="typeCode" placeholder="e.g., MONTHLY, BIMONTHLY, QUARTERLY" style="text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                    <label>Cycles Per Year</label>
+                    <input type="number" class="form-control" id="cyclesPerYear" min="1" max="365" value="12">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" class="form-control" id="typeDescription" placeholder="Brief description of this cycle type">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTypeModal()">Cancel</button>
+                <button class="btn btn-success" onclick="saveType()">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Cycle Definition Modal -->
+    <div class="modal-overlay" id="definitionModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="defModalTitle">Add Cycle Definition</h3>
+                <button class="modal-close" onclick="closeDefinitionModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editDefId">
+                <div class="form-group">
+                    <label>Cycle Number *</label>
+                    <input type="text" class="form-control" id="cycleNumber" placeholder="e.g., C1, C2, C3">
+                </div>
+                <div class="form-group">
+                    <label>Cycle Name *</label>
+                    <input type="text" class="form-control" id="cycleName" placeholder="e.g., January, Jan-Feb, Q1">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Start Month *</label>
+                        <select class="form-control" id="startMonth">
+                            <option value="1">1 - January</option>
+                            <option value="2">2 - February</option>
+                            <option value="3">3 - March</option>
+                            <option value="4">4 - April</option>
+                            <option value="5">5 - May</option>
+                            <option value="6">6 - June</option>
+                            <option value="7">7 - July</option>
+                            <option value="8">8 - August</option>
+                            <option value="9">9 - September</option>
+                            <option value="10">10 - October</option>
+                            <option value="11">11 - November</option>
+                            <option value="12">12 - December</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>End Month *</label>
+                        <select class="form-control" id="endMonth">
+                            <option value="1">1 - January</option>
+                            <option value="2">2 - February</option>
+                            <option value="3">3 - March</option>
+                            <option value="4">4 - April</option>
+                            <option value="5">5 - May</option>
+                            <option value="6">6 - June</option>
+                            <option value="7">7 - July</option>
+                            <option value="8">8 - August</option>
+                            <option value="9">9 - September</option>
+                            <option value="10">10 - October</option>
+                            <option value="11">11 - November</option>
+                            <option value="12">12 - December</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Display Order</label>
+                    <input type="number" class="form-control" id="displayOrder" min="1" value="1">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDefinitionModal()">Cancel</button>
+                <button class="btn btn-success" onclick="saveDefinition()">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        let cycleTypes = [];
+        let selectedTypeId = null;
+        let currentDefinitions = [];
+
+        const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCycleTypes();
+        });
+
+        // Load all cycle types
+        async function loadCycleTypes() {
+            try {
+                const response = await fetch('/api/cycle-types');
+                const result = await response.json();
+                
+                if (result.success) {
+                    cycleTypes = result.data;
+                    renderCycleTypes();
+                    updateStats();
+                }
+            } catch (error) {
+                console.error('Error loading cycle types:', error);
+                showToast('Error loading cycle types', 'error');
+            }
+        }
+
+        // Render cycle types table
+        function renderCycleTypes() {
+            const container = document.getElementById('cycleTypesTable');
+            
+            if (cycleTypes.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <h3>No cycle types yet</h3>
+                        <p>Click "Add Cycle Type" to create one</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type Name</th>
+                            <th>Code</th>
+                            <th>Cycles/Year</th>
+                            <th>Schemas</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${cycleTypes.map(type => `
+                            <tr class="clickable-row ${selectedTypeId === type.CycleTypeID ? 'selected' : ''}" 
+                                onclick="selectType(${type.CycleTypeID})">
+                                <td><strong>${type.TypeName}</strong></td>
+                                <td><span class="badge badge-purple">${type.TypeCode}</span></td>
+                                <td>${type.CyclesPerYear}</td>
+                                <td>${type.SchemasUsingCount || 0}</td>
+                                <td class="action-btns" onclick="event.stopPropagation()">
+                                    <button class="btn btn-secondary btn-sm" onclick="editType(${type.CycleTypeID})" title="Edit">✏️</button>
+                                    ${type.SchemasUsingCount === 0 ? 
+                                        `<button class="btn btn-danger btn-sm" onclick="deleteType(${type.CycleTypeID})" title="Delete">🗑️</button>` : 
+                                        ''}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Select a cycle type and load its definitions
+        async function selectType(typeId) {
+            selectedTypeId = typeId;
+            renderCycleTypes();
+            
+            const type = cycleTypes.find(t => t.CycleTypeID === typeId);
+            document.getElementById('selectedTypeName').innerHTML = `
+                <strong style="color: #667eea;">${type.TypeName}</strong> 
+                <span style="color: #888;">(${type.CyclesPerYear} cycles/year)</span>
+            `;
+            document.getElementById('addDefBtn').disabled = false;
+
+            try {
+                const response = await fetch(`/api/cycle-types/${typeId}/definitions`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentDefinitions = result.data;
+                    renderDefinitions();
+                }
+            } catch (error) {
+                console.error('Error loading definitions:', error);
+                showToast('Error loading definitions', 'error');
+            }
+        }
+
+        // Render cycle definitions table
+        function renderDefinitions() {
+            const container = document.getElementById('cycleDefinitionsTable');
+            
+            if (currentDefinitions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📅</div>
+                        <h3>No cycles defined</h3>
+                        <p>Click "Add Cycle" to create one</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Cycle</th>
+                            <th>Name</th>
+                            <th>Months</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentDefinitions.map(def => `
+                            <tr>
+                                <td>${def.DisplayOrder}</td>
+                                <td><span class="badge badge-blue">${def.CycleNumber}</span></td>
+                                <td>${def.CycleName}</td>
+                                <td>
+                                    <span class="month-range">
+                                        ${monthNames[def.StartMonth]}${def.StartMonth !== def.EndMonth ? ' - ' + monthNames[def.EndMonth] : ''}
+                                    </span>
+                                </td>
+                                <td class="action-btns">
+                                    <button class="btn btn-secondary btn-sm" onclick="editDefinition(${def.CycleDefID})" title="Edit">✏️</button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteDefinition(${def.CycleDefID})" title="Delete">🗑️</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Update stats
+        function updateStats() {
+            const totalDefs = cycleTypes.reduce((sum, t) => sum + (t.CyclesPerYear || 0), 0);
+            const totalSchemas = cycleTypes.reduce((sum, t) => sum + (t.SchemasUsingCount || 0), 0);
+            
+            document.getElementById('totalTypes').textContent = cycleTypes.length;
+            document.getElementById('totalDefinitions').textContent = totalDefs;
+            document.getElementById('schemasUsing').textContent = totalSchemas;
+        }
+
+        // ==================== Type Modal ====================
+        function openAddTypeModal() {
+            document.getElementById('typeModalTitle').textContent = 'Add Cycle Type';
+            document.getElementById('editTypeId').value = '';
+            document.getElementById('typeName').value = '';
+            document.getElementById('typeCode').value = '';
+            document.getElementById('cyclesPerYear').value = '12';
+            document.getElementById('typeDescription').value = '';
+            document.getElementById('typeModal').classList.add('show');
+        }
+
+        function editType(typeId) {
+            const type = cycleTypes.find(t => t.CycleTypeID === typeId);
+            if (!type) return;
+
+            document.getElementById('typeModalTitle').textContent = 'Edit Cycle Type';
+            document.getElementById('editTypeId').value = typeId;
+            document.getElementById('typeName').value = type.TypeName;
+            document.getElementById('typeCode').value = type.TypeCode;
+            document.getElementById('cyclesPerYear').value = type.CyclesPerYear;
+            document.getElementById('typeDescription').value = type.Description || '';
+            document.getElementById('typeModal').classList.add('show');
+        }
+
+        function closeTypeModal() {
+            document.getElementById('typeModal').classList.remove('show');
+        }
+
+        async function saveType() {
+            const editId = document.getElementById('editTypeId').value;
+            const data = {
+                typeName: document.getElementById('typeName').value.trim(),
+                typeCode: document.getElementById('typeCode').value.trim().toUpperCase(),
+                cyclesPerYear: parseInt(document.getElementById('cyclesPerYear').value),
+                description: document.getElementById('typeDescription').value.trim()
+            };
+
+            if (!data.typeName || !data.typeCode) {
+                showToast('Type name and code are required', 'error');
+                return;
+            }
+
+            try {
+                let response;
+                if (editId) {
+                    response = await fetch(`/api/cycle-types/${editId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    response = await fetch('/api/cycle-types', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    showToast(editId ? 'Cycle type updated!' : 'Cycle type created!', 'success');
+                    closeTypeModal();
+                    loadCycleTypes();
+                } else {
+                    showToast(result.error || 'Error saving', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving type:', error);
+                showToast('Error saving cycle type', 'error');
+            }
+        }
+
+        async function deleteType(typeId) {
+            if (!confirm('Are you sure you want to delete this cycle type? All its definitions will also be deleted.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/cycle-types/${typeId}`, { method: 'DELETE' });
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast('Cycle type deleted!', 'success');
+                    if (selectedTypeId === typeId) {
+                        selectedTypeId = null;
+                        currentDefinitions = [];
+                        document.getElementById('selectedTypeName').textContent = 'Select a cycle type to view its definitions';
+                        document.getElementById('addDefBtn').disabled = true;
+                        renderDefinitions();
+                    }
+                    loadCycleTypes();
+                } else {
+                    showToast(result.error || 'Error deleting', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting type:', error);
+                showToast('Error deleting cycle type', 'error');
+            }
+        }
+
+        // ==================== Definition Modal ====================
+        function openAddDefinitionModal() {
+            if (!selectedTypeId) {
+                showToast('Please select a cycle type first', 'error');
+                return;
+            }
+
+            document.getElementById('defModalTitle').textContent = 'Add Cycle Definition';
+            document.getElementById('editDefId').value = '';
+            document.getElementById('cycleNumber').value = `C${currentDefinitions.length + 1}`;
+            document.getElementById('cycleName').value = '';
+            document.getElementById('startMonth').value = '1';
+            document.getElementById('endMonth').value = '1';
+            document.getElementById('displayOrder').value = currentDefinitions.length + 1;
+            document.getElementById('definitionModal').classList.add('show');
+        }
+
+        function editDefinition(defId) {
+            const def = currentDefinitions.find(d => d.CycleDefID === defId);
+            if (!def) return;
+
+            document.getElementById('defModalTitle').textContent = 'Edit Cycle Definition';
+            document.getElementById('editDefId').value = defId;
+            document.getElementById('cycleNumber').value = def.CycleNumber;
+            document.getElementById('cycleName').value = def.CycleName;
+            document.getElementById('startMonth').value = def.StartMonth;
+            document.getElementById('endMonth').value = def.EndMonth;
+            document.getElementById('displayOrder').value = def.DisplayOrder;
+            document.getElementById('definitionModal').classList.add('show');
+        }
+
+        function closeDefinitionModal() {
+            document.getElementById('definitionModal').classList.remove('show');
+        }
+
+        async function saveDefinition() {
+            const editId = document.getElementById('editDefId').value;
+            const data = {
+                cycleNumber: document.getElementById('cycleNumber').value.trim(),
+                cycleName: document.getElementById('cycleName').value.trim(),
+                startMonth: parseInt(document.getElementById('startMonth').value),
+                endMonth: parseInt(document.getElementById('endMonth').value),
+                displayOrder: parseInt(document.getElementById('displayOrder').value)
+            };
+
+            if (!data.cycleNumber || !data.cycleName) {
+                showToast('Cycle number and name are required', 'error');
+                return;
+            }
+
+            if (data.startMonth > data.endMonth) {
+                showToast('Start month cannot be after end month', 'error');
+                return;
+            }
+
+            try {
+                let response;
+                if (editId) {
+                    response = await fetch(`/api/cycle-definitions/${editId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    response = await fetch(`/api/cycle-types/${selectedTypeId}/definitions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    showToast(editId ? 'Cycle updated!' : 'Cycle added!', 'success');
+                    closeDefinitionModal();
+                    selectType(selectedTypeId);
+                    loadCycleTypes(); // Refresh to update CyclesPerYear
+                } else {
+                    showToast(result.error || 'Error saving', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving definition:', error);
+                showToast('Error saving cycle', 'error');
+            }
+        }
+
+        async function deleteDefinition(defId) {
+            if (!confirm('Are you sure you want to delete this cycle?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/cycle-definitions/${defId}`, { method: 'DELETE' });
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast('Cycle deleted!', 'success');
+                    selectType(selectedTypeId);
+                    loadCycleTypes(); // Refresh to update CyclesPerYear
+                } else {
+                    showToast(result.error || 'Error deleting', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting definition:', error);
+                showToast('Error deleting cycle', 'error');
+            }
+        }
+
+        // ==================== Toast ====================
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            toastMessage.textContent = message;
+            toast.className = `toast ${type} show`;
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

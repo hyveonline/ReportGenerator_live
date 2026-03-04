@@ -782,6 +782,12 @@
                                 <label>Description</label>
                                 <input type="text" id="schemaDescription" placeholder="Brief description...">
                             </div>
+                            <div class="form-group">
+                                <label>Cycle Type <span class="required">*</span></label>
+                                <select id="schemaCycleType" required>
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
                             <div class="form-group" style="justify-content: flex-end;">
                                 <button type="submit" class="btn btn-primary">➕ Create Schema</button>
                             </div>
@@ -982,7 +988,42 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadSchemas();
+            loadCycleTypes();
         });
+
+        // Load cycle types for dropdowns
+        let cycleTypes = [];
+        async function loadCycleTypes() {
+            try {
+                const response = await fetch('/api/cycle-types');
+                const result = await response.json();
+                if (result.success) {
+                    cycleTypes = result.data;
+                    populateCycleTypeDropdowns();
+                }
+            } catch (error) {
+                console.error('Error loading cycle types:', error);
+            }
+        }
+
+        function populateCycleTypeDropdowns() {
+            const createDropdown = document.getElementById('schemaCycleType');
+            const editDropdown = document.getElementById('editSchemaCycleType');
+            
+            const options = cycleTypes.map(ct => 
+                `<option value="${ct.CycleTypeID}">${ct.TypeName} (${ct.CyclesPerYear} cycles/year)</option>`
+            ).join('');
+            
+            if (createDropdown) {
+                createDropdown.innerHTML = '<option value="">Select Cycle Type...</option>' + options;
+                // Default to Monthly if available
+                const monthly = cycleTypes.find(ct => ct.TypeCode === 'MONTHLY');
+                if (monthly) createDropdown.value = monthly.CycleTypeID;
+            }
+            if (editDropdown) {
+                editDropdown.innerHTML = '<option value="">Select Cycle Type...</option>' + options;
+            }
+        }
 
         // Tab switching
         function switchTab(tab) {
@@ -1064,7 +1105,10 @@
                     <div class="schema-card" id="schema-card-${schema.schemaId}">
                         <div class="schema-header" onclick="selectSchema(${schema.schemaId})">
                             <span class="schema-name">📋 ${schema.schemaName}</span>
-                            <span class="card-badge">${schema.sectionCount} sections</span>
+                            <div style="display: flex; gap: 8px;">
+                                <span class="card-badge" style="background: #0ea5e9; color: white;">${schema.cycleTypeName || 'Monthly'}</span>
+                                <span class="card-badge">${schema.sectionCount} sections</span>
+                            </div>
                         </div>
                         <div class="schema-meta" onclick="selectSchema(${schema.schemaId})">
                             ${schema.description || 'No description'} • Created by ${schema.createdBy || 'Unknown'}
@@ -1229,15 +1273,24 @@
 
             const name = document.getElementById('schemaName').value;
             const description = document.getElementById('schemaDescription').value;
+            const cycleTypeId = document.getElementById('schemaCycleType').value;
+
+            if (!cycleTypeId) {
+                showToast('Please select a cycle type', 'error');
+                return;
+            }
 
             try {
                 await apiCall('/schemas', {
                     method: 'POST',
-                    body: JSON.stringify({ schemaName: name, description })
+                    body: JSON.stringify({ schemaName: name, description, cycleTypeId: parseInt(cycleTypeId) })
                 });
 
                 showToast('Schema created successfully!', 'success');
                 document.getElementById('createSchemaForm').reset();
+                // Reset cycle type to default
+                const monthly = cycleTypes.find(ct => ct.TypeCode === 'MONTHLY');
+                if (monthly) document.getElementById('schemaCycleType').value = monthly.CycleTypeID;
                 loadSchemas();
             } catch (error) {
                 showToast('Error creating schema: ' + error.message, 'error');
@@ -1266,6 +1319,7 @@
             document.getElementById('editSchemaId').value = schemaId;
             document.getElementById('editSchemaName').value = schema.schemaName;
             document.getElementById('editSchemaDescription').value = schema.description || '';
+            document.getElementById('editSchemaCycleType').value = schema.cycleTypeId || '';
             document.getElementById('editSchemaModal').classList.add('active');
         }
 
@@ -1341,16 +1395,22 @@
             const schemaId = document.getElementById('editSchemaId').value;
             const schemaName = document.getElementById('editSchemaName').value.trim();
             const description = document.getElementById('editSchemaDescription').value.trim();
+            const cycleTypeId = document.getElementById('editSchemaCycleType').value;
 
             if (!schemaName) {
                 showToast('Schema name is required', 'error');
                 return;
             }
 
+            if (!cycleTypeId) {
+                showToast('Please select a cycle type', 'error');
+                return;
+            }
+
             try {
                 await apiCall(`/schemas/${schemaId}`, {
                     method: 'PUT',
-                    body: JSON.stringify({ schemaName, description })
+                    body: JSON.stringify({ schemaName, description, cycleTypeId: parseInt(cycleTypeId) })
                 });
 
                 showToast('Schema updated successfully!', 'success');
@@ -2185,20 +2245,26 @@
     <div id="editSchemaModal" class="modal-overlay">
         <div class="modal">
             <div class="modal-header">
-                <h3>✏️ Rename Schema</h3>
+                <h3>✏️ Edit Schema</h3>
                 <button class="modal-close" onclick="closeEditSchemaModal()">&times;</button>
             </div>
-            <form id="editSchemaForm" onsubmit="saveSchemaEdit(event)">
+            <form id="editSchemaForm" onsubmit="saveSchemaEdit(event)" style="padding: 20px;">
                 <input type="hidden" id="editSchemaId">
-                <div class="form-group">
+                <div class="form-group" style="margin-bottom: 15px;">
                     <label>Schema Name <span class="required">*</span></label>
-                    <input type="text" id="editSchemaName" placeholder="e.g., Food Safety Audit" required>
+                    <input type="text" id="editSchemaName" placeholder="e.g., Food Safety Audit" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="margin-bottom: 15px;">
                     <label>Description</label>
-                    <textarea id="editSchemaDescription" rows="3" placeholder="Brief description of this audit schema..."></textarea>
+                    <textarea id="editSchemaDescription" rows="3" placeholder="Brief description of this audit schema..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
                 </div>
-                <div class="modal-footer">
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>Cycle Type <span class="required">*</span></label>
+                    <select id="editSchemaCycleType" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background: white;">
+                        <option value="">Select Cycle Type...</option>
+                    </select>
+                </div>
+                <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
                     <button type="button" class="btn" onclick="closeEditSchemaModal()" style="background: #6b7280;">Cancel</button>
                     <button type="submit" class="btn btn-success">💾 Save Changes</button>
                 </div>

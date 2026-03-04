@@ -157,7 +157,9 @@ class ReportGenerator {
                 auditDate: auditData.auditDate,
                 timeIn: auditData.timeIn,
                 timeOut: auditData.timeOut,
-                cycle: auditData.cycle,
+                cycle: auditData.cycleDisplay || auditData.cycle,  // Use cycleDisplay with name
+                cycleRaw: auditData.cycle,  // Keep raw cycle for reference
+                cycleTypeName: auditData.cycleTypeName,
                 year: auditData.year,
                 auditors: auditData.auditors,
                 accompaniedBy: auditData.accompaniedBy,
@@ -352,6 +354,7 @@ class ReportGenerator {
                 <span><strong>Document:</strong> ${data.documentNumber}</span>
                 <span><strong>Store:</strong> ${data.storeName} (${data.storeCode})</span>
                 <span><strong>Date:</strong> ${new Date(data.auditDate).toLocaleDateString()}</span>
+                <span><strong>Cycle:</strong> ${data.cycleDisplay || data.cycle} ${data.year}</span>
                 <span><strong>Auditor:</strong> ${data.auditors}</span>
             </div>
         </div>
@@ -608,6 +611,7 @@ class ReportGenerator {
                 <span><strong>Document:</strong> ${data.documentNumber}</span>
                 <span><strong>Store:</strong> ${data.storeName}</span>
                 <span><strong>Date:</strong> ${new Date(data.auditDate).toLocaleDateString()}</span>
+                <span><strong>Cycle:</strong> ${data.cycleDisplay || data.cycle} ${data.year}</span>
             </div>
         </div>
 
