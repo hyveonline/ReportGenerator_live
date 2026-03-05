@@ -313,6 +313,20 @@ app.post('/api/audit-templates/schemas/:schemaId/sections', requireAuth, require
     }
 });
 
+// Delete section (with all its items)
+app.delete('/api/audit-templates/sections/:sectionId', requireAuth, requirePagePermission(TEMPLATE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const result = await auditTemplateService.deleteSection(
+            parseInt(req.params.sectionId),
+            req.currentUser.email
+        );
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error deleting section:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get items by section
 app.get('/api/audit-templates/sections/:sectionId/items', requireAuth, requirePagePermission(TEMPLATE_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
     try {

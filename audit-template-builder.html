@@ -1481,9 +1481,15 @@
                                 <div class="section-count">${section.itemCount} items</div>
                             </div>
                         </div>
-                        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); selectSection(${section.sectionId})">
-                            📝 Manage Items
-                        </button>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); selectSection(${section.sectionId})">
+                                📝 Manage Items
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); confirmDeleteSection(${section.sectionId}, '${section.sectionName.replace(/'/g, "\\'")}')"
+                                    title="Delete section and all its items">
+                                🗑️
+                            </button>
+                        </div>
                     </div>
                 `).join('');
             } catch (error) {
@@ -1509,6 +1515,33 @@
                 loadSections();
             } catch (error) {
                 showToast('Error creating section: ' + error.message, 'error');
+            }
+        }
+
+        // Delete section with confirmation
+        function confirmDeleteSection(sectionId, sectionName) {
+            if (confirm(`⚠️ Are you sure you want to delete section "${sectionName}"?\n\nThis will permanently delete the section and ALL its items. This action cannot be undone.`)) {
+                deleteSection(sectionId, sectionName);
+            }
+        }
+
+        async function deleteSection(sectionId, sectionName) {
+            try {
+                const result = await apiCall(`/sections/${sectionId}`, {
+                    method: 'DELETE'
+                });
+
+                showToast(`Section "${sectionName}" and ${result.data.deletedItems} items deleted!`, 'success');
+                
+                // Clear current section if it was the deleted one
+                if (currentSectionId === sectionId) {
+                    currentSectionId = null;
+                    document.getElementById('itemsSection').style.display = 'none';
+                }
+                
+                loadSections();
+            } catch (error) {
+                showToast('Error deleting section: ' + error.message, 'error');
             }
         }
 

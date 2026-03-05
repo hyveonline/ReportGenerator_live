@@ -263,6 +263,39 @@ class AuditTemplateService {
         }
     }
     
+    /**
+     * Delete a section (hard delete)
+     * Also deletes all items belonging to this section
+     */
+    async deleteSection(sectionId, modifiedBy) {
+        try {
+            const pool = await sql.connect(dbConfig);
+            
+            // First delete all items in this section
+            const itemsResult = await pool.request()
+                .input('SectionID', sql.Int, sectionId)
+                .query(`
+                    DELETE FROM AuditItems WHERE SectionID = @SectionID;
+                    SELECT @@ROWCOUNT AS DeletedItems;
+                `);
+            const deletedItems = itemsResult.recordset[0]?.DeletedItems || 0;
+            
+            // Then delete the section itself
+            await pool.request()
+                .input('SectionID', sql.Int, sectionId)
+                .query(`
+                    DELETE FROM AuditSections WHERE SectionID = @SectionID
+                `);
+            
+            console.log(`[HARD DELETE] Section ${sectionId} and ${deletedItems} items permanently deleted by ${modifiedBy}`);
+            
+            return { success: true, sectionId, deletedItems };
+        } catch (error) {
+            console.error('Error deleting section:', error);
+            throw error;
+        }
+    }
+    
     // ==========================================
     // ITEM OPERATIONS
     // ==========================================
