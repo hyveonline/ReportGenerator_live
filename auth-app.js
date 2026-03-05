@@ -3684,6 +3684,27 @@ app.post('/api/audits/start', requireAuth, requireRole('Admin', 'SuperAuditor', 
     }
 });
 
+// Create a re-audit by duplicating an existing completed audit
+app.post('/api/audits/:auditId/reaudit', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+    try {
+        const auditId = parseInt(req.params.auditId);
+        const createdBy = req.currentUser.email;
+        
+        console.log(`🔄 Re-audit requested for audit ${auditId} by ${createdBy}`);
+        
+        const result = await AuditService.createReaudit(auditId, createdBy);
+        
+        res.json({ 
+            success: true, 
+            data: result,
+            message: `Re-audit created: ${result.documentNumber}`
+        });
+    } catch (error) {
+        console.error('Error creating re-audit:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get audits list for Audit List page (MUST be before :auditId route)
 app.get('/api/audits/list', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'StoreManager', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
     try {

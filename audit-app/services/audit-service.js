@@ -960,10 +960,15 @@ class AuditService {
                     s.RevisionDate AS ChecklistRevisionDate,
                     s.CreationDate AS ChecklistCreationDate,
                     s.ReportTitle AS ChecklistReportTitle,
-                    s.DocumentPrefix AS ChecklistDocumentPrefix
+                    s.DocumentPrefix AS ChecklistDocumentPrefix,
+                    ISNULL(a.IsReaudit, 0) AS IsReaudit,
+                    a.OriginalAuditID,
+                    a.ReauditNumber,
+                    orig.DocumentNumber AS OriginalDocumentNumber
                 FROM AuditInstances a
                 INNER JOIN AuditSchemas s ON a.SchemaID = s.SchemaID
                 LEFT JOIN SystemSettings ss ON ss.SchemaID = a.SchemaID AND ss.SettingType = 'Overall'
+                LEFT JOIN AuditInstances orig ON a.OriginalAuditID = orig.AuditID
                 ORDER BY a.CreatedAt DESC
             `);
 
@@ -1747,6 +1752,285 @@ class AuditService {
             };
         } catch (error) {
             console.error('Error getting cached department report:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create a re-audit by duplicating an existing completed audit
+     * Copies all responses, pictures, and temperature readings
+     * @param {number} originalAuditId - The audit to duplicate
+     * @param {string} createdBy - User email who created the re-audit
+     * @returns {Promise<Object>} - The new re-audit data
+     */
+    async createReaudit(originalAuditId, createdBy) {
+        const pool = await this.getPool();
+        const transaction = new sql.Transaction(pool);
+        
+        try {
+            await transaction.begin();
+            console.log(`🔄 Creating re-audit for audit ID: ${originalAuditId}`);
+
+            // 1. Get original audit data
+            const originalAudit = await transaction.request()
+                .input('AuditID', sql.Int, originalAuditId)
+                .query(`
+                    SELECT * FROM AuditInstances WHERE AuditID = @AuditID
+                `);
+
+            if (originalAudit.recordset.length === 0) {
+                throw new Error('Original audit not found');
+            }
+
+            const original = originalAudit.recordset[0];
+
+            if (original.Status !== 'Completed') {
+                throw new Error('Can only re-audit completed audits');
+            }
+
+            // 2. Determine re-audit number
+            // Check if this is already a re-audit or find existing re-audits
+            const baseDocNumber = original.DocumentNumber.replace(/ – Re audit( \d+)?$/, '');
+            const existingReaudits = await transaction.request()
+                .input('BaseDoc', sql.NVarChar(100), baseDocNumber + ' – Re audit%')
+                .input('OriginalID', sql.Int, original.OriginalAuditID || originalAuditId)
+                .query(`
+                    SELECT COUNT(*) as cnt FROM AuditInstances 
+                    WHERE DocumentNumber LIKE @BaseDoc
+                       OR OriginalAuditID = @OriginalID
+                `);
+
+            const reauditNumber = (existingReaudits.recordset[0].cnt || 0) + 1;
+            
+            // Build new document number
+            let newDocNumber;
+            if (reauditNumber === 1) {
+                newDocNumber = `${baseDocNumber} – Re audit`;
+            } else {
+                newDocNumber = `${baseDocNumber} – Re audit ${reauditNumber}`;
+            }
+
+            // 3. Create new audit instance
+            const today = new Date();
+            const newAuditResult = await transaction.request()
+                .input('DocumentNumber', sql.NVarChar(100), newDocNumber)
+                .input('StoreID', sql.Int, original.StoreID)
+                .input('StoreCode', sql.NVarChar(50), original.StoreCode)
+                .input('StoreName', sql.NVarChar(200), original.StoreName)
+                .input('SchemaID', sql.Int, original.SchemaID)
+                .input('AuditDate', sql.Date, today)
+                .input('TimeIn', sql.NVarChar(10), null)
+                .input('TimeOut', sql.NVarChar(10), null)
+                .input('Cycle', sql.NVarChar(10), original.Cycle)
+                .input('Year', sql.Int, original.Year)
+                .input('Auditors', sql.NVarChar(500), createdBy)
+                .input('AccompaniedBy', sql.NVarChar(500), original.AccompaniedBy)
+                .input('CreatedBy', sql.NVarChar(200), createdBy)
+                .input('IsReaudit', sql.Bit, 1)
+                .input('OriginalAuditID', sql.Int, original.OriginalAuditID || originalAuditId)
+                .input('ReauditNumber', sql.Int, reauditNumber)
+                .query(`
+                    INSERT INTO AuditInstances (
+                        DocumentNumber, StoreID, StoreCode, StoreName, SchemaID,
+                        AuditDate, TimeIn, TimeOut, Cycle, Year, Auditors, AccompaniedBy,
+                        Status, CreatedBy, CreatedAt, TotalScore,
+                        IsReaudit, OriginalAuditID, ReauditNumber
+                    ) VALUES (
+                        @DocumentNumber, @StoreID, @StoreCode, @StoreName, @SchemaID,
+                        @AuditDate, @TimeIn, @TimeOut, @Cycle, @Year, @Auditors, @AccompaniedBy,
+                        'Draft', @CreatedBy, GETDATE(), NULL,
+                        @IsReaudit, @OriginalAuditID, @ReauditNumber
+                    );
+                    SELECT SCOPE_IDENTITY() AS AuditID;
+                `);
+
+            const newAuditId = newAuditResult.recordset[0].AuditID;
+            console.log(`   ✅ Created new audit instance: ${newDocNumber} (ID: ${newAuditId})`);
+
+            // 4. Copy all responses with their values and findings
+            // Create a mapping of old ResponseID to new ResponseID for pictures
+            const responseMapping = {};
+            
+            const responsesResult = await transaction.request()
+                .input('AuditID', sql.Int, originalAuditId)
+                .query(`
+                    SELECT * FROM AuditResponses WHERE AuditID = @AuditID
+                `);
+
+            console.log(`   📋 Copying ${responsesResult.recordset.length} responses...`);
+
+            for (const resp of responsesResult.recordset) {
+                const insertResult = await transaction.request()
+                    .input('AuditID', sql.Int, newAuditId)
+                    .input('SectionID', sql.Int, resp.SectionID)
+                    .input('SectionNumber', sql.Int, resp.SectionNumber)
+                    .input('SectionName', sql.NVarChar(200), resp.SectionName)
+                    .input('ItemID', sql.Int, resp.ItemID)
+                    .input('ReferenceValue', sql.NVarChar(50), resp.ReferenceValue)
+                    .input('Title', sql.NVarChar(1000), resp.Title)
+                    .input('Coeff', sql.Int, resp.Coeff)
+                    .input('AnswerOptions', sql.NVarChar(200), resp.AnswerOptions)
+                    .input('CR', sql.NVarChar(2000), resp.CR)
+                    .input('SelectedChoice', sql.NVarChar(50), resp.SelectedChoice)
+                    .input('Value', sql.Float, resp.Value)
+                    .input('Finding', sql.NVarChar(sql.MAX), resp.Finding)
+                    .input('Comment', sql.NVarChar(sql.MAX), resp.Comment)
+                    .input('CorrectiveAction', sql.NVarChar(sql.MAX), resp.CorrectiveAction)
+                    .input('Priority', sql.NVarChar(50), resp.Priority)
+                    .input('HasPicture', sql.Bit, resp.HasPicture)
+                    .input('Escalate', sql.Bit, resp.Escalate)
+                    .input('Department', sql.NVarChar(100), resp.Department)
+                    .query(`
+                        INSERT INTO AuditResponses (
+                            AuditID, SectionID, SectionNumber, SectionName,
+                            ItemID, ReferenceValue, Title, Coeff, AnswerOptions, CR,
+                            SelectedChoice, Value, Finding, Comment, CorrectiveAction,
+                            Priority, HasPicture, Escalate, Department
+                        ) VALUES (
+                            @AuditID, @SectionID, @SectionNumber, @SectionName,
+                            @ItemID, @ReferenceValue, @Title, @Coeff, @AnswerOptions, @CR,
+                            @SelectedChoice, @Value, @Finding, @Comment, @CorrectiveAction,
+                            @Priority, @HasPicture, @Escalate, @Department
+                        );
+                        SELECT SCOPE_IDENTITY() AS ResponseID;
+                    `);
+                
+                responseMapping[resp.ResponseID] = insertResult.recordset[0].ResponseID;
+            }
+
+            // 5. Copy pictures with new ResponseIDs
+            const picturesResult = await transaction.request()
+                .input('AuditID', sql.Int, originalAuditId)
+                .query(`
+                    SELECT p.* FROM AuditPictures p
+                    INNER JOIN AuditResponses r ON p.ResponseID = r.ResponseID
+                    WHERE r.AuditID = @AuditID
+                `);
+
+            console.log(`   🖼️ Copying ${picturesResult.recordset.length} pictures...`);
+
+            for (const pic of picturesResult.recordset) {
+                const newResponseId = responseMapping[pic.ResponseID];
+                if (newResponseId) {
+                    await transaction.request()
+                        .input('ResponseID', sql.Int, newResponseId)
+                        .input('AuditID', sql.Int, newAuditId)
+                        .input('FileName', sql.NVarChar(500), pic.FileName)
+                        .input('FilePath', sql.NVarChar(1000), pic.FilePath)
+                        .input('FileData', sql.VarBinary(sql.MAX), pic.FileData)
+                        .input('ContentType', sql.NVarChar(100), pic.ContentType)
+                        .input('PictureType', sql.NVarChar(50), pic.PictureType)
+                        .input('Category', sql.NVarChar(100), pic.Category)
+                        .query(`
+                            INSERT INTO AuditPictures (
+                                ResponseID, AuditID, FileName, FilePath, FileData,
+                                ContentType, PictureType, Category, CreatedAt
+                            ) VALUES (
+                                @ResponseID, @AuditID, @FileName, @FilePath, @FileData,
+                                @ContentType, @PictureType, @Category, GETDATE()
+                            )
+                        `);
+                }
+            }
+
+            // 6. Copy temperature readings if table exists
+            try {
+                const tableCheck = await transaction.request().query(`
+                    SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'FridgeTemperatureReadings'
+                `);
+                
+                if (tableCheck.recordset.length > 0) {
+                    const tempReadingsResult = await transaction.request()
+                        .input('AuditID', sql.Int, originalAuditId)
+                        .query(`
+                            SELECT t.* FROM FridgeTemperatureReadings t
+                            INNER JOIN AuditResponses r ON t.ResponseID = r.ResponseID
+                            WHERE r.AuditID = @AuditID
+                        `);
+
+                    if (tempReadingsResult.recordset.length > 0) {
+                        console.log(`   🌡️ Copying ${tempReadingsResult.recordset.length} temperature readings...`);
+
+                        for (const temp of tempReadingsResult.recordset) {
+                            const newResponseId = responseMapping[temp.ResponseID];
+                            if (newResponseId) {
+                                await transaction.request()
+                                    .input('ResponseID', sql.Int, newResponseId)
+                                    .input('Section', sql.NVarChar(200), temp.Section)
+                                    .input('Category', sql.NVarChar(200), temp.Category)
+                                    .input('Unit', sql.NVarChar(200), temp.Unit)
+                                    .input('DisplayTemp', sql.Float, temp.DisplayTemp)
+                                    .input('ProbeTemp', sql.Float, temp.ProbeTemp)
+                                    .input('ReadingType', sql.NVarChar(50), temp.ReadingType)
+                                    .input('Issue', sql.NVarChar(1000), temp.Issue)
+                                    .query(`
+                                        INSERT INTO FridgeTemperatureReadings (
+                                            ResponseID, Section, Category, Unit,
+                                            DisplayTemp, ProbeTemp, ReadingType, Issue, CreatedAt
+                                        ) VALUES (
+                                            @ResponseID, @Section, @Category, @Unit,
+                                            @DisplayTemp, @ProbeTemp, @ReadingType, @Issue, GETDATE()
+                                        )
+                                    `);
+                            }
+                        }
+                    }
+                }
+            } catch (tempError) {
+                console.log(`   ⚠️ Skipping temperature readings (table may not exist): ${tempError.message}`);
+            }
+
+            // 7. Copy section scores
+            const scoresResult = await transaction.request()
+                .input('AuditID', sql.Int, originalAuditId)
+                .query(`
+                    SELECT * FROM AuditSectionScores WHERE AuditID = @AuditID
+                `);
+
+            if (scoresResult.recordset.length > 0) {
+                console.log(`   📊 Copying ${scoresResult.recordset.length} section scores...`);
+
+                for (const score of scoresResult.recordset) {
+                    await transaction.request()
+                        .input('AuditID', sql.Int, newAuditId)
+                        .input('SectionID', sql.Int, score.SectionID)
+                        .input('SectionNumber', sql.Int, score.SectionNumber)
+                        .input('SectionName', sql.NVarChar(200), score.SectionName)
+                        .input('EarnedScore', sql.Float, score.EarnedScore)
+                        .input('MaxScore', sql.Float, score.MaxScore)
+                        .input('Percentage', sql.Float, score.Percentage)
+                        .input('TotalQuestions', sql.Int, score.TotalQuestions)
+                        .input('AnsweredQuestions', sql.Int, score.AnsweredQuestions)
+                        .input('NAQuestions', sql.Int, score.NAQuestions)
+                        .query(`
+                            INSERT INTO AuditSectionScores (
+                                AuditID, SectionID, SectionNumber, SectionName,
+                                EarnedScore, MaxScore, Percentage,
+                                TotalQuestions, AnsweredQuestions, NAQuestions, CreatedAt
+                            ) VALUES (
+                                @AuditID, @SectionID, @SectionNumber, @SectionName,
+                                @EarnedScore, @MaxScore, @Percentage,
+                                @TotalQuestions, @AnsweredQuestions, @NAQuestions, GETDATE()
+                            )
+                        `);
+                }
+            }
+
+            await transaction.commit();
+            console.log(`   ✅ Re-audit created successfully!`);
+
+            return {
+                auditId: newAuditId,
+                documentNumber: newDocNumber,
+                originalAuditId: original.OriginalAuditID || originalAuditId,
+                reauditNumber,
+                storeName: original.StoreName,
+                storeCode: original.StoreCode
+            };
+
+        } catch (error) {
+            await transaction.rollback();
+            console.error('❌ Error creating re-audit:', error);
             throw error;
         }
     }
