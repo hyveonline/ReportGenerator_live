@@ -403,6 +403,33 @@ class AnalyticsPage {
                     </div>
                 </div>
             </section>
+
+            <!-- Action Plan Analysis -->
+            <section class="chart-card full-width">
+                <h2>📝 Action Plan Analysis</h2>
+                
+                <!-- Summary Stats -->
+                <div id="apSummaryStats" class="nc-summary-stats">
+                    <p class="loading-text">Loading...</p>
+                </div>
+                
+                <!-- Non-conformities by Location -->
+                <div class="nc-section">
+                    <h3>📍 Non-conformities by Location</h3>
+                    <div id="ncByLocationTable" class="data-table-container">
+                        <p class="loading-text">Loading data...</p>
+                    </div>
+                </div>
+                
+                <!-- Open Non-conformities by Location -->
+                <div class="nc-section">
+                    <h3>⏳ Open Non-conformities by Location</h3>
+                    <p class="nc-description">Open findings with days since creation.</p>
+                    <div id="openNCByLocationTable" class="data-table-container">
+                        <p class="loading-text">Loading data...</p>
+                    </div>
+                </div>
+            </section>
         </div>
     </main>
 
@@ -898,6 +925,7 @@ class AnalyticsPage {
                 renderSectionAnalysis(analyticsData.sectionWeakness, analyticsData.sectionDrilldown);
                 renderHeatmap(analyticsData.heatmap);
                 renderNCAnalysis(analyticsData.ncAnalysis);
+                renderActionPlanAnalysis(analyticsData.actionPlanAnalysis);
             } catch (error) {
                 console.error('Error loading analytics:', error);
                 alert('Error loading analytics: ' + error.message);
@@ -1659,6 +1687,100 @@ class AnalyticsPage {
                 </table>
             \`;
             document.getElementById('repetitiveFindingsTable').innerHTML = repetitiveHtml;
+        }
+
+        // =============================================
+        // ACTION PLAN ANALYSIS
+        // =============================================
+        
+        function renderActionPlanAnalysis(apAnalysis) {
+            if (!apAnalysis) {
+                document.getElementById('apSummaryStats').innerHTML = '<p class="no-data">No data available</p>';
+                document.getElementById('ncByLocationTable').innerHTML = '<p class="no-data">No data available</p>';
+                document.getElementById('openNCByLocationTable').innerHTML = '<p class="no-data">No data available</p>';
+                return;
+            }
+            
+            const { ncByLocation, openNCByLocation, summary } = apAnalysis;
+            
+            // Render Summary Stats
+            const summaryHtml = \`
+                <div class="nc-stat">
+                    <span class="nc-stat-value">\${summary.totalFindings}</span>
+                    <span class="nc-stat-label">Total Findings</span>
+                </div>
+                <div class="nc-stat closed">
+                    <span class="nc-stat-value">\${summary.closedFindings}</span>
+                    <span class="nc-stat-label">Closed</span>
+                </div>
+                <div class="nc-stat open">
+                    <span class="nc-stat-value">\${summary.openFindings}</span>
+                    <span class="nc-stat-label">Pending</span>
+                </div>
+                <div class="nc-stat">
+                    <span class="nc-stat-value">\${summary.closureRate}%</span>
+                    <span class="nc-stat-label">Closure Rate</span>
+                </div>
+            \`;
+            document.getElementById('apSummaryStats').innerHTML = summaryHtml;
+            
+            // Render NC by Location Table
+            const ncByLocationHtml = \`
+                <table class="data-table ap-location-table">
+                    <thead>
+                        <tr>
+                            <th>Store</th>
+                            <th>Open</th>
+                            <th>Closed</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${ncByLocation.length > 0 ? ncByLocation.map(r => \`
+                            <tr>
+                                <td>\${r.storeName}</td>
+                                <td class="open-count \${r.open > 0 ? 'has-open' : ''}">\${r.open}</td>
+                                <td class="closed-count">\${r.closed}</td>
+                                <td class="total-count">\${r.total}</td>
+                            </tr>
+                        \`).join('') : '<tr><td colspan="4" class="no-data">No action plan data found</td></tr>'}
+                    </tbody>
+                    \${ncByLocation.length > 0 ? \`
+                    <tfoot>
+                        <tr class="totals-row">
+                            <td><strong>Total</strong></td>
+                            <td class="open-count has-open"><strong>\${summary.openFindings}</strong></td>
+                            <td class="closed-count"><strong>\${summary.closedFindings}</strong></td>
+                            <td class="total-count"><strong>\${summary.totalFindings}</strong></td>
+                        </tr>
+                    </tfoot>
+                    \` : ''}
+                </table>
+            \`;
+            document.getElementById('ncByLocationTable').innerHTML = ncByLocationHtml;
+            
+            // Render Open NC by Location Table (Store, Open count, Days)
+            const openNCHtml = \`
+                <table class="data-table open-nc-table">
+                    <thead>
+                        <tr>
+                            <th>Store</th>
+                            <th>Open</th>
+                            <th>Days</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${openNCByLocation.length > 0 ? openNCByLocation.map(r => \`
+                            <tr class="\${r.maxDaysOpen > 30 ? 'overdue' : r.maxDaysOpen > 14 ? 'warning' : ''}">
+                                <td>\${r.storeName}</td>
+                                <td class="open-count has-open">\${r.openCount}</td>
+                                <td class="days-open \${r.maxDaysOpen > 30 ? 'critical' : r.maxDaysOpen > 14 ? 'warning' : ''}">\${r.maxDaysOpen}</td>
+                            </tr>
+                        \`).join('') : '<tr><td colspan="3" class="no-data">No open findings - All caught up! 🎉</td></tr>'}
+                    </tbody>
+                </table>
+            \`;
+            document.getElementById('openNCByLocationTable').innerHTML = openNCHtml;
         }
 
         // =============================================

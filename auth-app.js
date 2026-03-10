@@ -2241,6 +2241,68 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             }
         };
         
+        // 8. Action Plan Analysis
+        // Get action plan items with status by store
+        const apByStoreResult = await pool.request().query(`
+            SELECT 
+                ai.StoreName,
+                COUNT(*) as Total,
+                SUM(CASE WHEN apr.Status = 'Completed' THEN 1 ELSE 0 END) as Closed,
+                SUM(CASE WHEN apr.Status != 'Completed' OR apr.Status IS NULL THEN 1 ELSE 0 END) as OpenCount
+            FROM ActionPlanResponses apr
+            INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            GROUP BY ai.StoreName
+            ORDER BY ai.StoreName
+        `);
+        
+        const ncByLocation = apByStoreResult.recordset.map(r => ({
+            storeName: r.StoreName,
+            open: r.OpenCount || 0,
+            closed: r.Closed || 0,
+            total: r.Total || 0
+        }));
+        
+        // Get open action plan items aggregated by store with days open (using AuditDate since CreatedDate may be null)
+        const openAPResult = await pool.request().query(`
+            SELECT 
+                ai.StoreName,
+                COUNT(*) as OpenCount,
+                MAX(DATEDIFF(day, ai.AuditDate, GETDATE())) as MaxDaysOpen,
+                AVG(DATEDIFF(day, ai.AuditDate, GETDATE())) as AvgDaysOpen
+            FROM ActionPlanResponses apr
+            INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND (apr.Status != 'Completed' OR apr.Status IS NULL)
+            GROUP BY ai.StoreName
+            ORDER BY OpenCount DESC, ai.StoreName
+        `);
+        
+        const openNCByLocation = openAPResult.recordset.map(r => ({
+            storeName: r.StoreName,
+            openCount: r.OpenCount || 0,
+            maxDaysOpen: r.MaxDaysOpen || 0,
+            avgDaysOpen: Math.round(r.AvgDaysOpen) || 0
+        }));
+        
+        // Calculate action plan summary
+        const apTotalFindings = ncByLocation.reduce((sum, r) => sum + r.total, 0);
+        const apClosedFindings = ncByLocation.reduce((sum, r) => sum + r.closed, 0);
+        const apOpenFindings = ncByLocation.reduce((sum, r) => sum + r.open, 0);
+        
+        const actionPlanAnalysis = {
+            ncByLocation: ncByLocation,
+            openNCByLocation: openNCByLocation,
+            summary: {
+                totalFindings: apTotalFindings,
+                closedFindings: apClosedFindings,
+                openFindings: apOpenFindings,
+                closureRate: apTotalFindings > 0 ? ((apClosedFindings / apTotalFindings) * 100).toFixed(1) : 0
+            }
+        };
+        
         res.json({
             success: true,
             summary,
@@ -2250,7 +2312,8 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             sectionDrilldown,
             heatmap,
             complianceCalendar,
-            ncAnalysis
+            ncAnalysis,
+            actionPlanAnalysis
         });
         
     } catch (error) {

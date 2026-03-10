@@ -1561,3 +1561,105 @@ body {
     background: #dbeafe;
     text-decoration: underline;
 }
+
+/* Action Plan Analysis Styles */
+.nc-stat.closed .nc-stat-value {
+    color: #059669;
+}
+
+.nc-stat.open .nc-stat-value {
+    color: #dc2626;
+}
+
+.ap-location-table {
+    font-size: 0.9rem;
+}
+
+.ap-location-table th,
+.ap-location-table td {
+    padding: 0.6rem 1rem;
+    text-align: center;
+}
+
+.ap-location-table td:first-child {
+    text-align: left;
+}
+
+.open-count.has-open {
+    background: #fee2e2;
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.closed-count {
+    color: #059669;
+}
+
+.total-count {
+    font-weight: 600;
+}
+
+.totals-row {
+    background: #f1f5f9;
+    border-top: 2px solid #cbd5e1;
+}
+
+/* Open NC Table */
+.open-nc-table {
+    font-size: 0.85rem;
+}
+
+.open-nc-table th,
+.open-nc-table td {
+    padding: 0.5rem 0.75rem;
+}
+
+.open-nc-table tr.overdue {
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+}
+
+.open-nc-table tr.warning {
+    background: #fffbeb;
+    border-left: 3px solid #d97706;
+}
+
+.finding-text {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.days-open {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.days-open.critical {
+    color: #dc2626;
+    background: #fee2e2;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.days-open.warning {
+    color: #d97706;
+    background: #fef3c7;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.priority-high {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.priority-medium {
+    color: #d97706;
+    font-weight: 600;
+}
+
+.priority-low {
+    color: #059669;
+}
