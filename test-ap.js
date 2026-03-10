@@ -1,0 +1,1 @@
+﻿const sql = require('mssql'); const config = require('./config/default').database; sql.connect(config).then(pool => pool.request().query('SELECT TOP 1 * FROM ActionPlanResponses')).then(r => { console.log('Columns:', Object.keys(r.recordset[0] || {})); process.exit(0); }).catch(e => { console.error('Error:', e.message); process.exit(1); });

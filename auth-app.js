@@ -1637,6 +1637,213 @@ app.get('/admin/analytics', requireAuth, requireAutoRole('Admin', 'SuperAuditor'
     AnalyticsPage.render(req, res);
 });
 
+// ==========================================
+// Auditor Performance Page
+// ==========================================
+
+const AuditorPerformancePage = require('./admin/pages/auditor-performance-page');
+
+// Serve auditor performance page - uses auto role from MenuPermissions
+app.get('/admin/auditor-performance', requireAuth, requireAutoRole('Admin', 'SuperAuditor'), (req, res) => {
+    AuditorPerformancePage.render(req, res);
+});
+
+// Auditor Performance API - Get detailed auditor performance data
+app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const { years, cycles, brands } = req.query;
+        
+        // Get dynamic threshold
+        let passingThreshold = 87;
+        try {
+            const thresholdResult = await pool.request().query(`
+                SELECT TOP 1 ISNULL(PassingGrade, 87) AS PassingGrade
+                FROM SystemSettings WHERE SettingType = 'Overall'
+            `);
+            if (thresholdResult.recordset.length > 0) {
+                passingThreshold = thresholdResult.recordset[0].PassingGrade;
+            }
+        } catch (e) { /* use default */ }
+        
+        // Build WHERE clause
+        let whereClause = "WHERE ai.Status = 'Completed'";
+        if (years && years.trim()) {
+            const yearArray = years.split(',').map(y => parseInt(y)).filter(y => !isNaN(y));
+            if (yearArray.length > 0) whereClause += ` AND ai.Year IN (${yearArray.join(',')})`;
+        }
+        if (cycles && cycles.trim()) {
+            const cycleArray = cycles.split(',').filter(c => c.trim()).map(c => "'" + c.trim().replace(/'/g, "''") + "'");
+            if (cycleArray.length > 0) whereClause += ` AND ai.Cycle IN (${cycleArray.join(',')})`;
+        }
+        if (brands && brands.trim()) {
+            const brandArray = brands.split(',').filter(b => b.trim()).map(b => "'" + b.trim().replace(/'/g, "''") + "'");
+            if (brandArray.length > 0) whereClause += ` AND s.Brand IN (${brandArray.join(',')})`;
+        }
+        
+        // 1. Audit Duration Analysis (Time In/Out)
+        const durationResult = await pool.request().query(`
+            SELECT 
+                ai.Auditors,
+                ai.StoreName,
+                ai.DocumentNumber,
+                ai.AuditDate,
+                ai.TimeIn,
+                ai.TimeOut,
+                CASE 
+                    WHEN ai.TimeIn IS NOT NULL AND ai.TimeOut IS NOT NULL 
+                    THEN DATEDIFF(MINUTE, ai.TimeIn, ai.TimeOut)
+                    ELSE NULL 
+                END as DurationMinutes,
+                s.StandardAuditDuration,
+                ai.TotalScore
+            FROM AuditInstances ai
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            ORDER BY ai.Auditors, ai.AuditDate DESC
+        `);
+        
+        // 2. Report Submission Time (AuditDate vs first notification sent)
+        const submissionResult = await pool.request().query(`
+            SELECT 
+                ai.Auditors,
+                ai.DocumentNumber,
+                ai.StoreName,
+                ai.AuditDate,
+                ai.CompletedAt,
+                MIN(n.sent_at) as FirstNotificationSent,
+                CASE 
+                    WHEN MIN(n.sent_at) IS NOT NULL AND ai.AuditDate IS NOT NULL
+                    THEN DATEDIFF(HOUR, ai.AuditDate, MIN(n.sent_at))
+                    ELSE NULL
+                END as HoursToSend
+            FROM AuditInstances ai
+            LEFT JOIN Notifications n ON ai.DocumentNumber = n.document_number
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            GROUP BY ai.Auditors, ai.DocumentNumber, ai.StoreName, ai.AuditDate, ai.CompletedAt
+            ORDER BY ai.Auditors, ai.AuditDate DESC
+        `);
+        
+        // 3. Findings per store per auditor
+        const findingsResult = await pool.request().query(`
+            SELECT 
+                ai.Auditors,
+                ai.StoreName,
+                ai.DocumentNumber,
+                ai.AuditDate,
+                ai.TotalScore,
+                COUNT(ar.ResponseID) as TotalFindings
+            FROM AuditInstances ai
+            LEFT JOIN AuditResponses ar ON ai.AuditID = ar.AuditID 
+                AND ar.SelectedChoice IN ('No', 'Partially')
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            GROUP BY ai.Auditors, ai.StoreName, ai.DocumentNumber, ai.AuditDate, ai.TotalScore
+            ORDER BY ai.Auditors, ai.StoreName, ai.AuditDate DESC
+        `);
+        
+        // 4. Pass/Fail by auditor
+        const passFailByAuditorResult = await pool.request().query(`
+            SELECT 
+                ai.Auditors,
+                COUNT(*) as TotalAudits,
+                SUM(CASE WHEN ai.TotalScore >= ${passingThreshold} THEN 1 ELSE 0 END) as PassedAudits,
+                SUM(CASE WHEN ai.TotalScore < ${passingThreshold} THEN 1 ELSE 0 END) as FailedAudits,
+                AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore
+            FROM AuditInstances ai
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            GROUP BY ai.Auditors
+            ORDER BY TotalAudits DESC
+        `);
+        
+        // 5. Pass/Fail by branch (store)
+        const passFailByBranchResult = await pool.request().query(`
+            SELECT 
+                ai.StoreName,
+                ai.Auditors,
+                COUNT(*) as TotalAudits,
+                SUM(CASE WHEN ai.TotalScore >= ${passingThreshold} THEN 1 ELSE 0 END) as PassedAudits,
+                SUM(CASE WHEN ai.TotalScore < ${passingThreshold} THEN 1 ELSE 0 END) as FailedAudits,
+                AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore
+            FROM AuditInstances ai
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            GROUP BY ai.StoreName, ai.Auditors
+            ORDER BY ai.StoreName, ai.Auditors
+        `);
+        
+        // 6. Duration variance analysis
+        const durationVarianceResult = await pool.request().query(`
+            SELECT 
+                ai.Auditors,
+                ai.StoreName,
+                s.StandardAuditDuration,
+                AVG(CASE 
+                    WHEN ai.TimeIn IS NOT NULL AND ai.TimeOut IS NOT NULL 
+                    THEN DATEDIFF(MINUTE, ai.TimeIn, ai.TimeOut)
+                    ELSE NULL 
+                END) as AvgDurationMinutes,
+                COUNT(*) as AuditCount
+            FROM AuditInstances ai
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND ai.TimeIn IS NOT NULL AND ai.TimeOut IS NOT NULL
+            GROUP BY ai.Auditors, ai.StoreName, s.StandardAuditDuration
+            ORDER BY ai.StoreName, ai.Auditors
+        `);
+        
+        // 7. Store standard durations for editing
+        const storesResult = await pool.request().query(`
+            SELECT StoreID, StoreName, StandardAuditDuration 
+            FROM Stores WHERE IsActive = 1 
+            ORDER BY StoreName
+        `);
+        
+        res.json({
+            success: true,
+            passingThreshold,
+            auditDurations: durationResult.recordset,
+            submissionTimes: submissionResult.recordset,
+            findingsPerStore: findingsResult.recordset,
+            passFailByAuditor: passFailByAuditorResult.recordset,
+            passFailByBranch: passFailByBranchResult.recordset,
+            durationVariance: durationVarianceResult.recordset,
+            stores: storesResult.recordset
+        });
+        
+    } catch (error) {
+        console.error('Error getting auditor performance:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Update store standard audit duration
+app.put('/api/admin/stores/:storeId/duration', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const { storeId } = req.params;
+        const { duration } = req.body;
+        
+        await pool.request()
+            .input('storeId', sql.Int, parseInt(storeId))
+            .input('duration', sql.Int, duration ? parseInt(duration) : null)
+            .query(`UPDATE Stores SET StandardAuditDuration = @duration WHERE StoreID = @storeId`);
+        
+        res.json({ success: true, message: 'Duration updated' });
+    } catch (error) {
+        console.error('Error updating store duration:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get brands for analytics filter
 app.get('/api/admin/brands', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {

@@ -1197,6 +1197,27 @@
             box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
         }
 
+        /* Auditor Performance Button */
+        .auditor-performance-btn {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .auditor-performance-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+        }
+
         /* View Reports Modal */
         .view-reports-modal {
             display: none;
@@ -2284,7 +2305,11 @@
                         </button>
                         <button class="analytics-btn" id="analyticsBtn" onclick="window.location.href='/admin/analytics'" style="display: none;">
                             <span>📊</span>
-                            Analytics
+                            Stores Analytics
+                        </button>
+                        <button class="auditor-performance-btn" id="auditorPerformanceBtn" onclick="window.location.href='/admin/auditor-performance'" style="display: none;">
+                            <span>👨‍💼</span>
+                            Auditor Performance
                         </button>
                         <button class="notification-history-btn" id="notificationHistoryBtn" onclick="window.location.href='/admin/notification-history'" style="display: none;">
                             <span>📧</span>
@@ -2859,6 +2884,7 @@
             const reportsButtons = [
                 { id: 'viewReportsBtn', elementId: 'viewReportsBtn' },
                 { id: 'analyticsBtn', elementId: 'analyticsBtn' },
+                { id: 'auditorPerformanceBtn', elementId: 'auditorPerformanceBtn' },
                 { id: 'notificationHistoryBtn', elementId: 'notificationHistoryBtn' },
                 { id: 'broadcastBtn', elementId: 'broadcastBtn' },
                 { id: 'emailTemplatesBtn', elementId: 'emailTemplatesBtn' }

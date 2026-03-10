@@ -340,15 +340,6 @@ class AnalyticsPage {
                 </div>
             </section>
 
-            <!-- Auditor Performance -->
-            <section class="chart-card">
-                <h2>👥 Auditor Performance</h2>
-                <div class="chart-container">
-                    <canvas id="auditorChart"></canvas>
-                </div>
-                <div id="auditorTable" class="data-table-container"></div>
-            </section>
-
             <!-- Section Analysis -->
             <section class="chart-card">
                 <h2>📊 Section Analysis Report</h2>
@@ -488,7 +479,6 @@ class AnalyticsPage {
     <script>
         // Chart instances
         let trendChart = null;
-        let auditorChart = null;
         let sectionChart = null;
 
         // Data cache
@@ -939,7 +929,6 @@ class AnalyticsPage {
                 
                 renderSummaryCards(analyticsData.summary);
                 renderTrendChart(analyticsData.trends);
-                renderAuditorPerformance(analyticsData.auditorPerformance);
                 renderSectionAnalysis(analyticsData.sectionWeakness, analyticsData.sectionDrilldown);
                 renderHeatmap(analyticsData.heatmap);
                 renderNCAnalysis(analyticsData.ncAnalysis);
@@ -1069,82 +1058,6 @@ class AnalyticsPage {
                     }
                 }
             });
-        }
-
-        // Render auditor performance
-        function renderAuditorPerformance(auditors) {
-            const ctx = document.getElementById('auditorChart').getContext('2d');
-            
-            if (auditorChart) auditorChart.destroy();
-
-            const labels = auditors.map(a => a.auditorName);
-            const scores = auditors.map(a => a.avgScore);
-            const counts = auditors.map(a => a.auditCount);
-
-            // Color based on performance
-            const colors = scores.map(s => s >= 83 ? '#10b981' : '#ef4444');
-
-            auditorChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Average Score (%)',
-                        data: scores,
-                        backgroundColor: colors,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    scales: {
-                        x: {
-                            min: 0,
-                            max: 100,
-                            title: { display: true, text: 'Average Score (%)' }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const auditor = auditors[context.dataIndex];
-                                    return [
-                                        'Avg Score: ' + auditor.avgScore.toFixed(1) + '%',
-                                        'Audits: ' + auditor.auditCount
-                                    ];
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            // Render table
-            const tableHtml = \`
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Auditor</th>
-                            <th>Audits</th>
-                            <th>Avg Score</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        \${auditors.map(a => \`
-                            <tr>
-                                <td>\${a.auditorName}</td>
-                                <td>\${a.auditCount}</td>
-                                <td class="\${a.avgScore >= 83 ? 'pass' : 'fail'}">\${a.avgScore.toFixed(1)}%</td>
-                            </tr>
-                        \`).join('')}
-                    </tbody>
-                </table>
-            \`;
-            document.getElementById('auditorTable').innerHTML = tableHtml;
         }
 
         // Store drilldown data for section analysis
