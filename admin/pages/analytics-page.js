@@ -5,9 +5,8 @@
  * Features:
  * 1. Trend Charts - Score trends over time by store/auditor
  * 2. Auditor Performance - Compare auditors by # audits, avg scores
- * 3. Section Weakness Report - Which sections fail most often
+ * 3. Section Analysis Report - Drill-down analysis with per-store/audit breakdown and criteria details
  * 4. Heatmap - Visual grid of stores vs sections showing problem areas
- * 5. Compliance Calendar - See when stores were last audited
  */
 
 class AnalyticsPage {
@@ -350,9 +349,9 @@ class AnalyticsPage {
                 <div id="auditorTable" class="data-table-container"></div>
             </section>
 
-            <!-- Section Weakness -->
+            <!-- Section Analysis -->
             <section class="chart-card">
-                <h2>⚠️ Section Weakness Report</h2>
+                <h2>📊 Section Analysis Report</h2>
                 <div class="chart-container">
                     <canvas id="sectionChart"></canvas>
                 </div>
@@ -364,14 +363,6 @@ class AnalyticsPage {
                 <h2>🗺️ Store vs Section Heatmap</h2>
                 <div class="heatmap-container" id="heatmapContainer">
                     <p class="loading-text">Loading heatmap...</p>
-                </div>
-            </section>
-
-            <!-- Compliance Calendar -->
-            <section class="chart-card full-width">
-                <h2>📅 Compliance Calendar - Last Audit Dates</h2>
-                <div id="calendarContainer" class="calendar-container">
-                    <p class="loading-text">Loading calendar...</p>
                 </div>
             </section>
         </div>
@@ -866,9 +857,8 @@ class AnalyticsPage {
                 renderSummaryCards(analyticsData.summary);
                 renderTrendChart(analyticsData.trends);
                 renderAuditorPerformance(analyticsData.auditorPerformance);
-                renderSectionWeakness(analyticsData.sectionWeakness);
+                renderSectionAnalysis(analyticsData.sectionWeakness, analyticsData.sectionDrilldown);
                 renderHeatmap(analyticsData.heatmap);
-                renderComplianceCalendar(analyticsData.complianceCalendar);
             } catch (error) {
                 console.error('Error loading analytics:', error);
                 alert('Error loading analytics: ' + error.message);
@@ -1070,8 +1060,12 @@ class AnalyticsPage {
             document.getElementById('auditorTable').innerHTML = tableHtml;
         }
 
-        // Render section weakness report
-        function renderSectionWeakness(sections) {
+        // Store drilldown data for section analysis
+        let currentSectionDrilldown = {};
+
+        // Render section analysis report (enhanced version)
+        function renderSectionAnalysis(sections, drilldown) {
+            currentSectionDrilldown = drilldown || {};
             const ctx = document.getElementById('sectionChart').getContext('2d');
             
             if (sectionChart) sectionChart.destroy();
@@ -1081,13 +1075,8 @@ class AnalyticsPage {
             
             const labels = sorted.map(s => s.sectionName);
             const scores = sorted.map(s => s.avgScore);
-            const failRates = sorted.map(s => s.failRate);
 
-            const colors = scores.map(s => {
-                if (s >= 83) return '#10b981';
-                if (s >= 70) return '#f59e0b';
-                return '#ef4444';
-            });
+            const colors = scores.map(s => s >= 83 ? '#10b981' : '#ef4444');
 
             sectionChart = new Chart(ctx, {
                 type: 'bar',
@@ -1119,6 +1108,7 @@ class AnalyticsPage {
                                     const section = sorted[context.dataIndex];
                                     return [
                                         'Avg Score: ' + section.avgScore.toFixed(1) + '%',
+                                        'Pass Rate: ' + (section.passRate || 0).toFixed(1) + '%',
                                         'Fail Rate: ' + section.failRate.toFixed(1) + '%',
                                         'Times Audited: ' + section.timesAudited
                                     ];
@@ -1129,28 +1119,178 @@ class AnalyticsPage {
                 }
             });
 
-            // Render table
+            // Render enhanced table with expandable rows
             const tableHtml = \`
-                <table class="data-table">
+                <table class="data-table section-analysis-table">
                     <thead>
                         <tr>
+                            <th style="width: 30px;"></th>
                             <th>Section</th>
-                            <th>Avg Score</th>
+                            <th>Audits</th>
+                            <th>Average Score</th>
+                            <th>Pass Rate</th>
                             <th>Fail Rate</th>
                         </tr>
                     </thead>
                     <tbody>
-                        \${sorted.map(s => \`
-                            <tr>
-                                <td>\${s.sectionName}</td>
+                        \${sorted.map((s, idx) => {
+                            const drilldownData = currentSectionDrilldown[s.sectionName] || [];
+                            const hasStores = drilldownData.length > 0;
+                            const passCount = Math.round(s.timesAudited * (s.passRate || 0) / 100);
+                            const failCount = s.timesAudited - passCount;
+                            return \`
+                            <tr class="section-row \${hasStores ? 'expandable' : ''}" data-section="\${s.sectionName}" onclick="toggleSectionDrilldown('\${s.sectionName.replace(/'/g, "\\\\'")}')">
+                                <td class="expand-icon">\${hasStores ? '▶' : ''}</td>
+                                <td><strong>\${s.sectionName}</strong></td>
+                                <td>\${s.timesAudited}</td>
                                 <td class="\${s.avgScore >= 83 ? 'pass' : 'fail'}">\${s.avgScore.toFixed(1)}%</td>
-                                <td class="\${s.failRate > 20 ? 'fail' : ''}">\${s.failRate.toFixed(1)}%</td>
+                                <td class="pass">\${(s.passRate || 0).toFixed(1)}% <span class="rate-count">(\${passCount})</span></td>
+                                <td class="fail">\${s.failRate.toFixed(1)}% <span class="rate-count">(\${failCount})</span></td>
                             </tr>
-                        \`).join('')}
+                            <tr class="drilldown-row" id="drilldown-\${s.sectionName.replace(/[^a-zA-Z0-9]/g, '_')}" style="display: none;">
+                                <td colspan="6" class="drilldown-cell">
+                                    <div class="drilldown-content">
+                                        <div class="drilldown-header">
+                                            <strong>Store/Audit Breakdown for \${s.sectionName}</strong>
+                                            <button class="btn-small" onclick="event.stopPropagation(); loadSectionCriteria('\${s.sectionName.replace(/'/g, "\\\\'")}')">
+                                                📋 View Criteria Details
+                                            </button>
+                                        </div>
+                                        \${drilldownData.length > 0 ? \`
+                                        <table class="drilldown-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Store</th>
+                                                    <th>Document #</th>
+                                                    <th>Audit Date</th>
+                                                    <th>Score</th>
+                                                    <th>Earned/Max</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                \${drilldownData.map(d => \`
+                                                <tr>
+                                                    <td>\${d.storeName}</td>
+                                                    <td><a href="/reports/\${d.documentNumber}.html" target="_blank">\${d.documentNumber}</a></td>
+                                                    <td>\${new Date(d.auditDate).toLocaleDateString()}</td>
+                                                    <td class="\${d.score >= 83 ? 'pass' : 'fail'}">\${d.score ? d.score.toFixed(1) : 0}%</td>
+                                                    <td>\${d.earnedScore || 0}/\${d.maxScore || 0}</td>
+                                                </tr>
+                                                \`).join('')}
+                                            </tbody>
+                                        </table>
+                                        \` : '<p class="no-data">No detailed data available</p>'}
+                                    </div>
+                                </td>
+                            </tr>
+                        \`;}).join('')}
                     </tbody>
                 </table>
             \`;
             document.getElementById('sectionTable').innerHTML = tableHtml;
+        }
+
+        // Toggle section drilldown row
+        function toggleSectionDrilldown(sectionName) {
+            const rowId = 'drilldown-' + sectionName.replace(/[^a-zA-Z0-9]/g, '_');
+            const row = document.getElementById(rowId);
+            const sectionRow = document.querySelector(\`tr[data-section="\${sectionName}"]\`);
+            const icon = sectionRow?.querySelector('.expand-icon');
+            
+            if (row) {
+                if (row.style.display === 'none') {
+                    row.style.display = 'table-row';
+                    if (icon) icon.textContent = '▼';
+                } else {
+                    row.style.display = 'none';
+                    if (icon) icon.textContent = '▶';
+                }
+            }
+        }
+
+        // Load criteria details for a section
+        async function loadSectionCriteria(sectionName) {
+            try {
+                const drilldownData = currentSectionDrilldown[sectionName] || [];
+                const auditIds = drilldownData.map(d => d.auditId).join(',');
+                
+                const params = new URLSearchParams({ sectionName });
+                if (auditIds) params.append('auditIds', auditIds);
+                
+                const response = await fetch('/api/admin/analytics/section-criteria?' + params.toString());
+                if (!response.ok) throw new Error('Failed to load criteria');
+                
+                const data = await response.json();
+                showCriteriaModal(sectionName, data.criteria);
+                
+            } catch (error) {
+                console.error('Error loading criteria:', error);
+                alert('Error loading criteria: ' + error.message);
+            }
+        }
+
+        // Show criteria modal
+        function showCriteriaModal(sectionName, criteria) {
+            // Remove existing modal if present
+            const existingModal = document.getElementById('criteriaModal');
+            if (existingModal) existingModal.remove();
+            
+            const modalHtml = \`
+                <div id="criteriaModal" class="modal-overlay" onclick="closeCriteriaModal(event)">
+                    <div class="modal-content modal-large" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2>📋 Criteria Analysis: \${sectionName}</h2>
+                            <button class="modal-close" onclick="closeCriteriaModal()">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 60px;">Ref</th>
+                                        <th>Criteria/Question</th>
+                                        <th style="width: 60px;">Weight</th>
+                                        <th style="width: 80px;">Avg Score</th>
+                                        <th style="width: 80px;">Pass Rate</th>
+                                        <th style="width: 80px;">Fail Rate</th>
+                                        <th style="width: 120px;">Responses</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    \${criteria.map(c => {
+                                        const passRate = 100 - (c.failRate || 0);
+                                        const totalResponses = c.yesCount + c.partiallyCount + c.noCount;
+                                        return \`
+                                        <tr>
+                                            <td>\${c.referenceValue || '-'}</td>
+                                            <td style="text-align: left; max-width: 400px;">\${c.title}</td>
+                                            <td>\${c.weight || 2}</td>
+                                            <td class="\${c.avgScore >= 83 ? 'pass' : 'fail'}">\${c.avgScore ? c.avgScore.toFixed(1) : 0}%</td>
+                                            <td class="pass">\${passRate.toFixed(1)}%</td>
+                                            <td class="\${c.failRate > 20 ? 'fail' : ''}">\${(c.failRate || 0).toFixed(1)}%</td>
+                                            <td>
+                                                <span class="response-badge yes">✓\${c.yesCount}</span>
+                                                <span class="response-badge partial">½\${c.partiallyCount}</span>
+                                                <span class="response-badge no">✗\${c.noCount}</span>
+                                                \${c.naCount > 0 ? \`<span class="response-badge na">NA\${c.naCount}</span>\` : ''}
+                                            </td>
+                                        </tr>
+                                        \`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            \`;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // Close criteria modal
+        function closeCriteriaModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            const modal = document.getElementById('criteriaModal');
+            if (modal) modal.remove();
         }
 
         // Render heatmap

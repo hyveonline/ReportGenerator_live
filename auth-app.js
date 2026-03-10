@@ -1950,12 +1950,13 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             maxScore: r.MaxScore || 0
         }));
         
-        // 4. Section Weakness Report
+        // 4. Section Analysis Report (expanded with per-store breakdown)
         const sectionResult = await pool.request().query(`
             SELECT 
                 ss.SectionName,
                 COUNT(*) as TimesAudited,
                 AVG(ss.Percentage) as AvgScore,
+                SUM(CASE WHEN ss.Percentage >= ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as PassRate,
                 SUM(CASE WHEN ss.Percentage < ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as FailRate
             FROM AuditSectionScores ss
             INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID
@@ -1965,9 +1966,45 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             ORDER BY AvgScore ASC
         `);
         
+        // Get per-store section breakdown for drill-down
+        const sectionByStoreResult = await pool.request().query(`
+            SELECT 
+                ss.SectionName,
+                ai.StoreName,
+                ai.AuditID,
+                ai.DocumentNumber,
+                ai.AuditDate,
+                ss.Percentage as Score,
+                ss.EarnedScore,
+                ss.MaxScore
+            FROM AuditSectionScores ss
+            INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            ORDER BY ss.SectionName, ai.StoreName, ai.AuditDate DESC
+        `);
+        
+        // Group by section for drill-down data
+        const sectionDrilldown = {};
+        for (const row of sectionByStoreResult.recordset) {
+            if (!sectionDrilldown[row.SectionName]) {
+                sectionDrilldown[row.SectionName] = [];
+            }
+            sectionDrilldown[row.SectionName].push({
+                storeName: row.StoreName,
+                auditId: row.AuditID,
+                documentNumber: row.DocumentNumber,
+                auditDate: row.AuditDate,
+                score: row.Score,
+                earnedScore: row.EarnedScore,
+                maxScore: row.MaxScore
+            });
+        }
+        
         const sectionWeakness = sectionResult.recordset.map(r => ({
             sectionName: r.SectionName,
             timesAudited: r.TimesAudited,
+            passRate: r.PassRate || 0,
             avgScore: r.AvgScore || 0,
             failRate: r.FailRate || 0
         }));
@@ -2068,12 +2105,118 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             trends,
             auditorPerformance,
             sectionWeakness,
+            sectionDrilldown,
             heatmap,
             complianceCalendar
         });
         
     } catch (error) {
         console.error('Error fetching analytics:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get section criteria breakdown for specific audit(s)
+app.get('/api/admin/analytics/section-criteria', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const { sectionName, auditIds, storeName } = req.query;
+        
+        if (!sectionName) {
+            return res.status(400).json({ success: false, error: 'sectionName is required' });
+        }
+        
+        // Build filter for specific audits or store
+        let filterClause = `WHERE ar.SectionName = @sectionName AND ai.Status = 'Completed'`;
+        if (auditIds) {
+            const ids = auditIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+            if (ids.length > 0) {
+                filterClause += ` AND ai.AuditID IN (${ids.join(',')})`;
+            }
+        }
+        if (storeName) {
+            filterClause += ` AND ai.StoreName = @storeName`;
+        }
+        
+        const request = pool.request();
+        request.input('sectionName', sql.NVarChar, sectionName);
+        if (storeName) request.input('storeName', sql.NVarChar, storeName);
+        
+        // Get criteria/question level breakdown
+        const result = await request.query(`
+            SELECT 
+                ar.ReferenceValue,
+                ar.Title as CriteriaTitle,
+                ar.Coeff as Weight,
+                COUNT(*) as TimesAudited,
+                SUM(CASE WHEN ar.SelectedChoice = 'Yes' THEN 1 ELSE 0 END) as YesCount,
+                SUM(CASE WHEN ar.SelectedChoice = 'Partially' THEN 1 ELSE 0 END) as PartiallyCount,
+                SUM(CASE WHEN ar.SelectedChoice = 'No' THEN 1 ELSE 0 END) as NoCount,
+                SUM(CASE WHEN ar.SelectedChoice = 'NA' THEN 1 ELSE 0 END) as NACount,
+                AVG(CASE 
+                    WHEN ar.SelectedChoice = 'Yes' THEN 100.0
+                    WHEN ar.SelectedChoice = 'Partially' THEN 50.0
+                    WHEN ar.SelectedChoice = 'No' THEN 0.0
+                    ELSE NULL
+                END) as AvgScore,
+                SUM(CASE WHEN ar.SelectedChoice = 'No' THEN 1 ELSE 0 END) * 100.0 / 
+                    NULLIF(SUM(CASE WHEN ar.SelectedChoice != 'NA' THEN 1 ELSE 0 END), 0) as FailRate
+            FROM AuditResponses ar
+            INNER JOIN AuditInstances ai ON ar.AuditID = ai.AuditID
+            ${filterClause}
+            GROUP BY ar.ReferenceValue, ar.Title, ar.Coeff
+            ORDER BY ar.ReferenceValue
+        `);
+        
+        // Also get per-audit breakdown for the section
+        const auditBreakdown = await request.query(`
+            SELECT 
+                ai.AuditID,
+                ai.StoreName,
+                ai.DocumentNumber,
+                ai.AuditDate,
+                ss.Percentage as SectionScore,
+                ss.EarnedScore,
+                ss.MaxScore
+            FROM AuditSectionScores ss
+            INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID
+            WHERE ss.SectionName = @sectionName AND ai.Status = 'Completed'
+            ${auditIds ? `AND ai.AuditID IN (${auditIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)).join(',')})` : ''}
+            ${storeName ? `AND ai.StoreName = @storeName` : ''}
+            ORDER BY ai.AuditDate DESC
+        `);
+        
+        res.json({
+            success: true,
+            sectionName,
+            criteria: result.recordset.map(r => ({
+                referenceValue: r.ReferenceValue,
+                title: r.CriteriaTitle,
+                weight: r.Weight,
+                timesAudited: r.TimesAudited,
+                yesCount: r.YesCount,
+                partiallyCount: r.PartiallyCount,
+                noCount: r.NoCount,
+                naCount: r.NACount,
+                avgScore: r.AvgScore || 0,
+                failRate: r.FailRate || 0
+            })),
+            audits: auditBreakdown.recordset.map(r => ({
+                auditId: r.AuditID,
+                storeName: r.StoreName,
+                documentNumber: r.DocumentNumber,
+                auditDate: r.AuditDate,
+                sectionScore: r.SectionScore,
+                earnedScore: r.EarnedScore,
+                maxScore: r.MaxScore
+            }))
+        });
+        
+    } catch (error) {
+        console.error('Error fetching section criteria:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
