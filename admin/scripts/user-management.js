@@ -270,6 +270,26 @@ async function editUser(userId) {
             return;
         }
         
+        // Parse assigned_area_store_ids from comma-separated string to array of integers
+        if (user.assigned_area_store_ids && typeof user.assigned_area_store_ids === 'string') {
+            user.assigned_area_store_ids = user.assigned_area_store_ids
+                .split(',')
+                .map(id => parseInt(id.trim(), 10))
+                .filter(id => !isNaN(id));
+        } else if (!user.assigned_area_store_ids) {
+            user.assigned_area_store_ids = [];
+        }
+        
+        // Parse assigned_brands from comma-separated string to array
+        if (user.assigned_brands && typeof user.assigned_brands === 'string') {
+            user.assigned_brands = user.assigned_brands
+                .split(',')
+                .map(b => b.trim())
+                .filter(b => b);
+        } else if (!user.assigned_brands) {
+            user.assigned_brands = [];
+        }
+        
         // Show modal with user data
         window.openEditUserModal(user);
         
@@ -524,4 +544,7 @@ function showToast(message, type = 'success') {
  */
 function closeModal() {
     document.getElementById('editUserModal').classList.remove('show');
+    // Reset area store selection tracking
+    window.selectedAreaStoreIds = null;
+    window.currentEditingUser = null;
 }

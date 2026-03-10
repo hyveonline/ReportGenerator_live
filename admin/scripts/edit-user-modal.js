@@ -146,11 +146,22 @@ window.openEditUserModal = async function(user) {
             </form>
         `;
         
+        // Store current user globally for area store loading
+        window.currentEditingUser = user;
+        
+        // Reset area store selection tracking for new user
+        window.selectedAreaStoreIds = null;
+        
         // Load stores list for checkbox selection
         await loadStoresForModal(user);
         
         // Load brands for HeadOfOperations
         await loadBrandsForModal(user);
+        
+        // Load area stores if AreaManager
+        if (user.role === 'AreaManager') {
+            await loadAreaStoresForModal('', user);
+        }
         
         // Show modal
         modal.classList.add('show');
@@ -284,7 +295,7 @@ window.handleRoleChange = function() {
     if (areaSection) {
         areaSection.style.display = role === 'AreaManager' ? 'block' : 'none';
         if (role === 'AreaManager') {
-            loadAreaStoresForModal();
+            loadAreaStoresForModal('', window.currentEditingUser);
         }
     }
     
@@ -304,8 +315,10 @@ window.handleRoleChange = function() {
 
 /**
  * Load stores for area manager assignment
+ * @param {string} brandFilter - Optional brand to filter by
+ * @param {object} user - Optional user object with assigned_area_store_ids
  */
-async function loadAreaStoresForModal(brandFilter = '') {
+async function loadAreaStoresForModal(brandFilter = '', user = null) {
     try {
         const response = await fetch('/api/admin/stores');
         if (!response.ok) {
@@ -313,35 +326,55 @@ async function loadAreaStoresForModal(brandFilter = '') {
         }
         
         const data = await response.json();
-        let stores = data.stores || [];
+        const allStores = data.stores || [];
         
-        // Store all stores for filtering
-        window.allAreaStores = stores;
+        // Store all stores globally for filtering
+        window.allAreaStores = allStores;
         
-        // Apply brand filter if specified
+        // Initialize selected store IDs tracking (if not already set)
+        const currentUser = user || window.currentEditingUser;
+        if (!window.selectedAreaStoreIds) {
+            window.selectedAreaStoreIds = new Set();
+            
+            // Load initial selection from user data
+            if (currentUser?.assigned_area_store_ids && Array.isArray(currentUser.assigned_area_store_ids)) {
+                currentUser.assigned_area_store_ids.forEach(id => window.selectedAreaStoreIds.add(id));
+            } else if (currentUser?.assigned_area_stores && typeof currentUser.assigned_area_stores === 'string') {
+                // Fallback: if we only have store codes, match by code
+                const storeCodes = currentUser.assigned_area_stores.split(', ').map(s => s.trim()).filter(s => s);
+                allStores
+                    .filter(s => storeCodes.includes(s.store_code))
+                    .forEach(s => window.selectedAreaStoreIds.add(s.store_id));
+            }
+        }
+        
+        // Filter stores for display (but keep all stores tracked)
+        let displayStores = allStores;
         if (brandFilter) {
-            stores = stores.filter(s => s.brand === brandFilter);
+            displayStores = allStores.filter(s => s.brand === brandFilter);
         }
         
         // Get current user's area assignments
         const areaStoreCheckboxes = document.getElementById('areaStoreCheckboxes');
         
-        if (stores.length === 0) {
+        if (displayStores.length === 0) {
             areaStoreCheckboxes.innerHTML = '<p class="form-hint">No stores available for selected brand.</p>';
             return;
         }
         
-        // Parse current assigned area stores (will be populated from user data)
-        const currentAreaStores = window.currentEditingUser?.assigned_area_stores || [];
+        // Show selected count from all brands
+        const selectedCount = window.selectedAreaStoreIds.size;
+        const countDisplay = selectedCount > 0 ? `<p class="form-hint" style="color: #10b981; margin-bottom: 10px;">✓ ${selectedCount} store(s) selected across all brands</p>` : '';
         
-        areaStoreCheckboxes.innerHTML = stores.map((store, index) => `
+        areaStoreCheckboxes.innerHTML = countDisplay + displayStores.map((store, index) => `
             <label class="checkbox-label store-checkbox" data-brand="${store.brand || ''}">
                 <input 
                     type="checkbox" 
                     name="assigned_area_stores" 
                     value="${store.store_id}"
-                    ${currentAreaStores.includes(store.store_id) ? 'checked' : ''}
+                    ${window.selectedAreaStoreIds.has(store.store_id) ? 'checked' : ''}
                     id="area_store_${index}"
+                    onchange="updateAreaStoreSelection(${store.store_id}, this.checked)"
                 >
                 <span><strong>${escapeHtml(store.store_code)}</strong> - ${escapeHtml(store.store_name)}</span>
                 <small style="color:#666; margin-left:4px;">(${store.brand || 'Unknown'})</small>
@@ -362,7 +395,34 @@ async function loadAreaStoresForModal(brandFilter = '') {
  */
 window.filterAreaStoresByBrand = function() {
     const brandFilter = document.getElementById('areaBrandFilter').value;
-    loadAreaStoresForModal(brandFilter);
+    loadAreaStoresForModal(brandFilter, window.currentEditingUser);
+};
+
+/**
+ * Update area store selection tracking
+ * This keeps track of selections across brand filters
+ */
+window.updateAreaStoreSelection = function(storeId, isChecked) {
+    if (!window.selectedAreaStoreIds) {
+        window.selectedAreaStoreIds = new Set();
+    }
+    
+    if (isChecked) {
+        window.selectedAreaStoreIds.add(storeId);
+    } else {
+        window.selectedAreaStoreIds.delete(storeId);
+    }
+    
+    // Update the count display
+    const countDisplay = document.querySelector('#areaStoreCheckboxes .form-hint');
+    if (countDisplay && countDisplay.style.color === 'rgb(16, 185, 129)') {
+        const count = window.selectedAreaStoreIds.size;
+        if (count > 0) {
+            countDisplay.textContent = `✓ ${count} store(s) selected across all brands`;
+        } else {
+            countDisplay.textContent = '';
+        }
+    }
 };
 
 /**
@@ -383,9 +443,15 @@ window.handleSubmitEditUser = async function(event, userId) {
         const selectedBrands = Array.from(form.querySelectorAll('input[name="assigned_brands"]:checked'))
             .map(cb => cb.value);
         
-        // Get selected area stores (for AreaManager)
-        const selectedAreaStores = Array.from(form.querySelectorAll('input[name="assigned_area_stores"]:checked'))
-            .map(cb => parseInt(cb.value));
+        // Get selected area stores (for AreaManager) - use global tracking to include all brands
+        let selectedAreaStores = [];
+        if (window.selectedAreaStoreIds && window.selectedAreaStoreIds.size > 0) {
+            selectedAreaStores = Array.from(window.selectedAreaStoreIds);
+        } else {
+            // Fallback to visible checkboxes if global tracking not available
+            selectedAreaStores = Array.from(form.querySelectorAll('input[name="assigned_area_stores"]:checked'))
+                .map(cb => parseInt(cb.value));
+        }
         
         // Build update payload
         const updateData = {

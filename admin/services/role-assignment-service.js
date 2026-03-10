@@ -33,7 +33,8 @@ class RoleAssignmentService {
                     u.created_at,
                     u.updated_at,
                     (SELECT STRING_AGG(uba.Brand, ', ') FROM UserBrandAssignments uba WHERE uba.UserID = u.id) as assigned_brands,
-                    (SELECT STRING_AGG(s.StoreCode, ', ') FROM UserAreaAssignments uaa JOIN Stores s ON uaa.StoreID = s.StoreID WHERE uaa.UserID = u.id) as assigned_area_stores
+                    (SELECT STRING_AGG(s.StoreCode, ', ') FROM UserAreaAssignments uaa JOIN Stores s ON uaa.StoreID = s.StoreID WHERE uaa.UserID = u.id) as assigned_area_stores,
+                    (SELECT STRING_AGG(CAST(uaa.StoreID AS VARCHAR), ',') FROM UserAreaAssignments uaa WHERE uaa.UserID = u.id) as assigned_area_store_ids
                 FROM Users u
                 ORDER BY 
                     CASE 
