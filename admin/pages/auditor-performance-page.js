@@ -505,8 +505,8 @@ class AuditorPerformancePage {
                 <p class="subtitle">Track and analyze auditor metrics</p>
             </div>
             <div class="user-section">
-                <span class="user-name">\${user.displayName || user.email}</span>
-                <span class="badge-admin">\${user.role}</span>
+                <span class="user-name">${user.displayName || user.email}</span>
+                <span class="badge-admin">${user.role}</span>
                 <a href="/admin/analytics" class="btn-secondary">📊 Stores Analytics</a>
                 <a href="/dashboard" class="btn-secondary">Back to Dashboard</a>
                 <a href="/auth/logout" class="btn-logout">Logout</a>
@@ -777,10 +777,11 @@ class AuditorPerformancePage {
                 if (cyclesResponse.ok) {
                     const cyclesData = await cyclesResponse.json();
                     const cycleSelect = document.getElementById('cycleFilter');
-                    (cyclesData.data || []).forEach(c => {
+                    // API returns array of strings directly
+                    (Array.isArray(cyclesData) ? cyclesData : []).forEach(c => {
                         const option = document.createElement('option');
-                        option.value = c.CycleName || c.cycleName;
-                        option.textContent = c.CycleName || c.cycleName;
+                        option.value = c;
+                        option.textContent = c;
                         cycleSelect.appendChild(option);
                     });
                 }
@@ -790,10 +791,11 @@ class AuditorPerformancePage {
                 if (schemesResponse.ok) {
                     const schemesData = await schemesResponse.json();
                     const schemeSelect = document.getElementById('schemeFilter');
-                    (schemesData.data || []).forEach(s => {
+                    // API returns array of {schemaId, schemaName}
+                    (Array.isArray(schemesData) ? schemesData : []).forEach(s => {
                         const option = document.createElement('option');
-                        option.value = s.Brand || s.brand;
-                        option.textContent = s.Brand || s.brand;
+                        option.value = s.schemaName || s.SchemaName;
+                        option.textContent = s.schemaName || s.SchemaName;
                         schemeSelect.appendChild(option);
                     });
                 }
