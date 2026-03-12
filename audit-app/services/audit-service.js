@@ -201,6 +201,11 @@ class AuditService {
 
                 // Create response for each item
                 for (const item of itemsResult.recordset) {
+                    // Debug logging for CR field
+                    if (!item.CR || item.CR === '') {
+                        console.log(`[CR DEBUG] Item ${item.ItemID} (${item.ReferenceValue}) has empty CR`);
+                    }
+                    
                     await pool.request()
                         .input('AuditID', sql.Int, auditId)
                         .input('SectionID', sql.Int, section.SectionID)
