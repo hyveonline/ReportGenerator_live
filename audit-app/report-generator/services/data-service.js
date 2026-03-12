@@ -57,6 +57,8 @@ class DataService {
             const cycleDisplay = audit.CycleDisplayName 
                 ? `${audit.Cycle} (${audit.CycleDisplayName})`
                 : audit.Cycle;
+            
+            console.log(`   📅 Cycle: ${audit.Cycle}, CycleDisplayName: ${audit.CycleDisplayName}, cycleDisplay: ${cycleDisplay}`);
 
             return {
                 auditId: audit.AuditID,
@@ -736,6 +738,37 @@ class DataService {
         } catch (error) {
             console.error('❌ Error fetching categories:', error);
             return [];
+        }
+    }
+
+    /**
+     * Get cycle definitions for a schema's cycle type
+     * @param {number} schemaId - Schema ID
+     * @returns {Promise<Object>} - Map of cycle number to display name { 'C1': 'January', 'C2': 'February', ... }
+     */
+    async getCycleDefinitions(schemaId) {
+        try {
+            const result = await this.pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`
+                    SELECT cd.CycleNumber, cd.CycleName
+                    FROM AuditSchemas s
+                    INNER JOIN CycleDefinitions cd ON s.CycleTypeID = cd.CycleTypeID
+                    WHERE s.SchemaID = @schemaId AND cd.IsActive = 1
+                    ORDER BY cd.DisplayOrder
+                `);
+
+            // Build map: { 'C1': 'January', 'C2': 'February', ... }
+            const cycleMap = {};
+            for (const row of result.recordset) {
+                cycleMap[row.CycleNumber] = row.CycleName;
+            }
+
+            console.log(`   ✅ Found ${Object.keys(cycleMap).length} cycle definitions`);
+            return cycleMap;
+        } catch (error) {
+            console.error('❌ Error fetching cycle definitions:', error);
+            return {};
         }
     }
 }

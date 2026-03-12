@@ -153,6 +153,10 @@ class ReportGenerator {
             console.log('🎨 Step 7.8: Fetching schema colors...');
             const schemaColors = await this.schemaColorsService.getSchemaColors(auditData.schemaId);
 
+            // 7.9 Fetch cycle definitions for this schema's cycle type
+            console.log('📅 Step 7.9: Fetching cycle definitions...');
+            const cycleDefinitions = await this.dataService.getCycleDefinitions(auditData.schemaId);
+
             // 8. Build report data structure
             console.log('📦 Step 8: Building report data...');
             const reportData = {
@@ -194,6 +198,7 @@ class ReportGenerator {
                 historicalFindings,
                 recurringIssues,  // New: tracks which cycles each issue appeared in
                 schemaColors,
+                cycleDefinitions,  // Cycle display names (C1 -> January, etc.)
                 
                 // Metadata
                 generatedAt: new Date().toISOString()

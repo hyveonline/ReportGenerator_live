@@ -1770,10 +1770,17 @@ class TemplateEngine {
         const overallClass = overallScore >= threshold ? 'score-pass' : 'score-fail';
 
         // Build header columns - current cycle first (highlighted), then other cycles
-        const currentCycleHeader = `<th class="current-cycle">C${currentCycle}</th>`;
+        // Use cycle definitions for display names if available
+        const cycleDefinitions = data.cycleDefinitions || {};
+        const getCycleDisplayName = (cycleNum) => {
+            const cycleName = cycleDefinitions[`C${cycleNum}`];
+            return cycleName ? `C${cycleNum} (${cycleName})` : `C${cycleNum}`;
+        };
+
+        const currentCycleHeader = `<th class="current-cycle">${getCycleDisplayName(currentCycle)}</th>`;
         const historicalHeaders = cyclesToShow
             .filter(c => c !== currentCycle)
-            .map(c => `<th>C${c}</th>`)
+            .map(c => `<th>${getCycleDisplayName(c)}</th>`)
             .join('');
 
         // Build total row cells - current cycle first, then historical

@@ -666,6 +666,405 @@ app.get('/admin/cycle-management', requireAuth, requireRole('Admin', 'SuperAudit
     res.sendFile(path.join(__dirname, 'audit-app/pages/cycle-management.html'));
 });
 
+// Serve Cycle Dashboard page
+app.get('/admin/cycle-dashboard', requireAuth, requireRole('Admin', 'SuperAuditor'), (req, res) => {
+    res.sendFile(path.join(__dirname, 'audit-app/pages/cycle-dashboard.html'));
+});
+
+// ==========================================
+// CYCLE DASHBOARD APIs
+// ==========================================
+
+// Get all schemas with cycle info for dropdown
+app.get('/api/cycle-dashboard/schemas', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT 
+                s.SchemaID as schemaId,
+                s.SchemaName as schemaName,
+                ct.TypeName as cycleTypeName,
+                ct.CyclesPerYear as cyclesPerYear,
+                CASE 
+                    WHEN s.SchemaName LIKE '%GNG%' THEN 'GNG'
+                    WHEN s.SchemaName LIKE '%Spinneys%' THEN 'Spinneys'
+                    WHEN s.SchemaName LIKE '%Happy%' THEN 'Happy'
+                    WHEN s.SchemaName LIKE '%Noknok%' THEN 'Noknok'
+                    WHEN s.SchemaName LIKE '%Cold Stone%' THEN 'Cold Stone'
+                    WHEN s.SchemaName LIKE '%Monoprix%' THEN 'Monoprix'
+                    WHEN s.SchemaName LIKE '%Catering%' THEN 'Catering'
+                    WHEN s.SchemaName LIKE '%Thai Express%' THEN 'Thai Express'
+                    ELSE 'Other'
+                END as brand
+            FROM AuditSchemas s
+            LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+            WHERE s.IsActive = 1
+            ORDER BY brand, s.SchemaName
+        `);
+        
+        res.json({ success: true, schemas: result.recordset });
+    } catch (error) {
+        console.error('Error getting schemas for cycle dashboard:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get cycle progress for a schema
+app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { schemaId } = req.query;
+        if (!schemaId) {
+            return res.status(400).json({ success: false, error: 'Schema ID required' });
+        }
+
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+
+        // Get schema info and cycle type
+        const schemaResult = await pool.request()
+            .input('schemaId', sql.Int, schemaId)
+            .query(`
+                SELECT s.SchemaID, s.SchemaName, ct.TypeName, ct.CyclesPerYear, ct.CycleTypeID
+                FROM AuditSchemas s
+                LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                WHERE s.SchemaID = @schemaId
+            `);
+
+        if (schemaResult.recordset.length === 0) {
+            return res.status(404).json({ success: false, error: 'Schema not found' });
+        }
+
+        const schema = schemaResult.recordset[0];
+
+        // Get current cycle based on month and cycle type
+        const cycleDefResult = await pool.request()
+            .input('cycleTypeId', sql.Int, schema.CycleTypeID)
+            .input('currentMonth', sql.Int, currentMonth)
+            .query(`
+                SELECT CycleNumber, CycleName
+                FROM CycleDefinitions
+                WHERE CycleTypeID = @cycleTypeId
+                  AND @currentMonth BETWEEN StartMonth AND EndMonth
+            `);
+
+        const currentCycle = cycleDefResult.recordset.length > 0 
+            ? cycleDefResult.recordset[0].CycleNumber 
+            : 'C1';
+        const cycleName = cycleDefResult.recordset.length > 0 
+            ? cycleDefResult.recordset[0].CycleName 
+            : '';
+
+        // Get total stores assigned to this schema
+        const storesResult = await pool.request()
+            .input('schemaId', sql.Int, schemaId)
+            .query(`
+                SELECT COUNT(*) as totalStores
+                FROM Stores
+                WHERE SchemaID = @schemaId AND IsActive = 1
+            `);
+
+        const totalStores = storesResult.recordset[0].totalStores;
+
+        // Get audited stores count for current cycle and year
+        const auditedResult = await pool.request()
+            .input('schemaId', sql.Int, schemaId)
+            .input('currentCycle', sql.NVarChar, currentCycle)
+            .input('currentYear', sql.Int, currentYear)
+            .query(`
+                SELECT COUNT(DISTINCT ai.StoreID) as auditedCount
+                FROM AuditInstances ai
+                WHERE ai.SchemaID = @schemaId
+                  AND ai.Cycle = @currentCycle
+                  AND ai.Year = @currentYear
+                  AND ai.Status = 'Completed'
+            `);
+
+        const auditedCount = auditedResult.recordset[0].auditedCount;
+        const pendingCount = totalStores - auditedCount;
+        const progress = totalStores > 0 ? Math.round((auditedCount / totalStores) * 100) : 0;
+
+        res.json({
+            success: true,
+            schemaId: parseInt(schemaId),
+            schemaName: schema.SchemaName,
+            cycleTypeName: schema.TypeName || 'Unknown',
+            cyclesPerYear: schema.CyclesPerYear || 6,
+            currentCycle: `${currentCycle} (${cycleName})`,
+            totalStores,
+            auditedCount,
+            pendingCount,
+            progress
+        });
+
+    } catch (error) {
+        console.error('Error getting cycle progress:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get pending stores for a schema in current cycle
+app.get('/api/cycle-dashboard/pending-stores', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { schemaId } = req.query;
+        if (!schemaId) {
+            return res.status(400).json({ success: false, error: 'Schema ID required' });
+        }
+
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+
+        // Get schema's cycle type
+        const schemaResult = await pool.request()
+            .input('schemaId', sql.Int, schemaId)
+            .query(`
+                SELECT s.CycleTypeID FROM AuditSchemas s WHERE s.SchemaID = @schemaId
+            `);
+
+        const cycleTypeId = schemaResult.recordset[0]?.CycleTypeID;
+
+        // Get current cycle
+        const cycleDefResult = await pool.request()
+            .input('cycleTypeId', sql.Int, cycleTypeId)
+            .input('currentMonth', sql.Int, currentMonth)
+            .query(`
+                SELECT CycleNumber FROM CycleDefinitions
+                WHERE CycleTypeID = @cycleTypeId AND @currentMonth BETWEEN StartMonth AND EndMonth
+            `);
+
+        const currentCycle = cycleDefResult.recordset.length > 0 
+            ? cycleDefResult.recordset[0].CycleNumber 
+            : 'C1';
+
+        // Get pending stores (not audited in current cycle)
+        const result = await pool.request()
+            .input('schemaId', sql.Int, schemaId)
+            .input('currentCycle', sql.NVarChar, currentCycle)
+            .input('currentYear', sql.Int, currentYear)
+            .query(`
+                SELECT 
+                    s.StoreID as storeId,
+                    s.StoreCode as storeCode,
+                    s.StoreName as storeName,
+                    s.Brand as brand,
+                    (SELECT TOP 1 ai.AuditDate 
+                     FROM AuditInstances ai 
+                     WHERE ai.StoreID = s.StoreID AND ai.Status = 'Completed'
+                     ORDER BY ai.AuditDate DESC) as lastAuditDate
+                FROM Stores s
+                WHERE s.SchemaID = @schemaId
+                  AND s.IsActive = 1
+                  AND s.StoreID NOT IN (
+                      SELECT DISTINCT ai.StoreID
+                      FROM AuditInstances ai
+                      WHERE ai.SchemaID = @schemaId
+                        AND ai.Cycle = @currentCycle
+                        AND ai.Year = @currentYear
+                        AND ai.Status = 'Completed'
+                  )
+                ORDER BY s.Brand, s.StoreName
+            `);
+
+        res.json({ success: true, stores: result.recordset });
+
+    } catch (error) {
+        console.error('Error getting pending stores:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get audited stores for a schema in current cycle
+app.get('/api/cycle-dashboard/audited-stores', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { schemaId } = req.query;
+        if (!schemaId) {
+            return res.status(400).json({ success: false, error: 'Schema ID required' });
+        }
+
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+
+        // Get schema's cycle type
+        const schemaResult = await pool.request()
+            .input('schemaId', sql.Int, schemaId)
+            .query(`
+                SELECT s.CycleTypeID FROM AuditSchemas s WHERE s.SchemaID = @schemaId
+            `);
+
+        const cycleTypeId = schemaResult.recordset[0]?.CycleTypeID;
+
+        // Get current cycle
+        const cycleDefResult = await pool.request()
+            .input('cycleTypeId', sql.Int, cycleTypeId)
+            .input('currentMonth', sql.Int, currentMonth)
+            .query(`
+                SELECT CycleNumber FROM CycleDefinitions
+                WHERE CycleTypeID = @cycleTypeId AND @currentMonth BETWEEN StartMonth AND EndMonth
+            `);
+
+        const currentCycle = cycleDefResult.recordset.length > 0 
+            ? cycleDefResult.recordset[0].CycleNumber 
+            : 'C1';
+
+        // Get audited stores with latest score
+        const result = await pool.request()
+            .input('schemaId', sql.Int, schemaId)
+            .input('currentCycle', sql.NVarChar, currentCycle)
+            .input('currentYear', sql.Int, currentYear)
+            .query(`
+                SELECT 
+                    s.StoreID as storeId,
+                    s.StoreCode as storeCode,
+                    s.StoreName as storeName,
+                    s.Brand as brand,
+                    ai.TotalScore as score,
+                    ai.AuditDate as auditDate,
+                    ai.DocumentNumber as documentNumber
+                FROM Stores s
+                INNER JOIN (
+                    SELECT StoreID, TotalScore, AuditDate, DocumentNumber,
+                           ROW_NUMBER() OVER (PARTITION BY StoreID ORDER BY AuditDate DESC) as rn
+                    FROM AuditInstances
+                    WHERE SchemaID = @schemaId
+                      AND Cycle = @currentCycle
+                      AND Year = @currentYear
+                      AND Status = 'Completed'
+                ) ai ON s.StoreID = ai.StoreID AND ai.rn = 1
+                WHERE s.SchemaID = @schemaId AND s.IsActive = 1
+                ORDER BY ai.AuditDate DESC
+            `);
+
+        res.json({ success: true, stores: result.recordset });
+
+    } catch (error) {
+        console.error('Error getting audited stores:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get all stores with their cycle information
+app.get('/api/cycle-dashboard/all-stores', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+
+        // Calculate current cycle based on month (cycle format is 'C1', 'C2', etc.)
+        const currentCycleMonthly = `C${currentMonth}`;
+        const currentCycleBiMonthly = `C${Math.ceil(currentMonth / 2)}`;
+        const currentCycleQuarterly = `C${Math.ceil(currentMonth / 3)}`;
+
+        const result = await pool.request()
+            .input('currentYear', sql.Int, currentYear)
+            .input('currentCycleMonthly', sql.NVarChar, currentCycleMonthly)
+            .input('currentCycleBiMonthly', sql.NVarChar, currentCycleBiMonthly)
+            .input('currentCycleQuarterly', sql.NVarChar, currentCycleQuarterly)
+            .query(`
+                WITH StoreAuditStatus AS (
+                    SELECT 
+                        s.StoreID,
+                        s.StoreName,
+                        s.StoreCode,
+                        s.Brand,
+                        s.SchemaID,
+                        sc.SchemaName,
+                        ct.CycleTypeID,
+                        ct.TypeName as CycleTypeName,
+                        ct.CyclesPerYear,
+                        CASE ct.CycleTypeID
+                            WHEN 1 THEN @currentCycleMonthly  -- Monthly
+                            WHEN 2 THEN @currentCycleBiMonthly  -- Bi-Monthly
+                            WHEN 3 THEN @currentCycleQuarterly  -- Quarterly
+                            ELSE @currentCycleMonthly
+                        END as CurrentCycle,
+                        -- Check if audited in current cycle
+                        (SELECT TOP 1 ai.AuditDate 
+                         FROM AuditInstances ai 
+                         WHERE ai.StoreID = s.StoreID 
+                           AND ai.SchemaID = s.SchemaID
+                           AND ai.Year = @currentYear
+                           AND ai.Cycle = CASE ct.CycleTypeID
+                                WHEN 1 THEN @currentCycleMonthly
+                                WHEN 2 THEN @currentCycleBiMonthly
+                                WHEN 3 THEN @currentCycleQuarterly
+                                ELSE @currentCycleMonthly
+                            END
+                           AND ai.Status = 'Completed'
+                         ORDER BY ai.AuditDate DESC) as CurrentCycleAuditDate,
+                        (SELECT TOP 1 ai.TotalScore 
+                         FROM AuditInstances ai 
+                         WHERE ai.StoreID = s.StoreID 
+                           AND ai.SchemaID = s.SchemaID
+                           AND ai.Year = @currentYear
+                           AND ai.Cycle = CASE ct.CycleTypeID
+                                WHEN 1 THEN @currentCycleMonthly
+                                WHEN 2 THEN @currentCycleBiMonthly
+                                WHEN 3 THEN @currentCycleQuarterly
+                                ELSE @currentCycleMonthly
+                            END
+                           AND ai.Status = 'Completed'
+                         ORDER BY ai.AuditDate DESC) as CurrentCycleScore,
+                        -- Last audit info
+                        (SELECT TOP 1 ai.AuditDate 
+                         FROM AuditInstances ai 
+                         WHERE ai.StoreID = s.StoreID 
+                           AND ai.SchemaID = s.SchemaID
+                           AND ai.Status = 'Completed'
+                         ORDER BY ai.AuditDate DESC) as LastAuditDate,
+                        (SELECT TOP 1 ai.Cycle 
+                         FROM AuditInstances ai 
+                         WHERE ai.StoreID = s.StoreID 
+                           AND ai.SchemaID = s.SchemaID
+                           AND ai.Year = @currentYear
+                           AND ai.Status = 'Completed'
+                         ORDER BY ai.AuditDate DESC) as LastAuditCycle
+                    FROM Stores s
+                    INNER JOIN AuditSchemas sc ON s.SchemaID = sc.SchemaID
+                    LEFT JOIN CycleTypes ct ON sc.CycleTypeID = ct.CycleTypeID
+                    WHERE s.IsActive = 1 AND sc.IsActive = 1
+                )
+                SELECT 
+                    StoreID as storeId,
+                    StoreName as storeName,
+                    StoreCode as storeCode,
+                    Brand as brand,
+                    SchemaID as schemaId,
+                    SchemaName as schemaName,
+                    CycleTypeName as cycleTypeName,
+                    CyclesPerYear as cyclesPerYear,
+                    CurrentCycle as currentCycle,
+                    CASE 
+                        WHEN CurrentCycleAuditDate IS NOT NULL THEN 'Audited'
+                        ELSE 'Pending'
+                    END as status,
+                    CurrentCycleAuditDate as auditDate,
+                    CurrentCycleScore as score,
+                    LastAuditDate as lastAuditDate,
+                    LastAuditCycle as lastAuditCycle
+                FROM StoreAuditStatus
+                ORDER BY SchemaName, Brand, StoreName
+            `);
+
+        res.json({ success: true, stores: result.recordset });
+
+    } catch (error) {
+        console.error('Error getting all stores cycle info:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get all stores
 app.get('/api/stores', requireAuth, async (req, res) => {
     try {

@@ -670,6 +670,28 @@
             background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
         }
 
+        .cycle-dashboard-btn {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .cycle-dashboard-btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+            background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+        }
+
         .menu-settings-btn {
             background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
             color: white;
@@ -2358,6 +2380,10 @@
                             <span>🔄</span>
                             Cycle Management
                         </button>
+                        <button class="cycle-dashboard-btn" id="cycleDashboardBtn" onclick="window.location.href='/admin/cycle-dashboard'" style="display: none;">
+                            <span>📊</span>
+                            Cycle Dashboard
+                        </button>
                     </div>
                 </div>
 
@@ -2859,7 +2885,8 @@
                 { id: 'templateBuilderBtn', elementId: 'templateBuilderBtn' },
                 { id: 'systemSettingsBtn', elementId: 'systemSettingsBtn' },
                 { id: 'escalationSettingsBtn', elementId: 'escalationSettingsBtn' },
-                { id: 'cycleManagementBtn', elementId: 'cycleManagementBtn' }
+                { id: 'cycleManagementBtn', elementId: 'cycleManagementBtn' },
+                { id: 'cycleDashboardBtn', elementId: 'cycleDashboardBtn' }
             ];
 
             let usedDatabase = false;
@@ -3104,6 +3131,11 @@
                                 cycleManagementBtn.style.display = 'flex';
                                 console.log('✅ Cycle Management button display set to flex');
                             }
+                            const cycleDashboardBtn = document.getElementById('cycleDashboardBtn');
+                            if (cycleDashboardBtn) {
+                                cycleDashboardBtn.style.display = 'flex';
+                                console.log('✅ Cycle Dashboard button display set to flex');
+                            }
                             if (storeManagementBtn) {
                                 storeManagementBtn.style.display = 'flex';
                             }
@@ -3235,6 +3267,10 @@
                             const cycleManagementBtnFallback = document.getElementById('cycleManagementBtn');
                             if (cycleManagementBtnFallback) {
                                 cycleManagementBtnFallback.style.display = 'flex';
+                            }
+                            const cycleDashboardBtnFallback = document.getElementById('cycleDashboardBtn');
+                            if (cycleDashboardBtnFallback) {
+                                cycleDashboardBtnFallback.style.display = 'flex';
                             }
                         }
                     }
