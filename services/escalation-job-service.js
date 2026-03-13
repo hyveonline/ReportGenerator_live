@@ -192,6 +192,7 @@ class EscalationJobService {
         const pool = await this.getDbPool();
         
         // Get audits that have action plans with approaching deadlines
+        // Use DISTINCT and take earliest notification to avoid duplicates
         const result = await pool.request()
             .input('reminderDays', sql.Int, reminderDays)
             .query(`
@@ -202,8 +203,8 @@ class EscalationJobService {
                         ai.StoreName,
                         ai.StoreCode,
                         ai.AuditDate,
-                        DATEADD(DAY, es.DeadlineDays, n.sent_at) as Deadline,
-                        DATEDIFF(DAY, GETDATE(), DATEADD(DAY, es.DeadlineDays, n.sent_at)) as DaysRemaining
+                        DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at)) as Deadline,
+                        DATEDIFF(DAY, GETDATE(), DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at))) as DaysRemaining
                     FROM AuditInstances ai
                     INNER JOIN Notifications n ON n.document_number = ai.DocumentNumber 
                         AND n.notification_type IN ('ReportPublished', 'FullReportGenerated', 'AuditReport')
@@ -216,6 +217,7 @@ class EscalationJobService {
                         AND n2.notification_type = 'ActionPlanSubmitted'
                         AND n2.status = 'Sent'
                     )
+                    GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.AuditDate, es.DeadlineDays
                 )
                 SELECT * FROM AuditDeadlines
                 WHERE DaysRemaining = @reminderDays
@@ -237,6 +239,7 @@ class EscalationJobService {
     async getOverdueActionPlans(gracePeriodHours) {
         const pool = await this.getDbPool();
         
+        // Use GROUP BY with MIN(sent_at) to avoid duplicates from multiple notification records
         const result = await pool.request()
             .input('gracePeriodHours', sql.Int, gracePeriodHours)
             .query(`
@@ -247,8 +250,8 @@ class EscalationJobService {
                         ai.StoreName,
                         ai.StoreCode,
                         ai.AuditDate,
-                        DATEADD(DAY, es.DeadlineDays, n.sent_at) as Deadline,
-                        DATEDIFF(DAY, DATEADD(DAY, es.DeadlineDays, n.sent_at), GETDATE()) as DaysOverdue
+                        DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at)) as Deadline,
+                        DATEDIFF(DAY, DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at)), GETDATE()) as DaysOverdue
                     FROM AuditInstances ai
                     INNER JOIN Notifications n ON n.document_number = ai.DocumentNumber 
                         AND n.notification_type IN ('ReportPublished', 'FullReportGenerated', 'AuditReport')
@@ -261,6 +264,7 @@ class EscalationJobService {
                         AND n2.notification_type = 'ActionPlanSubmitted'
                         AND n2.status = 'Sent'
                     )
+                    GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.AuditDate, es.DeadlineDays
                 )
                 SELECT * FROM AuditDeadlines
                 WHERE DATEADD(HOUR, @gracePeriodHours, Deadline) < GETDATE()
