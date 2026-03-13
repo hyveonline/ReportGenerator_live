@@ -191,6 +191,78 @@
             display: none;
         }
 
+        .failing-filters {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e5e7eb;
+            flex-wrap: wrap;
+        }
+
+        .failing-filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .failing-filter-group label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+
+        .failing-filter-group select {
+            padding: 10px 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            min-width: 280px;
+            cursor: pointer;
+            background: white;
+        }
+
+        .failing-filter-group select:focus {
+            outline: none;
+            border-color: #7c3aed;
+        }
+
+        .failing-summary {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-left: auto;
+        }
+
+        .failing-stat {
+            text-align: center;
+            padding: 8px 16px;
+            background: #fef2f2;
+            border-radius: 8px;
+        }
+
+        .failing-stat .stat-num {
+            font-size: 24px;
+            font-weight: 700;
+            color: #ef4444;
+        }
+
+        .failing-stat .stat-label {
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .failing-stat.threshold {
+            background: #f3e8ff;
+        }
+
+        .failing-stat.threshold .stat-num {
+            color: #7c3aed;
+        }
+
         .cycle-tabs {
             display: flex;
             gap: 8px;
@@ -1142,9 +1214,19 @@
                 <span class="toggle-icon" id="failingBranchesToggle">▼</span>
             </div>
             <div class="failing-branches-content" id="failingBranchesContent">
+                <div class="failing-filters">
+                    <div class="failing-filter-group">
+                        <label>Schema / Checklist</label>
+                        <select id="schemaSelect" onchange="showFailingForSchema(this.value)">
+                            <option value="">-- Select Schema --</option>
+                        </select>
+                    </div>
+                    <div class="failing-summary" id="failingSummary">
+                    </div>
+                </div>
                 <div class="cycle-tabs" id="cycleTabs"></div>
                 <div class="failing-list" id="failingList">
-                    <div class="empty-state-small">Select a cycle to view failing branches</div>
+                    <div class="empty-state-small">Select a schema to view failing branches</div>
                 </div>
             </div>
         </div>
@@ -1319,48 +1401,114 @@
         }
 
         function updateFailingBranches() {
-            // Group failing audits by cycle and year
+            // Group failing audits by schema first, then by cycle
             // Use each audit's PassingGrade from SystemSettings (dynamic per schema)
             // IMPORTANT: Use rounded score to match the card display (Math.round)
-            const failingByCycle = {};
+            const failingBySchema = {};
+            const schemaThresholds = {};
             
             allAudits.forEach(audit => {
-                const threshold = audit.PassingGrade || 83; // Use audit's PassingGrade, fallback to 83
+                const threshold = audit.PassingGrade || 83;
+                const schemaName = audit.SchemaName || 'Unknown Schema';
                 const roundedScore = audit.TotalScore !== null ? Math.round(audit.TotalScore) : null;
+                
+                // Store threshold per schema
+                if (!schemaThresholds[schemaName]) {
+                    schemaThresholds[schemaName] = threshold;
+                }
+                
                 if (audit.Status === 'Completed' && roundedScore !== null && roundedScore < threshold) {
-                    const cycleKey = `${audit.AuditCycle || 'N/A'} ${audit.AuditYear || ''}`.trim();
-                    if (!failingByCycle[cycleKey]) {
-                        failingByCycle[cycleKey] = [];
+                    if (!failingBySchema[schemaName]) {
+                        failingBySchema[schemaName] = {};
                     }
-                    failingByCycle[cycleKey].push(audit);
+                    const cycleKey = `${audit.AuditCycle || 'N/A'} ${audit.AuditYear || ''}`.trim();
+                    if (!failingBySchema[schemaName][cycleKey]) {
+                        failingBySchema[schemaName][cycleKey] = [];
+                    }
+                    failingBySchema[schemaName][cycleKey].push(audit);
                 }
             });
 
+            // Store for later use
+            window.failingBySchema = failingBySchema;
+            window.schemaThresholds = schemaThresholds;
+
+            // Get schemas with failures only, sorted by fail count (highest first)
+            const schemasWithFailures = Object.keys(failingBySchema)
+                .map(schema => ({
+                    name: schema,
+                    count: Object.values(failingBySchema[schema]).reduce((sum, arr) => sum + arr.length, 0),
+                    threshold: schemaThresholds[schema] || 83
+                }))
+                .sort((a, b) => b.count - a.count);
+
+            // Populate dropdown
+            const selectEl = document.getElementById('schemaSelect');
+            selectEl.innerHTML = '<option value="">-- Select Schema (' + schemasWithFailures.length + ' with failures) --</option>' +
+                schemasWithFailures.map(s => 
+                    `<option value="${s.name}">${s.name} — ${s.count} failed (<${s.threshold}%)</option>`
+                ).join('');
+
+            // Show first schema by default if any
+            if (schemasWithFailures.length > 0) {
+                selectEl.value = schemasWithFailures[0].name;
+                showFailingForSchema(schemasWithFailures[0].name);
+            } else {
+                document.getElementById('failingSummary').innerHTML = '';
+                document.getElementById('cycleTabs').innerHTML = '';
+                document.getElementById('failingList').innerHTML = '<div class="empty-state-small">🎉 All branches passed! No failing audits.</div>';
+            }
+        }
+
+        function showFailingForSchema(schemaName) {
+            if (!schemaName) {
+                document.getElementById('failingSummary').innerHTML = '';
+                document.getElementById('cycleTabs').innerHTML = '';
+                document.getElementById('failingList').innerHTML = '<div class="empty-state-small">Select a schema to view failing branches</div>';
+                return;
+            }
+
+            window.currentSchema = schemaName;
+            const schemaData = window.failingBySchema[schemaName] || {};
+            const threshold = window.schemaThresholds[schemaName] || 83;
+            const totalFailing = Object.values(schemaData).reduce((sum, arr) => sum + arr.length, 0);
+            
+            // Update summary stats
+            document.getElementById('failingSummary').innerHTML = `
+                <div class="failing-stat threshold">
+                    <div class="stat-num">&lt;${threshold}%</div>
+                    <div class="stat-label">Threshold</div>
+                </div>
+                <div class="failing-stat">
+                    <div class="stat-num">${totalFailing}</div>
+                    <div class="stat-label">Total Failed</div>
+                </div>
+            `;
+            
             // Sort cycles (most recent first)
-            const sortedCycles = Object.keys(failingByCycle).sort((a, b) => {
-                // Extract year and cycle for sorting
+            const sortedCycles = Object.keys(schemaData).sort((a, b) => {
                 const [cycleA, yearA] = a.split(' ');
                 const [cycleB, yearB] = b.split(' ');
                 if (yearA !== yearB) return (parseInt(yearB) || 0) - (parseInt(yearA) || 0);
                 return cycleB.localeCompare(cycleA);
             });
 
-            // Render cycle tabs
-            const tabsHtml = sortedCycles.map((cycle, idx) => {
-                const count = failingByCycle[cycle].length;
+            // Render cycle tabs for this schema
+            const cycleTabsHtml = sortedCycles.map((cycle, idx) => {
+                const count = schemaData[cycle].length;
                 return `<button class="cycle-tab ${idx === 0 ? 'active' : ''}" onclick="showFailingForCycle('${cycle}')">${cycle} <span class="fail-count">${count}</span></button>`;
             }).join('');
 
-            document.getElementById('cycleTabs').innerHTML = tabsHtml || '<span class="empty-state-small">No failing audits found</span>';
+            document.getElementById('cycleTabs').innerHTML = cycleTabsHtml || '<span class="empty-state-small" style="padding: 10px;">✅ No failing audits for this schema</span>';
 
-            // Store for later use BEFORE showing first cycle
-            window.failingByCycle = failingByCycle;
+            // Store current schema's cycle data
+            window.failingByCycle = schemaData;
 
             // Show first cycle by default
             if (sortedCycles.length > 0) {
                 showFailingForCycle(sortedCycles[0]);
             } else {
-                document.getElementById('failingList').innerHTML = '<div class="empty-state-small">🎉 All branches passed! No failing audits.</div>';
+                document.getElementById('failingList').innerHTML = '<div class="empty-state-small">🎉 All branches passed for this schema!</div>';
             }
         }
 
@@ -1380,13 +1528,15 @@
             // Sort by score (lowest first)
             failingAudits.sort((a, b) => (a.TotalScore || 0) - (b.TotalScore || 0));
 
+            const threshold = window.schemaThresholds[window.currentSchema] || 83;
+
             const listHtml = failingAudits.map(audit => `
                 <div class="failing-branch-item" onclick="window.location.href='/auditor/fill-audit?id=${audit.AuditID}&readonly=true'" style="cursor: pointer;">
                     <div class="failing-branch-info">
                         <div class="failing-branch-name">🏪 ${audit.StoreName || 'Unknown Store'}</div>
                         <div class="failing-branch-doc">${audit.DocumentNumber || '-'}</div>
                     </div>
-                    <div class="failing-branch-score">${Math.round(audit.TotalScore)}%</div>
+                    <div class="failing-branch-score">${Math.round(audit.TotalScore)}% <span style="font-size: 11px; color: #9ca3af;">/ ${threshold}%</span></div>
                 </div>
             `).join('');
 
