@@ -342,6 +342,18 @@
             color: #1e3a5f;
         }
 
+        .doc-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .schema-name-badge {
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
         .status-badge {
             padding: 6px 14px;
             border-radius: 20px;
@@ -1459,7 +1471,10 @@
             return `
                 <div class="audit-card">
                     <div class="card-header ${headerClass}">
-                        <div class="doc-number">${audit.DocumentNumber || '-'}${reauditBadge}</div>
+                        <div class="doc-info">
+                            <div class="doc-number">${audit.DocumentNumber || '-'}${reauditBadge}</div>
+                            <div class="schema-name-badge">${audit.SchemaName || ''}</div>
+                        </div>
                         <span class="status-badge status-${statusClass}">
                             ${audit.Status === 'Completed' ? '✓ ' : audit.Status === 'In Progress' ? '⏳ ' : ''}${audit.Status || 'Draft'}
                         </span>
