@@ -1240,6 +1240,9 @@
                     <option value="Completed">Completed</option>
                     <option value="In Progress">In Progress</option>
                     <option value="Draft">Draft</option>
+                    <option value="---" disabled>───────────────</option>
+                    <option value="ReportNotSent">📧 Report Not Sent</option>
+                    <option value="PendingActionPlan">📋 Pending Action Plan</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -1344,6 +1347,10 @@
                 // Update stats
                 updateStats();
                 
+                // Load notification statuses for special filter counts
+                await loadAllNotificationStatuses();
+                updateSpecialFilterCounts();
+                
                 // Apply initial filters
                 applyFilters();
                 
@@ -1356,6 +1363,34 @@
                         <p>${error.message}</p>
                     </div>
                 `;
+            }
+        }
+
+        // Update the special filter dropdown options with counts
+        function updateSpecialFilterCounts() {
+            const completedAudits = allAudits.filter(a => a.Status === 'Completed');
+            
+            let reportNotSentCount = 0;
+            let pendingActionPlanCount = 0;
+            
+            completedAudits.forEach(audit => {
+                const status = auditNotificationStatuses[audit.AuditID];
+                if (!status || !status.reportSentDate) {
+                    reportNotSentCount++;
+                } else if (status.reportSentDate && !status.actionPlanSubmittedDate) {
+                    pendingActionPlanCount++;
+                }
+            });
+            
+            // Update dropdown options
+            const statusFilter = document.getElementById('statusFilter');
+            const options = statusFilter.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value === 'ReportNotSent') {
+                    options[i].textContent = `📧 Report Not Sent (${reportNotSentCount})`;
+                } else if (options[i].value === 'PendingActionPlan') {
+                    options[i].textContent = `📋 Pending Action Plan (${pendingActionPlanCount})`;
+                }
             }
         }
 
@@ -1566,15 +1601,42 @@
             toggle.classList.toggle('collapsed');
         }
 
-        function applyFilters() {
+        // Store notification statuses globally for filtering
+        let auditNotificationStatuses = {};
+
+        async function applyFilters() {
             const status = document.getElementById('statusFilter').value;
             const store = document.getElementById('storeFilter').value;
             const year = document.getElementById('yearFilter').value;
             const cycle = document.getElementById('cycleFilter').value;
             const search = document.getElementById('searchInput').value.toLowerCase();
 
+            // For special filters, we need notification statuses first
+            if (status === 'ReportNotSent' || status === 'PendingActionPlan') {
+                // Load notification statuses if not already loaded
+                if (Object.keys(auditNotificationStatuses).length === 0) {
+                    await loadAllNotificationStatuses();
+                }
+            }
+
             filteredAudits = allAudits.filter(audit => {
-                if (status && audit.Status !== status) return false;
+                // Handle special status filters
+                if (status === 'ReportNotSent') {
+                    // Must be Completed and report not sent
+                    if (audit.Status !== 'Completed') return false;
+                    const notifStatus = auditNotificationStatuses[audit.AuditID];
+                    if (!notifStatus || notifStatus.reportSentDate) return false;
+                } else if (status === 'PendingActionPlan') {
+                    // Must be Completed, report sent, but action plan not submitted
+                    if (audit.Status !== 'Completed') return false;
+                    const notifStatus = auditNotificationStatuses[audit.AuditID];
+                    if (!notifStatus) return false;
+                    if (!notifStatus.reportSentDate) return false; // Report must be sent first
+                    if (notifStatus.actionPlanSubmittedDate) return false; // AP must NOT be submitted
+                } else if (status && audit.Status !== status) {
+                    return false;
+                }
+                
                 if (store && audit.StoreName !== store) return false;
                 if (year && audit.AuditYear != year) return false;
                 if (cycle && audit.AuditCycle !== cycle) return false;
@@ -1593,6 +1655,30 @@
             
             // Load notification statuses (for Admin, Auditor, SuperAuditor)
             loadNotificationStatuses();
+        }
+
+        // Load ALL notification statuses for filtering purposes
+        async function loadAllNotificationStatuses() {
+            const completedAudits = allAudits.filter(a => a.Status === 'Completed');
+            if (completedAudits.length === 0) return;
+            
+            const auditIds = completedAudits.map(a => a.AuditID);
+            
+            try {
+                const response = await fetch('/api/audits/notification-statuses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auditIds })
+                });
+                
+                if (!response.ok) throw new Error('Failed to load notification statuses');
+                
+                const data = await response.json();
+                auditNotificationStatuses = data.statuses || {};
+            } catch (error) {
+                console.error('Error loading all notification statuses:', error);
+                auditNotificationStatuses = {};
+            }
         }
 
         function renderCards() {
