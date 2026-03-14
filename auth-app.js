@@ -4157,6 +4157,9 @@ app.get('/api/admin/escalation-job/pending-audits', requireAuth, requireRole('Ad
                     ai.StoreName,
                     ai.StoreCode,
                     ai.AuditDate,
+                    ai.Cycle,
+                    ai.Year,
+                    cd.CycleName,
                     MIN(n.sent_at) as ReportSentAt,
                     DATEADD(DAY, ${settings.DeadlineDays}, MIN(n.sent_at)) as Deadline,
                     DATEDIFF(DAY, GETDATE(), DATEADD(DAY, ${settings.DeadlineDays}, MIN(n.sent_at))) as DaysRemaining,
@@ -4170,6 +4173,9 @@ app.get('/api/admin/escalation-job/pending-audits', requireAuth, requireRole('Ad
                 INNER JOIN Notifications n ON n.document_number = ai.DocumentNumber 
                     AND n.notification_type IN ('ReportPublished', 'FullReportGenerated', 'AuditReport')
                     AND n.status = 'Sent'
+                LEFT JOIN AuditSchemas s ON ai.SchemaID = s.SchemaID
+                LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                LEFT JOIN CycleDefinitions cd ON ct.CycleTypeID = cd.CycleTypeID AND ai.Cycle = cd.CycleNumber
                 WHERE ai.Status = 'Completed'
                 AND NOT EXISTS (
                     SELECT 1 FROM Notifications n2 
@@ -4177,7 +4183,7 @@ app.get('/api/admin/escalation-job/pending-audits', requireAuth, requireRole('Ad
                     AND n2.notification_type = 'ActionPlanSubmitted'
                     AND n2.status = 'Sent'
                 )
-                GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.AuditDate
+                GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.AuditDate, ai.Cycle, ai.Year, cd.CycleName
             )
             SELECT * FROM AuditDeadlines
             ORDER BY DaysRemaining ASC
@@ -4211,6 +4217,44 @@ app.get('/api/admin/escalation-job/pending-audits', requireAuth, requireRole('Ad
         
     } catch (error) {
         console.error('[EscalationJob] Error fetching pending audits:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Dismiss an audit from escalation tracking (mark as handled externally)
+app.post('/api/admin/escalation-job/dismiss', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        const { documentNumber, reason } = req.body;
+        
+        if (!documentNumber) {
+            return res.status(400).json({ success: false, error: 'Document number required' });
+        }
+        
+        const sql = require('mssql');
+        const pool = await sql.connect({
+            server: process.env.SQL_SERVER,
+            database: process.env.SQL_DATABASE,
+            user: process.env.SQL_USER,
+            password: process.env.SQL_PASSWORD,
+            options: { encrypt: false, trustServerCertificate: true }
+        });
+        
+        // Insert a notification record marking this as "ActionPlanSubmitted" externally
+        await pool.request()
+            .input('documentNumber', sql.NVarChar, documentNumber)
+            .input('reason', sql.NVarChar, reason || 'Dismissed - Action Plan submitted externally')
+            .input('dismissedBy', sql.NVarChar, req.currentUser?.email || 'Admin')
+            .query(`
+                INSERT INTO Notifications (document_number, notification_type, recipient_email, status, sent_at, error_message)
+                VALUES (@documentNumber, 'ActionPlanSubmitted', @dismissedBy, 'Sent', GETDATE(), @reason)
+            `);
+        
+        console.log(`[EscalationJob] Audit ${documentNumber} dismissed by ${req.currentUser?.email}: ${reason || 'No reason provided'}`);
+        
+        res.json({ success: true, message: `Audit ${documentNumber} dismissed from escalation tracking` });
+        
+    } catch (error) {
+        console.error('[EscalationJob] Error dismissing audit:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

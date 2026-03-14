@@ -971,21 +971,25 @@
                 </button>
             </div>
             
-            <!-- Summary Stats -->
+            <!-- Summary Stats - Clickable to filter -->
             <div class="status-grid" style="margin-bottom: 1rem; padding: 0;">
-                <div class="status-card" style="background: #fef2f2; padding: 1rem; border-left: 4px solid #ef4444;">
+                <div class="status-card pending-filter-card" data-filter="all" onclick="filterPendingAudits('all')" style="background: #f3f4f6; padding: 1rem; border-left: 4px solid #6b7280; cursor: pointer; transition: transform 0.2s;">
+                    <h3 style="font-size: 0.75rem; color: #374151;">📋 All</h3>
+                    <div class="status-value" id="pendingTotal" style="font-size: 1.5rem; color: #374151;">0</div>
+                </div>
+                <div class="status-card pending-filter-card" data-filter="Overdue" onclick="filterPendingAudits('Overdue')" style="background: #fef2f2; padding: 1rem; border-left: 4px solid #ef4444; cursor: pointer; transition: transform 0.2s;">
                     <h3 style="font-size: 0.75rem; color: #991b1b;">🔴 Overdue</h3>
                     <div class="status-value" id="pendingOverdue" style="font-size: 1.5rem; color: #ef4444;">0</div>
                 </div>
-                <div class="status-card" style="background: #fffbeb; padding: 1rem; border-left: 4px solid #f59e0b;">
+                <div class="status-card pending-filter-card" data-filter="Grace Period" onclick="filterPendingAudits('Grace Period')" style="background: #fffbeb; padding: 1rem; border-left: 4px solid #f59e0b; cursor: pointer; transition: transform 0.2s;">
                     <h3 style="font-size: 0.75rem; color: #92400e;">🟡 Grace Period</h3>
                     <div class="status-value" id="pendingGrace" style="font-size: 1.5rem; color: #f59e0b;">0</div>
                 </div>
-                <div class="status-card" style="background: #fef3c7; padding: 1rem; border-left: 4px solid #d97706;">
+                <div class="status-card pending-filter-card" data-filter="Reminder Due" onclick="filterPendingAudits('Reminder Due')" style="background: #fef3c7; padding: 1rem; border-left: 4px solid #d97706; cursor: pointer; transition: transform 0.2s;">
                     <h3 style="font-size: 0.75rem; color: #92400e;">🟠 Reminder Due</h3>
                     <div class="status-value" id="pendingReminder" style="font-size: 1.5rem; color: #d97706;">0</div>
                 </div>
-                <div class="status-card" style="background: #f0fdf4; padding: 1rem; border-left: 4px solid #10b981;">
+                <div class="status-card pending-filter-card" data-filter="On Track" onclick="filterPendingAudits('On Track')" style="background: #f0fdf4; padding: 1rem; border-left: 4px solid #10b981; cursor: pointer; transition: transform 0.2s;">
                     <h3 style="font-size: 0.75rem; color: #166534;">🟢 On Track</h3>
                     <div class="status-value" id="pendingOnTrack" style="font-size: 1.5rem; color: #10b981;">0</div>
                 </div>
@@ -999,14 +1003,17 @@
                             <th>Status</th>
                             <th>Document #</th>
                             <th>Store</th>
+                            <th>Cycle</th>
                             <th>Report Sent</th>
                             <th>Deadline</th>
                             <th>Days Remaining</th>
+                            <th>Next Scheduled Action</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="pendingAuditsBody">
                         <tr>
-                            <td colspan="6" class="empty-state">
+                            <td colspan="9" class="empty-state">
                                 <i class="fas fa-spinner fa-spin"></i>
                                 <p>Loading pending audits...</p>
                             </td>
@@ -1220,6 +1227,29 @@
             }
         }
 
+        // Store settings for next action calculation
+        let escalationSettings = { reminderDays: [3, 1], gracePeriodHours: 24 };
+        let allPendingAudits = [];
+        let currentPendingFilter = 'all';
+
+        // Filter pending audits by clicking on cards
+        function filterPendingAudits(filter) {
+            currentPendingFilter = filter;
+            
+            // Update card active state
+            document.querySelectorAll('.pending-filter-card').forEach(card => {
+                if (card.dataset.filter === filter) {
+                    card.style.transform = 'scale(1.05)';
+                    card.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                } else {
+                    card.style.transform = 'scale(1)';
+                    card.style.boxShadow = 'none';
+                }
+            });
+            
+            renderPendingAuditsTable();
+        }
+
         // Fetch pending audits forecast
         async function fetchPendingAudits() {
             try {
@@ -1227,73 +1257,154 @@
                 const data = await response.json();
                 
                 if (data.success) {
+                    // Store settings
+                    escalationSettings = data.settings;
+                    
                     // Update summary counts
+                    document.getElementById('pendingTotal').textContent = data.summary.total;
                     document.getElementById('pendingOverdue').textContent = data.summary.overdue;
                     document.getElementById('pendingGrace').textContent = data.summary.gracePeriod;
                     document.getElementById('pendingReminder').textContent = data.summary.reminderDue;
                     document.getElementById('pendingOnTrack').textContent = data.summary.onTrack;
                     
-                    // Build table rows
-                    const tbody = document.getElementById('pendingAuditsBody');
-                    const allAudits = [
+                    // Store all audits for filtering
+                    allPendingAudits = [
                         ...data.audits.overdue.map(a => ({...a, statusClass: 'overdue'})),
                         ...data.audits.gracePeriod.map(a => ({...a, statusClass: 'grace'})),
                         ...data.audits.reminderDue.map(a => ({...a, statusClass: 'reminder'})),
                         ...data.audits.onTrack.map(a => ({...a, statusClass: 'ontrack'}))
                     ];
                     
-                    if (allAudits.length === 0) {
-                        tbody.innerHTML = `
-                            <tr>
-                                <td colspan="6" class="empty-state">
-                                    <i class="fas fa-check-circle" style="color: var(--success);"></i>
-                                    <p>No pending action plans</p>
-                                </td>
-                            </tr>
-                        `;
-                        return;
-                    }
-                    
-                    tbody.innerHTML = allAudits.map(audit => {
-                        let statusBadge = '';
-                        let daysDisplay = '';
-                        
-                        if (audit.Status === 'Overdue') {
-                            statusBadge = '<span style="background: #fef2f2; color: #dc2626; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🔴 OVERDUE</span>';
-                            daysDisplay = `<span style="color: #dc2626; font-weight: 700;">${Math.abs(audit.DaysRemaining)} days overdue</span>`;
-                        } else if (audit.Status === 'Grace Period') {
-                            statusBadge = '<span style="background: #fffbeb; color: #d97706; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟡 GRACE</span>';
-                            daysDisplay = `<span style="color: #d97706; font-weight: 700;">${Math.abs(audit.DaysRemaining)} days overdue (grace)</span>`;
-                        } else if (audit.Status === 'Reminder Due') {
-                            statusBadge = '<span style="background: #fef3c7; color: #b45309; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟠 REMINDER</span>';
-                            daysDisplay = `<span style="color: #b45309; font-weight: 600;">${audit.DaysRemaining} days left</span>`;
-                        } else {
-                            statusBadge = '<span style="background: #f0fdf4; color: #16a34a; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟢 ON TRACK</span>';
-                            daysDisplay = `<span style="color: #16a34a;">${audit.DaysRemaining} days left</span>`;
-                        }
-                        
-                        return `
-                            <tr>
-                                <td>${statusBadge}</td>
-                                <td style="font-weight: 500;">${audit.DocumentNumber}</td>
-                                <td>${audit.StoreName}</td>
-                                <td>${formatDate(audit.ReportSentAt)}</td>
-                                <td>${formatDate(audit.Deadline)}</td>
-                                <td>${daysDisplay}</td>
-                            </tr>
-                        `;
-                    }).join('');
+                    renderPendingAuditsTable();
                 }
             } catch (error) {
                 console.error('Error fetching pending audits:', error);
                 document.getElementById('pendingAuditsBody').innerHTML = `
                     <tr>
-                        <td colspan="6" class="empty-state">
+                        <td colspan="9" class="empty-state">
                             <i class="fas fa-exclamation-triangle" style="color: var(--danger);"></i>
                             <p>Error loading pending audits</p>
                         </td>
                     </tr>
                 `;
+            }
+        }
+
+        // Render pending audits table based on current filter
+        function renderPendingAuditsTable() {
+            const tbody = document.getElementById('pendingAuditsBody');
+            
+            // Apply filter
+            let auditsToShow = allPendingAudits;
+            if (currentPendingFilter !== 'all') {
+                auditsToShow = allPendingAudits.filter(a => a.Status === currentPendingFilter);
+            }
+                    
+            if (auditsToShow.length === 0) {
+                const filterMsg = currentPendingFilter === 'all' ? 'No pending action plans' : `No ${currentPendingFilter} audits`;
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="empty-state">
+                            <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                            <p>${filterMsg}</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+                    
+            tbody.innerHTML = auditsToShow.map(audit => {
+                let statusBadge = '';
+                let daysDisplay = '';
+                let nextAction = '';
+                
+                if (audit.Status === 'Overdue') {
+                    statusBadge = '<span style="background: #fef2f2; color: #dc2626; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🔴 OVERDUE</span>';
+                    daysDisplay = `<span style="color: #dc2626; font-weight: 700;">${Math.abs(audit.DaysRemaining)} days overdue</span>`;
+                    nextAction = '<span style="color: #dc2626; font-weight: 600;">📧 Escalation on next run</span>';
+                } else if (audit.Status === 'Grace Period') {
+                    statusBadge = '<span style="background: #fffbeb; color: #d97706; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟡 GRACE</span>';
+                    daysDisplay = `<span style="color: #d97706; font-weight: 700;">${Math.abs(audit.DaysRemaining)} days overdue (grace)</span>`;
+                    nextAction = `<span style="color: #d97706;">⏳ Escalation after grace (${escalationSettings.gracePeriodHours}h)</span>`;
+                } else if (audit.Status === 'Reminder Due') {
+                    statusBadge = '<span style="background: #fef3c7; color: #b45309; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟠 REMINDER</span>';
+                    daysDisplay = `<span style="color: #b45309; font-weight: 600;">${audit.DaysRemaining} days left</span>`;
+                    // Check if this matches a reminder day
+                    const reminderDays = escalationSettings.reminderDays || [3, 1];
+                    if (reminderDays.includes(audit.DaysRemaining)) {
+                        nextAction = '<span style="color: #b45309; font-weight: 600;">📧 Reminder on next run</span>';
+                    } else {
+                        const nextReminderDay = reminderDays.filter(d => d < audit.DaysRemaining).sort((a,b) => b-a)[0];
+                        if (nextReminderDay) {
+                            nextAction = `<span style="color: #6b7280;">📧 Reminder in ${audit.DaysRemaining - nextReminderDay} days</span>`;
+                        } else {
+                            nextAction = '<span style="color: #6b7280;">No reminder scheduled</span>';
+                        }
+                    }
+                } else {
+                    statusBadge = '<span style="background: #f0fdf4; color: #16a34a; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟢 ON TRACK</span>';
+                    daysDisplay = `<span style="color: #16a34a;">${audit.DaysRemaining} days left</span>`;
+                    // Calculate next reminder
+                    const reminderDays = escalationSettings.reminderDays || [3, 1];
+                    const nextReminderDay = reminderDays.filter(d => d < audit.DaysRemaining).sort((a,b) => b-a)[0];
+                    if (nextReminderDay) {
+                        nextAction = `<span style="color: #6b7280;">📧 Reminder in ${audit.DaysRemaining - nextReminderDay} days</span>`;
+                    } else {
+                        nextAction = '<span style="color: #9ca3af;">—</span>';
+                    }
+                }
+                
+                // Format cycle display
+                const cycleDisplay = audit.CycleName 
+                    ? `${audit.Cycle || ''} ${audit.CycleName} ${audit.Year || ''}`.trim()
+                    : `${audit.Cycle || '-'} / ${audit.Year || '-'}`;
+                
+                return `
+                    <tr>
+                        <td>${statusBadge}</td>
+                        <td style="font-weight: 500;">${audit.DocumentNumber}</td>
+                        <td>${audit.StoreName}</td>
+                        <td style="font-size: 0.8rem;">${cycleDisplay}</td>
+                        <td>${formatDate(audit.ReportSentAt)}</td>
+                        <td>${formatDate(audit.Deadline)}</td>
+                        <td>${daysDisplay}</td>
+                        <td style="font-size: 0.8rem;">${nextAction}</td>
+                        <td>
+                            <button onclick="dismissAudit('${audit.DocumentNumber}')" 
+                                    style="padding: 4px 10px; font-size: 0.75rem; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                                    title="Mark as handled externally (Action Plan submitted outside system)">
+                                ✓ Dismiss
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Dismiss an audit from escalation tracking
+        async function dismissAudit(documentNumber) {
+            const reason = prompt(`Dismiss "${documentNumber}" from escalation tracking?\n\nEnter reason (e.g., "Action Plan submitted via email"):`, 'Action Plan submitted externally');
+            
+            if (reason === null) return; // User cancelled
+            
+            try {
+                const response = await fetch('/api/admin/escalation-job/dismiss', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ documentNumber, reason })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`✓ ${documentNumber} dismissed from escalation`, 'success');
+                    fetchPendingAudits(); // Refresh the list
+                } else {
+                    showToast('Error: ' + (data.error || 'Failed to dismiss'), 'error');
+                }
+            } catch (error) {
+                console.error('Error dismissing audit:', error);
+                showToast('Error dismissing audit', 'error');
             }
         }
 
