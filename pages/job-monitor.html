@@ -977,6 +977,10 @@
                     <h3 style="font-size: 0.75rem; color: #374151;">📋 All</h3>
                     <div class="status-value" id="pendingTotal" style="font-size: 1.5rem; color: #374151;">0</div>
                 </div>
+                <div class="status-card pending-filter-card" data-filter="recentlySent" onclick="filterPendingAudits('recentlySent')" style="background: #eff6ff; padding: 1rem; border-left: 4px solid #3b82f6; cursor: pointer; transition: transform 0.2s;">
+                    <h3 style="font-size: 0.75rem; color: #1e40af;">🆕 Recently Sent (7d)</h3>
+                    <div class="status-value" id="pendingRecentlySent" style="font-size: 1.5rem; color: #3b82f6;">0</div>
+                </div>
                 <div class="status-card pending-filter-card" data-filter="Overdue" onclick="filterPendingAudits('Overdue')" style="background: #fef2f2; padding: 1rem; border-left: 4px solid #ef4444; cursor: pointer; transition: transform 0.2s;">
                     <h3 style="font-size: 0.75rem; color: #991b1b;">🔴 Overdue</h3>
                     <div class="status-value" id="pendingOverdue" style="font-size: 1.5rem; color: #ef4444;">0</div>
@@ -1250,6 +1254,9 @@
             renderPendingAuditsTable();
         }
 
+        // Store recently sent audits separately
+        let recentlySentAudits = [];
+
         // Fetch pending audits forecast
         async function fetchPendingAudits() {
             try {
@@ -1262,10 +1269,14 @@
                     
                     // Update summary counts
                     document.getElementById('pendingTotal').textContent = data.summary.total;
+                    document.getElementById('pendingRecentlySent').textContent = data.summary.recentlySent || 0;
                     document.getElementById('pendingOverdue').textContent = data.summary.overdue;
                     document.getElementById('pendingGrace').textContent = data.summary.gracePeriod;
                     document.getElementById('pendingReminder').textContent = data.summary.reminderDue;
                     document.getElementById('pendingOnTrack').textContent = data.summary.onTrack;
+                    
+                    // Store recently sent audits
+                    recentlySentAudits = data.audits.recentlySent || [];
                     
                     // Store all audits for filtering
                     allPendingAudits = [
@@ -1296,12 +1307,16 @@
             
             // Apply filter
             let auditsToShow = allPendingAudits;
-            if (currentPendingFilter !== 'all') {
+            if (currentPendingFilter === 'recentlySent') {
+                auditsToShow = recentlySentAudits;
+            } else if (currentPendingFilter !== 'all') {
                 auditsToShow = allPendingAudits.filter(a => a.Status === currentPendingFilter);
             }
                     
             if (auditsToShow.length === 0) {
-                const filterMsg = currentPendingFilter === 'all' ? 'No pending action plans' : `No ${currentPendingFilter} audits`;
+                const filterMsg = currentPendingFilter === 'all' ? 'No pending action plans' : 
+                    currentPendingFilter === 'recentlySent' ? 'No audits sent in last 7 days' : 
+                    `No ${currentPendingFilter} audits`;
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="9" class="empty-state">

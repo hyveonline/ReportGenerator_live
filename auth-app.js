@@ -4198,6 +4198,11 @@ app.get('/api/admin/escalation-job/pending-audits', requireAuth, requireRole('Ad
             onTrack: audits.filter(a => a.Status === 'On Track')
         };
         
+        // Recently sent (within last 7 days) - subset of all audits
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const recentlySent = audits.filter(a => new Date(a.ReportSentAt) >= sevenDaysAgo);
+        
         res.json({
             success: true,
             settings: {
@@ -4210,9 +4215,10 @@ app.get('/api/admin/escalation-job/pending-audits', requireAuth, requireRole('Ad
                 overdue: grouped.overdue.length,
                 gracePeriod: grouped.gracePeriod.length,
                 reminderDue: grouped.reminderDue.length,
-                onTrack: grouped.onTrack.length
+                onTrack: grouped.onTrack.length,
+                recentlySent: recentlySent.length
             },
-            audits: grouped
+            audits: { ...grouped, recentlySent }
         });
         
     } catch (error) {
