@@ -2053,24 +2053,43 @@ class AnalyticsPage {
             \`;
             document.getElementById('ncByLocationTable').innerHTML = ncByLocationHtml;
             
-            // Render Open NC by Location Table (Store, Open count, Days)
+            // Render Open NC by Location Table (Store, Non-Conformity, Open, Days)
             const openNCHtml = \`
                 <table class="data-table open-nc-table">
                     <thead>
                         <tr>
                             <th>Store</th>
+                            <th>Non-Conformity</th>
                             <th>Open</th>
                             <th>Days</th>
                         </tr>
                     </thead>
                     <tbody>
-                        \${openNCByLocation.length > 0 ? openNCByLocation.map(r => \`
-                            <tr class="\${r.maxDaysOpen > 30 ? 'overdue' : r.maxDaysOpen > 14 ? 'warning' : ''}">
-                                <td>\${r.storeName}</td>
-                                <td class="open-count has-open">\${r.openCount}</td>
-                                <td class="days-open \${r.maxDaysOpen > 30 ? 'critical' : r.maxDaysOpen > 14 ? 'warning' : ''}">\${r.maxDaysOpen}</td>
-                            </tr>
-                        \`).join('') : '<tr><td colspan="3" class="no-data">No open findings - All caught up! 🎉</td></tr>'}
+                        \${openNCByLocation.length > 0 ? openNCByLocation.map(r => {
+                            // Create rows for each finding within the store
+                            if (r.findings && r.findings.length > 0) {
+                                return r.findings.map((f, idx) => \`
+                                    <tr class="\${f.daysOpen > 30 ? 'overdue' : f.daysOpen > 14 ? 'warning' : ''}">
+                                        \${idx === 0 ? \`<td rowspan="\${r.findings.length}" class="store-cell">\${r.storeName}</td>\` : ''}
+                                        <td class="finding-cell">
+                                            <div class="finding-text">\${f.finding}</div>
+                                            <div class="finding-meta">\${f.reference ? \`Ref: \${f.reference}\` : ''} \${f.documentNumber ? \`| \${f.documentNumber}\` : ''}</div>
+                                        </td>
+                                        \${idx === 0 ? \`<td rowspan="\${r.findings.length}" class="open-count has-open">\${r.openCount}</td>\` : ''}
+                                        <td class="days-open \${f.daysOpen > 30 ? 'critical' : f.daysOpen > 14 ? 'warning' : ''}">\${f.daysOpen}</td>
+                                    </tr>
+                                \`).join('');
+                            } else {
+                                return \`
+                                    <tr class="\${r.maxDaysOpen > 30 ? 'overdue' : r.maxDaysOpen > 14 ? 'warning' : ''}">
+                                        <td>\${r.storeName}</td>
+                                        <td class="finding-cell">-</td>
+                                        <td class="open-count has-open">\${r.openCount}</td>
+                                        <td class="days-open \${r.maxDaysOpen > 30 ? 'critical' : r.maxDaysOpen > 14 ? 'warning' : ''}">\${r.maxDaysOpen}</td>
+                                    </tr>
+                                \`;
+                            }
+                        }).join('') : '<tr><td colspan="4" class="no-data">No open findings - All caught up! 🎉</td></tr>'}
                     </tbody>
                 </table>
             \`;

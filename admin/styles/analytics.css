@@ -1751,3 +1751,51 @@ body {
     padding: 1rem;
 }
 
+/* =============================================
+   OPEN NC BY LOCATION TABLE STYLES
+   ============================================= */
+
+.open-nc-table .store-cell {
+    font-weight: 600;
+    background: #f8fafc;
+    vertical-align: top;
+}
+
+.open-nc-table .finding-cell {
+    max-width: 400px;
+}
+
+.open-nc-table .finding-text {
+    font-size: 0.9rem;
+    color: #1e293b;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.open-nc-table .finding-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.open-nc-table tr.overdue {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.open-nc-table tr.warning {
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.open-nc-table .days-open {
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.open-nc-table .days-open.critical {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.open-nc-table .days-open.warning {
+    color: #d97706;
+    font-weight: 600;
+}

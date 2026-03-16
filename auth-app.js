@@ -3037,11 +3037,48 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             ORDER BY OpenCount DESC, ai.StoreName
         `);
         
+        // Get detailed open non-conformities per store (individual findings with days open)
+        const openNCDetailsResult = await pool.request().query(`
+            SELECT 
+                ai.StoreName,
+                apr.Finding as Finding,
+                apr.ReferenceValue,
+                ai.DocumentNumber,
+                DATEDIFF(day, ai.AuditDate, GETDATE()) as DaysOpen,
+                apr.Status
+            FROM ActionPlanResponses apr
+            INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND (apr.Status != 'Completed' OR apr.Status IS NULL)
+            ORDER BY ai.StoreName, DaysOpen DESC
+        `);
+
+        // Group detailed findings by store
+        const openNCDetailsByStore = {};
+        for (const row of openNCDetailsResult.recordset) {
+            if (!openNCDetailsByStore[row.StoreName]) {
+                openNCDetailsByStore[row.StoreName] = [];
+            }
+            // Use Finding if available, otherwise use ReferenceValue as description
+            const findingText = row.Finding && row.Finding.trim() 
+                ? row.Finding 
+                : (row.ReferenceValue ? `Issue at Ref ${row.ReferenceValue}` : 'Non-conformity detected');
+            openNCDetailsByStore[row.StoreName].push({
+                finding: findingText,
+                reference: row.ReferenceValue || '',
+                documentNumber: row.DocumentNumber,
+                daysOpen: row.DaysOpen || 0,
+                status: row.Status || 'Open'
+            });
+        }
+        
         const openNCByLocation = openAPResult.recordset.map(r => ({
             storeName: r.StoreName,
             openCount: r.OpenCount || 0,
             maxDaysOpen: r.MaxDaysOpen || 0,
-            avgDaysOpen: Math.round(r.AvgDaysOpen) || 0
+            avgDaysOpen: Math.round(r.AvgDaysOpen) || 0,
+            findings: openNCDetailsByStore[r.StoreName] || []
         }));
         
         // Calculate action plan summary
