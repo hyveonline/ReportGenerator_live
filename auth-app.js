@@ -2631,6 +2631,58 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             auditCount: r.AuditCount,
             avgScore: r.AvgScore || 0
         }));
+
+        // 2b. Trend Data by Brand (Scheme) - for per-scheme chart
+        const trendsByBrandResult = await pool.request().query(`
+            SELECT 
+                CONCAT(ai.Year, '-', ai.Cycle) as Period,
+                ai.Year,
+                ai.Cycle,
+                s.Brand,
+                COUNT(*) as AuditCount,
+                AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore
+            FROM AuditInstances ai
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND s.Brand IS NOT NULL
+            GROUP BY ai.Year, ai.Cycle, s.Brand
+            ORDER BY ai.Year, ai.Cycle, s.Brand
+        `);
+
+        // Get passing grades per brand (based on schema name matching brand)
+        const brandThresholdsResult = await pool.request().query(`
+            SELECT DISTINCT 
+                st.Brand,
+                ISNULL(ss.PassingGrade, 87) as PassingGrade
+            FROM Stores st
+            INNER JOIN AuditSchemas sch ON st.SchemaID = sch.SchemaID
+            LEFT JOIN SystemSettings ss ON sch.SchemaID = ss.SchemaID AND ss.SettingType = 'Overall'
+            WHERE st.Brand IS NOT NULL AND st.IsActive = 1
+        `);
+
+        const brandThresholds = {};
+        for (const bt of brandThresholdsResult.recordset) {
+            brandThresholds[bt.Brand] = bt.PassingGrade;
+        }
+
+        // Group trends by brand
+        const trendsByBrand = {};
+        for (const r of trendsByBrandResult.recordset) {
+            if (!trendsByBrand[r.Brand]) {
+                trendsByBrand[r.Brand] = {
+                    brand: r.Brand,
+                    passingGrade: brandThresholds[r.Brand] || 87,
+                    data: []
+                };
+            }
+            trendsByBrand[r.Brand].data.push({
+                period: r.Period,
+                year: r.Year,
+                cycle: r.Cycle,
+                auditCount: r.AuditCount,
+                avgScore: r.AvgScore || 0
+            });
+        }
         
         // 3. Auditor Performance
         const auditorResult = await pool.request().query(`
@@ -3069,6 +3121,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             success: true,
             summary,
             trends,
+            trendsByBrand: Object.values(trendsByBrand),
             auditorPerformance,
             sectionWeakness,
             sectionDrilldown,

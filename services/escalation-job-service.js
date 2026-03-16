@@ -320,7 +320,7 @@ class EscalationJobService {
     }
 
     /**
-     * Get all active SuperAuditors
+     * Get all active SuperAuditors who have notifications enabled
      */
     async getSuperAuditors() {
         const pool = await this.getDbPool();
@@ -328,6 +328,7 @@ class EscalationJobService {
             SELECT id, email, display_name
             FROM Users
             WHERE role = 'SuperAuditor' AND is_active = 1
+            AND (receive_notifications = 1 OR receive_notifications IS NULL)
         `);
         return result.recordset;
     }

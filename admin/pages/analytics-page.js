@@ -25,6 +25,7 @@ class AnalyticsPage {
     <title>Advanced Analytics - Food Safety Audit System</title>
     <link rel="stylesheet" href="/admin/styles/analytics.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 </head>
 <body>
     <!-- Header -->
@@ -97,10 +98,10 @@ class AnalyticsPage {
                     </div>
                 </div>
                 <div class="filter-group">
-                    <label>Head of Operations:</label>
+                    <label>Management:</label>
                     <div class="multi-select-dropdown" id="headOfOpsDropdown">
                         <div class="multi-select-header" onclick="toggleDropdown('headOfOpsDropdown')">
-                            <span class="selected-text">All Head of Ops</span>
+                            <span class="selected-text">All Management</span>
                             <span class="dropdown-arrow">▼</span>
                         </div>
                         <div class="multi-select-options" id="headOfOpsOptions">
@@ -334,7 +335,8 @@ class AnalyticsPage {
         <div class="charts-grid">
             <!-- Trend Chart -->
             <section class="chart-card full-width">
-                <h2>📈 Score Trends Over Time</h2>
+                <h2>📈 Score Trends Over Time by Scheme</h2>
+                <p class="section-description">Average score trends per brand/scheme with target passing grade lines.</p>
                 <div class="chart-container large">
                     <canvas id="trendChart"></canvas>
                 </div>
@@ -928,7 +930,7 @@ class AnalyticsPage {
                 analyticsData = await response.json();
                 
                 renderSummaryCards(analyticsData.summary);
-                renderTrendChart(analyticsData.trends);
+                renderTrendChartByBrand(analyticsData.trendsByBrand, analyticsData.trends);
                 renderSectionAnalysis(analyticsData.sectionWeakness, analyticsData.sectionDrilldown);
                 renderHeatmap(analyticsData.heatmap);
                 renderNCAnalysis(analyticsData.ncAnalysis);
@@ -984,41 +986,133 @@ class AnalyticsPage {
             }
         }
 
-        // Render trend chart
-        function renderTrendChart(trends) {
+        // Render trend chart by brand with target lines - vertical bars with score labels
+        function renderTrendChartByBrand(trendsByBrand, fallbackTrends) {
             const ctx = document.getElementById('trendChart').getContext('2d');
             
             if (trendChart) trendChart.destroy();
 
-            const labels = trends.map(t => t.period);
-            const scores = trends.map(t => t.avgScore);
-            const counts = trends.map(t => t.auditCount);
+            // Brand colors for bars
+            const brandColors = {
+                'Spinneys': { bar: '#22c55e', bg: 'rgba(34, 197, 94, 0.8)' },
+                'Happy': { bar: '#f59e0b', bg: 'rgba(245, 158, 11, 0.8)' },
+                'GNG': { bar: '#3b82f6', bg: 'rgba(59, 130, 246, 0.8)' },
+                'Noknok': { bar: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.8)' },
+                'Cold Stone': { bar: '#ec4899', bg: 'rgba(236, 72, 153, 0.8)' },
+                'Thai Express': { bar: '#06b6d4', bg: 'rgba(6, 182, 212, 0.8)' },
+                'Catering - El Estez': { bar: '#f97316', bg: 'rgba(249, 115, 22, 0.8)' },
+                'Catering - Pizzarte': { bar: '#84cc16', bg: 'rgba(132, 204, 22, 0.8)' },
+                'Catering - AUB': { bar: '#14b8a6', bg: 'rgba(20, 184, 166, 0.8)' },
+                'Catering - Pate et Pain': { bar: '#a855f7', bg: 'rgba(168, 85, 247, 0.8)' },
+                'Food Avenue': { bar: '#64748b', bg: 'rgba(100, 116, 139, 0.8)' },
+                'Signature - By the Sea': { bar: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.8)' }
+            };
 
-            trendChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
+            // Default colors for brands not in the map
+            const defaultColors = [
+                { bar: '#ef4444', bg: 'rgba(239, 68, 68, 0.8)' },
+                { bar: '#10b981', bg: 'rgba(16, 185, 129, 0.8)' },
+                { bar: '#6366f1', bg: 'rgba(99, 102, 241, 0.8)' },
+                { bar: '#f472b6', bg: 'rgba(244, 114, 182, 0.8)' }
+            ];
+
+            // If no brand-specific data, fall back to overall trend
+            if (!trendsByBrand || trendsByBrand.length === 0) {
+                const labels = fallbackTrends.map(t => t.period);
+                const scores = fallbackTrends.map(t => t.avgScore);
+                
+                trendChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
                             label: 'Average Score (%)',
                             data: scores,
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
                             borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            fill: true,
-                            tension: 0.4,
-                            yAxisID: 'y'
+                            borderWidth: 1,
+                            barPercentage: 0.6,
+                            categoryPercentage: 0.8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { min: 0, max: 100, title: { display: true, text: 'Score (%)' } }
                         },
-                        {
-                            label: 'Audit Count',
-                            data: counts,
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            fill: false,
-                            tension: 0.4,
-                            yAxisID: 'y1',
-                            type: 'bar'
+                        plugins: {
+                            legend: { position: 'top' }
                         }
-                    ]
+                    }
+                });
+                return;
+            }
+
+            // Get all unique periods across all brands
+            const allPeriods = new Set();
+            trendsByBrand.forEach(brand => {
+                brand.data.forEach(d => allPeriods.add(d.period));
+            });
+            const sortedPeriods = Array.from(allPeriods).sort((a, b) => {
+                const [yearA, cycleA] = a.split('-');
+                const [yearB, cycleB] = b.split('-');
+                if (yearA !== yearB) return parseInt(yearA) - parseInt(yearB);
+                // Sort cycles: C1, C2, ... C12
+                const numA = parseInt(cycleA.replace('C', ''));
+                const numB = parseInt(cycleB.replace('C', ''));
+                return numA - numB;
+            });
+
+            const datasets = [];
+            let colorIndex = 0;
+
+            // Create bar datasets for each brand
+            trendsByBrand.forEach(brand => {
+                const color = brandColors[brand.brand] || defaultColors[colorIndex % defaultColors.length];
+                colorIndex++;
+
+                // Map data to periods (fill gaps with null)
+                const dataMap = {};
+                brand.data.forEach(d => {
+                    dataMap[d.period] = d.avgScore;
+                });
+                const dataPoints = sortedPeriods.map(p => dataMap[p] !== undefined ? dataMap[p] : null);
+
+                datasets.push({
+                    label: brand.brand,
+                    data: dataPoints,
+                    backgroundColor: color.bg,
+                    borderColor: color.bar,
+                    borderWidth: 1,
+                    barPercentage: 0.7,
+                    categoryPercentage: 0.85,
+                    passingGrade: brand.passingGrade
+                });
+            });
+
+            // Add target line datasets (one per brand)
+            trendsByBrand.forEach(brand => {
+                const color = brandColors[brand.brand] || defaultColors[0];
+                datasets.push({
+                    label: brand.brand + ' Target (' + brand.passingGrade + '%)',
+                    data: sortedPeriods.map(() => brand.passingGrade),
+                    type: 'line',
+                    borderColor: color.bar,
+                    borderDash: [6, 4],
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0,
+                    order: 0
+                });
+            });
+
+            trendChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedPeriods,
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -1033,31 +1127,68 @@ class AnalyticsPage {
                             position: 'left',
                             min: 0,
                             max: 100,
-                            title: { display: true, text: 'Score (%)' }
+                            title: { display: true, text: 'Score (%)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
                         },
-                        y1: {
-                            type: 'linear',
-                            position: 'right',
-                            min: 0,
-                            title: { display: true, text: 'Audit Count' },
-                            grid: { drawOnChartArea: false }
+                        x: {
+                            title: { display: true, text: 'Cycle' }
                         }
                     },
                     plugins: {
-                        legend: { position: 'top' },
+                        legend: { 
+                            position: 'top',
+                            labels: {
+                                filter: function(legendItem) {
+                                    // Hide target lines from legend
+                                    return !legendItem.text.includes('Target');
+                                },
+                                usePointStyle: true,
+                                boxWidth: 12
+                            }
+                        },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    if (context.dataset.label === 'Average Score (%)') {
-                                        return 'Avg Score: ' + context.parsed.y.toFixed(1) + '%';
+                                    if (context.dataset.label.includes('Target')) {
+                                        return context.dataset.label + ': ' + context.parsed.y + '%';
                                     }
-                                    return 'Audits: ' + context.parsed.y;
+                                    const passingGrade = context.dataset.passingGrade || 87;
+                                    const score = context.parsed.y;
+                                    const status = score >= passingGrade ? '✅' : '❌';
+                                    return context.dataset.label + ': ' + score.toFixed(1) + '% ' + status;
                                 }
+                            }
+                        },
+                        // Data labels plugin - show score above each bar
+                        datalabels: {
+                            display: function(context) {
+                                return context.dataset.type !== 'line';
+                            },
+                            anchor: 'end',
+                            align: 'top',
+                            color: '#333',
+                            font: {
+                                weight: 'bold',
+                                size: 10
+                            },
+                            formatter: function(value) {
+                                if (value === null || value === undefined) return '';
+                                return value.toFixed(1) + '%';
                             }
                         }
                     }
-                }
+                },
+                plugins: [ChartDataLabels]
             });
+        }
+
+        // Legacy render function (kept for compatibility)
+        function renderTrendChart(trends) {
+            renderTrendChartByBrand(null, trends);
         }
 
         // Store drilldown data for section analysis
