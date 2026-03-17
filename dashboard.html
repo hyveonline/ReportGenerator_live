@@ -1022,6 +1022,57 @@
             margin-bottom: 8px;
         }
 
+        .score-calc-search-filters {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .score-calc-search-group {
+            position: relative;
+        }
+
+        .score-calc-search-group label {
+            display: block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .score-calc-search-group input,
+        .score-calc-search-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .score-calc-search-group input:focus,
+        .score-calc-search-group select:focus {
+            outline: none;
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+        }
+
+        .score-calc-search-group input::placeholder {
+            color: #9ca3af;
+        }
+
+        .score-calc-audit-count {
+            text-align: right;
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 8px;
+        }
+
+        .score-calc-audit-selector > label:first-child {
+            margin-bottom: 15px;
+        }
+
         .score-calc-audit-selector select {
             width: 100%;
             padding: 12px 15px;
@@ -2501,10 +2552,23 @@
                 </div>
                 <div class="score-calculator-body">
                     <div class="score-calc-audit-selector">
-                        <label>Select Audit</label>
+                        <label>Search & Select Audit</label>
+                        <div class="score-calc-search-filters">
+                            <div class="score-calc-search-group">
+                                <label>🏪 Store Name</label>
+                                <input type="text" id="scoreCalcStoreSearch" placeholder="Type to search store..." oninput="filterScoreCalcAudits()">
+                            </div>
+                            <div class="score-calc-search-group">
+                                <label>📋 Schema</label>
+                                <select id="scoreCalcSchemaFilter" onchange="filterScoreCalcAudits()">
+                                    <option value="">All Schemas</option>
+                                </select>
+                            </div>
+                        </div>
                         <select id="scoreCalcAuditSelect" onchange="loadAuditForCalculator()">
                             <option value="">-- Select an audit --</option>
                         </select>
+                        <div class="score-calc-audit-count" id="scoreCalcAuditCount"></div>
                     </div>
                     
                     <div id="scoreCalcContent" style="display: none;">
@@ -3769,10 +3833,15 @@
         // ==========================================
         let scoreCalcData = null;
         let scoreCalcPassingGrade = 83;
+        let scoreCalcAllAudits = []; // Store all audits for filtering
 
         async function openScoreCalculator() {
             const modal = document.getElementById('scoreCalculatorModal');
             modal.classList.add('active');
+            
+            // Reset search filters
+            document.getElementById('scoreCalcStoreSearch').value = '';
+            document.getElementById('scoreCalcSchemaFilter').value = '';
             
             // Load audits list
             try {
@@ -3780,15 +3849,55 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    const select = document.getElementById('scoreCalcAuditSelect');
-                    select.innerHTML = '<option value="">-- Select an audit --</option>' +
-                        result.data.map(a => `
-                            <option value="${a.AuditID}">${a.DocumentNumber} - ${a.StoreName} (${a.Status})</option>
-                        `).join('');
+                    scoreCalcAllAudits = result.data;
+                    
+                    // Populate schema filter dropdown with unique schemas
+                    const schemas = [...new Set(result.data.map(a => a.SchemaName).filter(Boolean))].sort();
+                    const schemaSelect = document.getElementById('scoreCalcSchemaFilter');
+                    schemaSelect.innerHTML = '<option value="">All Schemas</option>' +
+                        schemas.map(s => `<option value="${s}">${s}</option>`).join('');
+                    
+                    // Populate audits dropdown
+                    populateScoreCalcAudits(result.data);
                 }
             } catch (error) {
                 console.error('Error loading audits:', error);
             }
+        }
+
+        function populateScoreCalcAudits(audits) {
+            const select = document.getElementById('scoreCalcAuditSelect');
+            select.innerHTML = '<option value="">-- Select an audit (' + audits.length + ' found) --</option>' +
+                audits.map(a => `
+                    <option value="${a.AuditID}">${a.DocumentNumber} - ${a.StoreName} [${a.SchemaName || '-'}] (${a.Status})</option>
+                `).join('');
+            
+            // Update count
+            document.getElementById('scoreCalcAuditCount').textContent = 
+                `Showing ${audits.length} of ${scoreCalcAllAudits.length} audits`;
+        }
+
+        function filterScoreCalcAudits() {
+            const storeSearch = document.getElementById('scoreCalcStoreSearch').value.toLowerCase().trim();
+            const schemaFilter = document.getElementById('scoreCalcSchemaFilter').value;
+            
+            let filtered = scoreCalcAllAudits;
+            
+            // Filter by store name
+            if (storeSearch) {
+                filtered = filtered.filter(a => 
+                    (a.StoreName && a.StoreName.toLowerCase().includes(storeSearch)) ||
+                    (a.StoreCode && a.StoreCode.toLowerCase().includes(storeSearch)) ||
+                    (a.DocumentNumber && a.DocumentNumber.toLowerCase().includes(storeSearch))
+                );
+            }
+            
+            // Filter by schema
+            if (schemaFilter) {
+                filtered = filtered.filter(a => a.SchemaName === schemaFilter);
+            }
+            
+            populateScoreCalcAudits(filtered);
         }
 
         function closeScoreCalculator() {
@@ -3796,7 +3905,10 @@
             modal.classList.remove('active');
             document.getElementById('scoreCalcContent').style.display = 'none';
             document.getElementById('scoreCalcAuditSelect').value = '';
+            document.getElementById('scoreCalcStoreSearch').value = '';
+            document.getElementById('scoreCalcSchemaFilter').value = '';
             scoreCalcData = null;
+            scoreCalcAllAudits = [];
         }
 
         async function loadAuditForCalculator() {
