@@ -2593,7 +2593,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         // Action Plans Reviewed by Area Managers (count of unique documents with ActionPlanSubmitted notification)
         const actionPlansReviewedResult = await pool.request().query(`
             SELECT COUNT(DISTINCT document_number) as ReviewedCount
-            FROM NotificationHistory
+            FROM Notifications
             WHERE notification_type = 'ActionPlanSubmitted'
             AND status = 'Sent'
         `);
