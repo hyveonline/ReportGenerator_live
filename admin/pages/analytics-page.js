@@ -345,6 +345,14 @@ class AnalyticsPage {
             <!-- Section Analysis -->
             <section class="chart-card">
                 <h2>📊 Section Analysis Report</h2>
+                <div class="section-analysis-controls">
+                    <label>Sort By:</label>
+                    <select id="sectionSortMode" onchange="changeSectionSort()">
+                        <option value="score">Average Score (Weakest First)</option>
+                        <option value="category">Category, then Score</option>
+                        <option value="name">Section Name (A-Z)</option>
+                    </select>
+                </div>
                 <div class="chart-container">
                     <canvas id="sectionChart"></canvas>
                 </div>
@@ -1193,16 +1201,43 @@ class AnalyticsPage {
 
         // Store drilldown data for section analysis
         let currentSectionDrilldown = {};
+        let currentSectionData = [];
+
+        // Handle section sort mode change
+        function changeSectionSort() {
+            if (currentSectionData.length > 0) {
+                renderSectionAnalysis(currentSectionData, currentSectionDrilldown);
+            }
+        }
 
         // Render section analysis report (enhanced version)
         function renderSectionAnalysis(sections, drilldown) {
             currentSectionDrilldown = drilldown || {};
+            currentSectionData = sections || [];
             const ctx = document.getElementById('sectionChart').getContext('2d');
             
             if (sectionChart) sectionChart.destroy();
+            
+            // Get sort mode
+            const sortMode = document.getElementById('sectionSortMode')?.value || 'score';
 
-            // Sort by average score (weakest first)
-            const sorted = [...sections].sort((a, b) => a.avgScore - b.avgScore);
+            // Sort based on selected mode
+            let sorted;
+            if (sortMode === 'category') {
+                // Sort by category first, then by score within category
+                sorted = [...sections].sort((a, b) => {
+                    const catA = (a.categoryName || 'Uncategorized').toLowerCase();
+                    const catB = (b.categoryName || 'Uncategorized').toLowerCase();
+                    if (catA !== catB) return catA.localeCompare(catB);
+                    return a.avgScore - b.avgScore;
+                });
+            } else if (sortMode === 'name') {
+                // Sort by section name alphabetically
+                sorted = [...sections].sort((a, b) => a.sectionName.localeCompare(b.sectionName));
+            } else {
+                // Default: sort by average score (weakest first)
+                sorted = [...sections].sort((a, b) => a.avgScore - b.avgScore);
+            }
             
             const labels = sorted.map(s => s.sectionName);
             const scores = sorted.map(s => s.avgScore);
@@ -1256,6 +1291,7 @@ class AnalyticsPage {
                     <thead>
                         <tr>
                             <th style="width: 30px;"></th>
+                            <th>Category</th>
                             <th>Section</th>
                             <th>Audits</th>
                             <th>Average Score</th>
@@ -1272,6 +1308,7 @@ class AnalyticsPage {
                             return \`
                             <tr class="section-row \${hasStores ? 'expandable' : ''}" data-section="\${s.sectionName}" onclick="toggleSectionDrilldown('\${s.sectionName.replace(/'/g, "\\\\'")}')">
                                 <td class="expand-icon">\${hasStores ? '▶' : ''}</td>
+                                <td class="category-cell"><span class="category-badge">\${s.categoryName || 'Uncategorized'}</span></td>
                                 <td><strong>\${s.sectionName}</strong></td>
                                 <td>\${s.timesAudited}</td>
                                 <td class="\${s.avgScore >= 83 ? 'pass' : 'fail'}">\${s.avgScore.toFixed(1)}%</td>
@@ -1279,7 +1316,7 @@ class AnalyticsPage {
                                 <td class="fail">\${s.failRate.toFixed(1)}% <span class="rate-count">(\${failCount})</span></td>
                             </tr>
                             <tr class="drilldown-row" id="drilldown-\${s.sectionName.replace(/[^a-zA-Z0-9]/g, '_')}" style="display: none;">
-                                <td colspan="6" class="drilldown-cell">
+                                <td colspan="7" class="drilldown-cell">
                                     <div class="drilldown-content">
                                         <div class="drilldown-header">
                                             <strong>Store/Audit Breakdown for \${s.sectionName}</strong>

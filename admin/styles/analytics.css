@@ -1210,6 +1210,43 @@ body {
 }
 
 /* Section Analysis Report Styles */
+.section-analysis-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: #f8fafc;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.section-analysis-controls label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #475569;
+}
+
+.section-analysis-controls select {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #334155;
+    cursor: pointer;
+}
+
+.section-analysis-controls select:hover {
+    border-color: #94a3b8;
+}
+
+.section-analysis-controls select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
 .section-analysis-table .section-row.expandable {
     cursor: pointer;
 }
@@ -1298,6 +1335,26 @@ body {
 
 .btn-small:hover {
     background: #2563eb;
+}
+
+/* Category Badge Styles */
+.category-cell {
+    white-space: nowrap;
+}
+
+.category-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #ffffff;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.category-badge:empty::before {
+    content: 'Uncategorized';
 }
 
 /* Response Badges */

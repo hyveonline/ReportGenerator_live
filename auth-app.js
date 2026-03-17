@@ -2707,17 +2707,21 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             maxScore: r.MaxScore || 0
         }));
         
-        // 4. Section Analysis Report (expanded with per-store breakdown)
+        // 4. Section Analysis Report (expanded with per-store breakdown and category info)
         const sectionResult = await pool.request().query(`
             SELECT 
                 ss.SectionName,
                 COUNT(*) as TimesAudited,
                 AVG(ss.Percentage) as AvgScore,
                 SUM(CASE WHEN ss.Percentage >= ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as PassRate,
-                SUM(CASE WHEN ss.Percentage < ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as FailRate
+                SUM(CASE WHEN ss.Percentage < ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as FailRate,
+                MAX(ac.CategoryName) as CategoryName
             FROM AuditSectionScores ss
             INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSections asec ON ss.SectionName = asec.SectionName AND asec.SchemaID = s.SchemaID
+            LEFT JOIN CategorySections cs ON asec.SectionID = cs.SectionID
+            LEFT JOIN AuditCategories ac ON cs.CategoryID = ac.CategoryID AND ac.SchemaID = s.SchemaID
             ${whereClause}
             GROUP BY ss.SectionName
             ORDER BY AvgScore ASC
@@ -2760,6 +2764,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         
         const sectionWeakness = sectionResult.recordset.map(r => ({
             sectionName: r.SectionName,
+            categoryName: r.CategoryName || 'Uncategorized',
             timesAudited: r.TimesAudited,
             passRate: r.PassRate || 0,
             avgScore: r.AvgScore || 0,
