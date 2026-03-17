@@ -3350,19 +3350,27 @@ app.get('/api/admin/analytics/reviewed-action-plans', requireAuth, requireRole('
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
+        // Get action plans submitted with the area managers who received them
         const result = await pool.request().query(`
-            SELECT DISTINCT
-                n.document_number as DocumentNumber,
+            SELECT 
+                n1.document_number as DocumentNumber,
                 ai.StoreName,
-                n.sent_by_name as SubmittedBy,
-                n.sent_at as SubmittedDate,
+                n1.sent_by_name as SubmittedBy,
+                n1.sent_at as SubmittedDate,
                 ai.AuditDate,
-                ai.TotalScore
-            FROM Notifications n
-            LEFT JOIN AuditInstances ai ON n.document_number = ai.DocumentNumber
-            WHERE n.notification_type = 'ActionPlanSubmitted'
-            AND n.status = 'Sent'
-            ORDER BY n.sent_at DESC
+                ai.TotalScore,
+                (
+                    SELECT STRING_AGG(n2.recipient_name, ', ')
+                    FROM Notifications n2
+                    WHERE n2.document_number = n1.document_number
+                    AND n2.notification_type = 'ActionPlanSubmittedToAreaManager'
+                    AND n2.status = 'Sent'
+                ) as ReviewedBy
+            FROM Notifications n1
+            LEFT JOIN AuditInstances ai ON n1.document_number = ai.DocumentNumber
+            WHERE n1.notification_type = 'ActionPlanSubmitted'
+            AND n1.status = 'Sent'
+            ORDER BY n1.sent_at DESC
         `);
         
         res.json({
