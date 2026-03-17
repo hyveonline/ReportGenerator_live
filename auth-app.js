@@ -8819,6 +8819,17 @@ app.get('/api/audits/:auditId/department-report/:department/download-word', requ
             return res.status(404).json({ success: false, error: 'Audit not found' });
         }
         
+        // For Maintenance department, also get fridge temperature readings (bad readings only)
+        let fridgeReadings = null;
+        if (department === 'Maintenance') {
+            try {
+                fridgeReadings = await AuditService.getFridgeReadings(auditId);
+                console.log(`🌡️ Found ${(fridgeReadings?.badReadings || []).length} bad fridge readings for Maintenance report`);
+            } catch (err) {
+                console.warn(`⚠️ Could not fetch fridge readings: ${err.message}`);
+            }
+        }
+        
         // Use docx library to create Word document
         const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, HeadingLevel, ImageRun, AlignmentType } = require('docx');
         const fsSync = require('fs');
@@ -8856,10 +8867,6 @@ app.get('/api/audits/:auditId/department-report/:department/download-word', requ
                 heading: HeadingLevel.HEADING_1,
                 alignment: AlignmentType.CENTER,
             }),
-            new Paragraph({
-                children: [new TextRun({ text: 'Follow-up Report', size: 28, color: '666666' })],
-                alignment: AlignmentType.CENTER,
-            }),
             new Paragraph({ text: '' }),
             new Paragraph({ children: [new TextRun({ text: `Document: `, bold: true }), new TextRun({ text: auditData.documentNumber })] }),
             new Paragraph({ children: [new TextRun({ text: `Store: `, bold: true }), new TextRun({ text: auditData.storeName })] }),
@@ -8867,6 +8874,126 @@ app.get('/api/audits/:auditId/department-report/:department/download-word', requ
             new Paragraph({ children: [new TextRun({ text: `Total Findings: `, bold: true }), new TextRun({ text: String(report.items.length) })] }),
             new Paragraph({ text: '' }),
         ];
+        
+        // For Maintenance department, add fridge temperature readings table (bad readings)
+        if (department === 'Maintenance' && fridgeReadings && fridgeReadings.badReadings && fridgeReadings.badReadings.length > 0) {
+            const { BorderStyle } = require('docx');
+            
+            docChildren.push(new Paragraph({
+                children: [new TextRun({ text: '🌡️ Fridges/Freezers with Temperature Findings', bold: true, size: 26 })],
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 200, after: 100 },
+            }));
+            
+            // Helper function to get fridge picture buffer
+            async function getFridgePictureBuffer(picturePath) {
+                try {
+                    if (!picturePath) return null;
+                    const FRIDGE_STORAGE_BASE = pathModule.join(__dirname, 'storage', 'fridge-pictures');
+                    const fullPath = pathModule.join(FRIDGE_STORAGE_BASE, picturePath);
+                    if (fsSync.existsSync(fullPath)) {
+                        return fsSync.readFileSync(fullPath);
+                    }
+                    return null;
+                } catch (err) {
+                    console.warn(`⚠️ Could not load fridge picture: ${err.message}`);
+                    return null;
+                }
+            }
+            
+            // Create table rows for bad readings
+            const tableRows = [
+                // Header row
+                new TableRow({
+                    tableHeader: true,
+                    children: [
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: '#', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 5, type: WidthType.PERCENTAGE } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Section', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 12, type: WidthType.PERCENTAGE } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Unit', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 20, type: WidthType.PERCENTAGE } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Display (°C)', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 10, type: WidthType.PERCENTAGE } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Probe (°C)', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 10, type: WidthType.PERCENTAGE } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Issue', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 28, type: WidthType.PERCENTAGE } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Picture', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 15, type: WidthType.PERCENTAGE } }),
+                    ],
+                }),
+            ];
+            
+            // Add data rows
+            for (let i = 0; i < fridgeReadings.badReadings.length; i++) {
+                const reading = fridgeReadings.badReadings[i];
+                
+                // Try to load picture
+                let pictureCellContent = [new Paragraph({ text: '-' })];
+                if (reading.picturePath) {
+                    try {
+                        // Handle multiple pictures (JSON array) or single path
+                        let picturePaths = [];
+                        if (reading.picturePath.startsWith('[')) {
+                            picturePaths = JSON.parse(reading.picturePath);
+                        } else {
+                            picturePaths = [reading.picturePath];
+                        }
+                        
+                        const pictureElements = [];
+                        for (const picPath of picturePaths) {
+                            const buffer = await getFridgePictureBuffer(picPath);
+                            if (buffer) {
+                                pictureElements.push(
+                                    new Paragraph({
+                                        children: [
+                                            new ImageRun({
+                                                data: buffer,
+                                                transformation: {
+                                                    width: 80,
+                                                    height: 60,
+                                                },
+                                            }),
+                                        ],
+                                    })
+                                );
+                            }
+                        }
+                        if (pictureElements.length > 0) {
+                            pictureCellContent = pictureElements;
+                        }
+                    } catch (picErr) {
+                        console.warn(`⚠️ Could not embed fridge picture: ${picErr.message}`);
+                    }
+                }
+                
+                tableRows.push(new TableRow({
+                    children: [
+                        new TableCell({ children: [new Paragraph({ text: String(i + 1) })] }),
+                        new TableCell({ children: [new Paragraph({ text: reading.section || '-' })] }),
+                        new TableCell({ children: [new Paragraph({ text: reading.unit || '-' })] }),
+                        new TableCell({ children: [new Paragraph({ text: String(reading.displayTemp ?? '-') })] }),
+                        new TableCell({ children: [new Paragraph({ text: String(reading.probeTemp ?? '-') })] }),
+                        new TableCell({ children: [new Paragraph({ text: reading.issue || '-' })] }),
+                        new TableCell({ children: pictureCellContent }),
+                    ],
+                }));
+            }
+            
+            docChildren.push(new Table({
+                rows: tableRows,
+                width: { size: 100, type: WidthType.PERCENTAGE },
+            }));
+            
+            docChildren.push(new Paragraph({ text: '' }));
+            docChildren.push(new Paragraph({
+                children: [new TextRun({ text: `Total Bad Temperature Readings: ${fridgeReadings.badReadings.length}`, bold: true, size: 20 })],
+            }));
+            docChildren.push(new Paragraph({ text: '' }));
+        }
+        
+        // Add Findings section header if there are items
+        if (report.items.length > 0) {
+            docChildren.push(new Paragraph({
+                children: [new TextRun({ text: '📋 Escalated Findings', bold: true, size: 26 })],
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 200, after: 100 },
+            }));
+        }
         
         // Process each item with pictures
         for (let i = 0; i < report.items.length; i++) {

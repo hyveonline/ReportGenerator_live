@@ -1385,6 +1385,7 @@ class AuditService {
                     unit: r.unit,
                     displayTemp: r.displayTemp,
                     probeTemp: r.probeTemp,
+                    picturePath: r.picturePath, // Raw path for file access
                     picture: getPictureUrl(r.picturePath), // Backward compatibility
                     pictures: getPictureUrls(r.picturePath) // Multiple pictures support
                 }));
@@ -1399,6 +1400,7 @@ class AuditService {
                     displayTemp: r.displayTemp,
                     probeTemp: r.probeTemp,
                     issue: r.issue,
+                    picturePath: r.picturePath, // Raw path for file access
                     picture: getPictureUrl(r.picturePath), // Backward compatibility
                     pictures: getPictureUrls(r.picturePath) // Multiple pictures support
                 }));

@@ -15,6 +15,7 @@ const ImageService = require('./services/image-service');
 const TemplateEngine = require('./services/template-engine');
 const SchemaColorsService = require('../services/schema-colors-service');
 const PDFExportService = require('./services/pdf-export-service');
+const { escapeHtml } = require('./services/utilities');
 
 class ReportGenerator {
     constructor(options = {}) {
@@ -464,12 +465,24 @@ class ReportGenerator {
             // Fetch pictures (URL-based, no file duplication)
             const pictures = await this.dataService.getAuditPictures(auditId);
 
+            // For Maintenance department, also fetch temperature readings (bad readings)
+            let temperatureReadings = null;
+            if (department === 'Maintenance') {
+                try {
+                    temperatureReadings = await this.dataService.getTemperatureReadings(auditId);
+                    console.log(`🌡️ Found ${(temperatureReadings?.bad || []).length} bad fridge readings for Maintenance report`);
+                } catch (err) {
+                    console.warn(`⚠️ Could not fetch temperature readings: ${err.message}`);
+                }
+            }
+
             // Build department report HTML (similar to action plan but filtered)
             const html = this.buildDepartmentReportHtml({
                 ...auditData,
                 department,
                 findings: deptFindings,
-                pictures
+                pictures,
+                temperatureReadings
             });
 
             // Save
@@ -578,6 +591,54 @@ class ReportGenerator {
         const correctiveGallery = buildGallery(allCorrectivePics, '🔧 Corrective Action Pictures', '#dbeafe');
         const goodGallery = buildGallery(allGoodPics, '✅ Good Observation Pictures', '#dcfce7');
 
+        // Build temperature readings table for Maintenance department
+        let temperatureSection = '';
+        if (data.department === 'Maintenance' && data.temperatureReadings && data.temperatureReadings.bad && data.temperatureReadings.bad.length > 0) {
+            const tempRows = data.temperatureReadings.bad.map((r, idx) => {
+                let pictureHtml = '-';
+                if (r.pictures && r.pictures.length > 0) {
+                    pictureHtml = r.pictures.map(p => 
+                        `<img src="${p}" style="max-width:60px;max-height:45px;margin:2px;border-radius:4px;cursor:pointer;" onclick="openImageModal(this.src)">`
+                    ).join('');
+                } else if (r.picture) {
+                    pictureHtml = `<img src="${r.picture}" style="max-width:60px;max-height:45px;margin:2px;border-radius:4px;cursor:pointer;" onclick="openImageModal(this.src)">`;
+                }
+                return `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${escapeHtml(r.section || '-')}</td>
+                        <td>${escapeHtml(r.unit || '-')}</td>
+                        <td>${r.displayTemp ?? '-'}</td>
+                        <td>${r.probeTemp ?? '-'}</td>
+                        <td>${escapeHtml(r.issue || '-')}</td>
+                        <td>${pictureHtml}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            temperatureSection = `
+                <div style="margin-top:30px;padding:20px;background:#fef3c7;border-radius:8px;">
+                    <h3 style="margin-bottom:15px;">🌡️ Fridges/Freezers with Temperature Findings (${data.temperatureReadings.bad.length})</h3>
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">#</th>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Section</th>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Unit</th>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Display (°C)</th>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Probe (°C)</th>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Issue</th>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Picture</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tempRows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -671,6 +732,7 @@ class ReportGenerator {
         </table>
         ` : '<div class="no-items">No items assigned to this department.</div>'}
 
+        ${temperatureSection}
         ${findingGallery}
         ${correctiveGallery}
         ${goodGallery}
