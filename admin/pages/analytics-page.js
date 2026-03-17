@@ -271,11 +271,12 @@ class AnalyticsPage {
                 </div>
             </div>
             ${canSeeReviewedCard ? `
-            <div class="summary-card reviewed">
+            <div class="summary-card reviewed clickable" onclick="showReviewedActionPlans()" title="Click to view reviewed action plans">
                 <div class="card-icon">👁️</div>
                 <div class="card-content">
                     <h3 id="actionPlansReviewed">-</h3>
                     <p>Action Plans Reviewed</p>
+                    <span class="click-hint">Click to view details ➡️</span>
                 </div>
             </div>
             ` : ''}
@@ -505,6 +506,27 @@ class AnalyticsPage {
         </div>
     </div>
 
+    <!-- Reviewed Action Plans Modal -->
+    <div id="reviewedModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">
+                <h2>👁️ Action Plans Reviewed by Area Managers</h2>
+                <button class="modal-close" onclick="closeReviewedModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-filters">
+                    <input type="text" id="reviewedSearch" placeholder="🔍 Search store, document..." oninput="filterReviewedItems()">
+                </div>
+                <div class="modal-stats">
+                    <span id="reviewedCount">Loading...</span>
+                </div>
+                <div class="unsolved-table-container" id="reviewedTableContainer">
+                    <p class="loading-text">Loading reviewed action plans...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Chart instances
         let trendChart = null;
@@ -622,6 +644,90 @@ class AnalyticsPage {
         // Close modal on overlay click
         document.getElementById('unsolvedModal')?.addEventListener('click', (e) => {
             if (e.target.id === 'unsolvedModal') closeUnsolvedModal();
+        });
+
+        // ===== Reviewed Action Plans Modal =====
+        let reviewedItems = [];
+
+        // Show reviewed action plans modal
+        async function showReviewedActionPlans() {
+            document.getElementById('reviewedModal').style.display = 'flex';
+            document.getElementById('reviewedTableContainer').innerHTML = '<p class="loading-text">Loading reviewed action plans...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/analytics/reviewed-action-plans');
+                const data = await response.json();
+                
+                if (data.success) {
+                    reviewedItems = data.items;
+                    document.getElementById('reviewedCount').textContent = data.count + ' action plans reviewed';
+                    renderReviewedTable(reviewedItems);
+                } else {
+                    document.getElementById('reviewedTableContainer').innerHTML = '<p class="error-text">Error loading data</p>';
+                }
+            } catch (error) {
+                console.error('Error loading reviewed items:', error);
+                document.getElementById('reviewedTableContainer').innerHTML = '<p class="error-text">Error: ' + error.message + '</p>';
+            }
+        }
+
+        // Close reviewed modal
+        function closeReviewedModal() {
+            document.getElementById('reviewedModal').style.display = 'none';
+        }
+
+        // Filter reviewed items
+        function filterReviewedItems() {
+            const search = document.getElementById('reviewedSearch').value.toLowerCase();
+            
+            const filtered = reviewedItems.filter(item => {
+                return !search || 
+                    (item.StoreName || '').toLowerCase().includes(search) ||
+                    (item.DocumentNumber || '').toLowerCase().includes(search) ||
+                    (item.SubmittedBy || '').toLowerCase().includes(search);
+            });
+            
+            document.getElementById('reviewedCount').textContent = filtered.length + ' of ' + reviewedItems.length + ' items';
+            renderReviewedTable(filtered);
+        }
+
+        // Render reviewed table
+        function renderReviewedTable(items) {
+            if (items.length === 0) {
+                document.getElementById('reviewedTableContainer').innerHTML = '<p class="empty-text">No reviewed action plans found.</p>';
+                return;
+            }
+            
+            const html = \`
+                <table class="unsolved-table">
+                    <thead>
+                        <tr>
+                            <th>Store</th>
+                            <th>Document</th>
+                            <th>Submitted By</th>
+                            <th>Submitted Date</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${items.map(item => \`
+                            <tr>
+                                <td>\${item.StoreName || '-'}</td>
+                                <td><a href="/reports/\${item.DocumentNumber}.html" target="_blank" class="report-link">\${item.DocumentNumber || '-'}</a></td>
+                                <td>\${item.SubmittedBy || '-'}</td>
+                                <td>\${item.SubmittedDate ? new Date(item.SubmittedDate).toLocaleDateString() : '-'}</td>
+                                <td><a href="/action-plan/\${item.DocumentNumber}" target="_blank" class="btn-small">View Action Plan</a></td>
+                            </tr>
+                        \`).join('')}
+                    </tbody>
+                </table>
+            \`;
+            document.getElementById('reviewedTableContainer').innerHTML = html;
+        }
+
+        // Close reviewed modal on overlay click
+        document.getElementById('reviewedModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'reviewedModal') closeReviewedModal();
         });
 
         // Global store list for filtering

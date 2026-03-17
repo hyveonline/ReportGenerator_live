@@ -3343,6 +3343,40 @@ app.get('/api/admin/analytics/unsolved-action-plans', requireAuth, requireRole('
     }
 });
 
+// Get reviewed action plans (submitted to area managers)
+app.get('/api/admin/analytics/reviewed-action-plans', requireAuth, requireRole('Admin', 'SuperAuditor', 'HeadOfOperations'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request().query(`
+            SELECT DISTINCT
+                n.document_number as DocumentNumber,
+                ai.StoreName,
+                n.sent_by_name as SubmittedBy,
+                n.sent_at as SubmittedDate,
+                ai.AuditDate,
+                ai.TotalScore
+            FROM Notifications n
+            LEFT JOIN AuditInstances ai ON n.document_number = ai.DocumentNumber
+            WHERE n.notification_type = 'ActionPlanSubmitted'
+            AND n.status = 'Sent'
+            ORDER BY n.sent_at DESC
+        `);
+        
+        res.json({
+            success: true,
+            count: result.recordset.length,
+            items: result.recordset
+        });
+        
+    } catch (error) {
+        console.error('Error fetching reviewed action plans:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Custom Query API - Dynamic analytics queries
 app.get('/api/admin/analytics/custom-query', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
