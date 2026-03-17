@@ -12,7 +12,11 @@ class EscalationJobService {
         this.lastRunTime = null;
         this.nextRunTime = null;
         this.intervalId = null;
-        this.runIntervalMinutes = 60; // Run every hour
+        this.checkIntervalMinutes = 1; // Check every minute if it's time to run
+        this.scheduledRunTime = '09:00'; // Default: 9 AM
+        this.runOnWeekends = false; // Default: only weekdays
+        this.hasRunToday = false; // Track if job ran today
+        this.lastRunDate = null; // Track last run date
         this.jobStats = {
             totalRuns: 0,
             remindersSent: 0,
@@ -130,7 +134,8 @@ class EscalationJobService {
         const result = await pool.request().query(`
             SELECT TOP 1 
                 DeadlineDays, ReminderDaysBefore, AutoEscalationEnabled,
-                EmailNotificationsEnabled, EscalationRecipients, GracePeriodHours, MaxReminders
+                EmailNotificationsEnabled, EscalationRecipients, GracePeriodHours, MaxReminders,
+                ScheduledRunTime, RunOnWeekendsEnabled
             FROM ActionPlanEscalationSettings
         `);
         
@@ -146,7 +151,9 @@ class EscalationJobService {
             EmailNotificationsEnabled: true,
             EscalationRecipients: 'AreaManager',
             GracePeriodHours: 24,
-            MaxReminders: 3
+            MaxReminders: 3,
+            ScheduledRunTime: '09:00:00',
+            RunOnWeekendsEnabled: false
         };
     }
 
@@ -206,8 +213,8 @@ class EscalationJobService {
                         ai.StoreName,
                         ai.StoreCode,
                         ai.AuditDate,
-                        DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at)) as Deadline,
-                        DATEDIFF(DAY, GETDATE(), DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at))) as DaysRemaining
+                        dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays) as Deadline,
+                        dbo.fn_GetBusinessDaysDiff(GETDATE(), dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays)) as DaysRemaining
                     FROM AuditInstances ai
                     INNER JOIN Notifications n ON n.document_number = ai.DocumentNumber 
                         AND n.notification_type IN ('ReportPublished', 'FullReportGenerated', 'AuditReport')
@@ -253,8 +260,8 @@ class EscalationJobService {
                         ai.StoreName,
                         ai.StoreCode,
                         ai.AuditDate,
-                        DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at)) as Deadline,
-                        DATEDIFF(DAY, DATEADD(DAY, es.DeadlineDays, MIN(n.sent_at)), GETDATE()) as DaysOverdue
+                        dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays) as Deadline,
+                        dbo.fn_GetBusinessDaysDiff(dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays), GETDATE()) as DaysOverdue
                     FROM AuditInstances ai
                     INNER JOIN Notifications n ON n.document_number = ai.DocumentNumber 
                         AND n.notification_type IN ('ReportPublished', 'FullReportGenerated', 'AuditReport')
@@ -889,26 +896,127 @@ class EscalationJobService {
     }
 
     /**
+     * Check if it's a business day (Monday-Friday)
+     */
+    isBusinessDay(date = new Date()) {
+        const day = date.getDay();
+        return day !== 0 && day !== 6; // 0 = Sunday, 6 = Saturday
+    }
+
+    /**
+     * Check if current time matches scheduled run time
+     */
+    isScheduledTime() {
+        const now = new Date();
+        const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
+        const scheduledTime = this.scheduledRunTime.substring(0, 5); // HH:MM format
+        return currentTime === scheduledTime;
+    }
+
+    /**
+     * Get today's date as string (YYYY-MM-DD)
+     */
+    getTodayString() {
+        return new Date().toISOString().split('T')[0];
+    }
+
+    /**
+     * Calculate next scheduled run time
+     */
+    calculateNextRunTime() {
+        const now = new Date();
+        const [hours, minutes] = this.scheduledRunTime.split(':').map(Number);
+        
+        let nextRun = new Date(now);
+        nextRun.setHours(hours, minutes, 0, 0);
+        
+        // If scheduled time has passed today, move to tomorrow
+        if (nextRun <= now) {
+            nextRun.setDate(nextRun.getDate() + 1);
+        }
+        
+        // Skip weekends if not enabled
+        if (!this.runOnWeekends) {
+            while (!this.isBusinessDay(nextRun)) {
+                nextRun.setDate(nextRun.getDate() + 1);
+            }
+        }
+        
+        return nextRun;
+    }
+
+    /**
+     * Scheduled check - runs every minute to see if it's time
+     */
+    async scheduledCheck() {
+        const now = new Date();
+        const todayString = this.getTodayString();
+        
+        // Reset hasRunToday flag if it's a new day
+        if (this.lastRunDate !== todayString) {
+            this.hasRunToday = false;
+        }
+        
+        // Check if we should run
+        const shouldRun = 
+            !this.hasRunToday && 
+            this.isScheduledTime() && 
+            (this.runOnWeekends || this.isBusinessDay());
+        
+        if (shouldRun) {
+            console.log(`[EscalationJob] Scheduled run triggered at ${now.toLocaleTimeString()}`);
+            this.hasRunToday = true;
+            this.lastRunDate = todayString;
+            await this.run();
+            this.nextRunTime = this.calculateNextRunTime();
+        }
+    }
+
+    /**
      * Start the scheduler
      */
-    start() {
+    async start() {
         if (this.intervalId) {
             console.log('[EscalationJob] Scheduler already running');
             return;
         }
 
-        console.log(`[EscalationJob] Starting scheduler (interval: ${this.runIntervalMinutes} minutes)`);
+        // Load settings from database
+        try {
+            const settings = await this.getSettings();
+            if (settings.ScheduledRunTime) {
+                // SQL Server TIME type comes as a Date object
+                if (settings.ScheduledRunTime instanceof Date) {
+                    const hours = settings.ScheduledRunTime.getUTCHours().toString().padStart(2, '0');
+                    const minutes = settings.ScheduledRunTime.getUTCMinutes().toString().padStart(2, '0');
+                    this.scheduledRunTime = `${hours}:${minutes}`;
+                } else {
+                    const timeStr = settings.ScheduledRunTime.toString();
+                    if (timeStr.includes('T')) {
+                        this.scheduledRunTime = timeStr.split('T')[1].substring(0, 5);
+                    } else if (timeStr.includes(':')) {
+                        this.scheduledRunTime = timeStr.substring(0, 5);
+                    }
+                }
+            }
+            this.runOnWeekends = settings.RunOnWeekendsEnabled === true || settings.RunOnWeekendsEnabled === 1;
+        } catch (error) {
+            console.error('[EscalationJob] Error loading settings, using defaults:', error.message);
+        }
+
+        console.log(`[EscalationJob] Starting scheduler (scheduled time: ${this.scheduledRunTime}, weekends: ${this.runOnWeekends ? 'Yes' : 'No'})`);
         
         // Calculate next run time
-        this.nextRunTime = new Date(Date.now() + this.runIntervalMinutes * 60 * 1000);
+        this.nextRunTime = this.calculateNextRunTime();
+        console.log(`[EscalationJob] Next scheduled run: ${this.nextRunTime.toLocaleString()}`);
 
-        // Run immediately on start, then on interval
-        this.run();
-
+        // Check every minute if it's time to run
         this.intervalId = setInterval(() => {
-            this.nextRunTime = new Date(Date.now() + this.runIntervalMinutes * 60 * 1000);
-            this.run();
-        }, this.runIntervalMinutes * 60 * 1000);
+            this.scheduledCheck();
+        }, this.checkIntervalMinutes * 60 * 1000);
+        
+        // Also do an immediate check
+        this.scheduledCheck();
     }
 
     /**
@@ -918,6 +1026,7 @@ class EscalationJobService {
         if (this.intervalId) {
             clearInterval(this.intervalId);
             this.intervalId = null;
+            this.hasRunToday = false;
             console.log('[EscalationJob] Scheduler stopped');
         }
     }
@@ -925,13 +1034,37 @@ class EscalationJobService {
     /**
      * Get current status
      */
-    getStatus() {
+    async getStatus() {
+        // Fetch current settings from database to ensure we have latest values
+        try {
+            const settings = await this.getSettings();
+            if (settings.ScheduledRunTime) {
+                // SQL Server TIME type comes as a Date object
+                if (settings.ScheduledRunTime instanceof Date) {
+                    const hours = settings.ScheduledRunTime.getUTCHours().toString().padStart(2, '0');
+                    const minutes = settings.ScheduledRunTime.getUTCMinutes().toString().padStart(2, '0');
+                    this.scheduledRunTime = `${hours}:${minutes}`;
+                } else {
+                    const timeStr = settings.ScheduledRunTime.toString();
+                    if (timeStr.includes('T')) {
+                        this.scheduledRunTime = timeStr.split('T')[1].substring(0, 5);
+                    } else if (timeStr.includes(':')) {
+                        this.scheduledRunTime = timeStr.substring(0, 5);
+                    }
+                }
+            }
+            this.runOnWeekends = settings.RunOnWeekendsEnabled === true || settings.RunOnWeekendsEnabled === 1;
+        } catch (error) {
+            console.error('[EscalationJob] Error fetching settings for status:', error.message);
+        }
+
         return {
             isRunning: this.isRunning,
             schedulerActive: !!this.intervalId,
             lastRunTime: this.lastRunTime,
             nextRunTime: this.nextRunTime,
-            runIntervalMinutes: this.runIntervalMinutes,
+            scheduledRunTime: this.scheduledRunTime,
+            runOnWeekends: this.runOnWeekends,
             systemSenderEmail: this.systemSenderEmail,
             stats: this.jobStats
         };

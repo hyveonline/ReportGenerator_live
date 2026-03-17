@@ -3839,6 +3839,8 @@ app.get('/api/escalation-settings', requireAuth, requirePagePermission(ESCALATIO
                 EscalationRecipients,
                 GracePeriodHours,
                 MaxReminders,
+                ScheduledRunTime,
+                RunOnWeekendsEnabled,
                 ModifiedAt,
                 ModifiedBy
             FROM ActionPlanEscalationSettings
@@ -3857,7 +3859,9 @@ app.get('/api/escalation-settings', requireAuth, requirePagePermission(ESCALATIO
                     EmailNotificationsEnabled: true,
                     EscalationRecipients: 'AreaManager',
                     GracePeriodHours: 24,
-                    MaxReminders: 3
+                    MaxReminders: 3,
+                    ScheduledRunTime: '09:00:00',
+                    RunOnWeekendsEnabled: false
                 }
             });
         }
@@ -3877,7 +3881,9 @@ app.post('/api/escalation-settings', requireAuth, requirePagePermission(ESCALATI
             EmailNotificationsEnabled,
             EscalationRecipients,
             GracePeriodHours,
-            MaxReminders
+            MaxReminders,
+            ScheduledRunTime,
+            RunOnWeekendsEnabled
         } = req.body;
 
         const sql = require('mssql');
@@ -3888,6 +3894,14 @@ app.post('/api/escalation-settings', requireAuth, requirePagePermission(ESCALATI
             password: process.env.SQL_PASSWORD,
             options: { encrypt: false, trustServerCertificate: true }
         });
+
+        // Format scheduledRunTime properly - ensure it's in HH:MM:SS format
+        let formattedTime = ScheduledRunTime || '09:00:00';
+        if (formattedTime && !formattedTime.includes(':')) {
+            formattedTime = '09:00:00';
+        } else if (formattedTime && formattedTime.split(':').length === 2) {
+            formattedTime = formattedTime + ':00'; // Add seconds if missing
+        }
 
         // Check if settings exist
         const checkResult = await pool.request().query('SELECT COUNT(*) as count FROM ActionPlanEscalationSettings');
@@ -3902,6 +3916,8 @@ app.post('/api/escalation-settings', requireAuth, requirePagePermission(ESCALATI
                 .input('escalationRecipients', sql.NVarChar(500), EscalationRecipients || 'AreaManager')
                 .input('gracePeriod', sql.Int, GracePeriodHours || 24)
                 .input('maxReminders', sql.Int, MaxReminders || 3)
+                .input('scheduledRunTime', sql.NVarChar(20), formattedTime)
+                .input('runOnWeekends', sql.Bit, RunOnWeekendsEnabled ? 1 : 0)
                 .input('modifiedBy', sql.NVarChar(200), req.currentUser.email)
                 .query(`
                     UPDATE ActionPlanEscalationSettings SET
@@ -3912,6 +3928,8 @@ app.post('/api/escalation-settings', requireAuth, requirePagePermission(ESCALATI
                         EscalationRecipients = @escalationRecipients,
                         GracePeriodHours = @gracePeriod,
                         MaxReminders = @maxReminders,
+                        ScheduledRunTime = CAST(@scheduledRunTime AS TIME),
+                        RunOnWeekendsEnabled = @runOnWeekends,
                         ModifiedAt = GETDATE(),
                         ModifiedBy = @modifiedBy
                 `);
@@ -3925,16 +3943,18 @@ app.post('/api/escalation-settings', requireAuth, requirePagePermission(ESCALATI
                 .input('escalationRecipients', sql.NVarChar(500), EscalationRecipients || 'AreaManager')
                 .input('gracePeriod', sql.Int, GracePeriodHours || 24)
                 .input('maxReminders', sql.Int, MaxReminders || 3)
+                .input('scheduledRunTime', sql.NVarChar(20), formattedTime)
+                .input('runOnWeekends', sql.Bit, RunOnWeekendsEnabled ? 1 : 0)
                 .input('modifiedBy', sql.NVarChar(200), req.currentUser.email)
                 .query(`
                     INSERT INTO ActionPlanEscalationSettings (
                         DeadlineDays, ReminderDaysBefore, AutoEscalationEnabled,
                         EmailNotificationsEnabled, EscalationRecipients, GracePeriodHours,
-                        MaxReminders, ModifiedBy
+                        MaxReminders, ScheduledRunTime, RunOnWeekendsEnabled, ModifiedBy
                     ) VALUES (
                         @deadlineDays, @reminderDays, @autoEscalation,
                         @emailNotifications, @escalationRecipients, @gracePeriod,
-                        @maxReminders, @modifiedBy
+                        @maxReminders, CAST(@scheduledRunTime AS TIME), @runOnWeekends, @modifiedBy
                     )
                 `);
         }
@@ -4004,7 +4024,7 @@ app.get('/admin/job-monitor', requireAuth, requirePagePermission('/admin/job-mon
 // Get job status
 app.get('/api/admin/escalation-job/status', requireAuth, requireRole('Admin'), async (req, res) => {
     try {
-        const status = escalationJobService.getStatus();
+        const status = await escalationJobService.getStatus();
         res.json(status);
     } catch (error) {
         console.error('[EscalationJob] Error getting status:', error);
@@ -4251,12 +4271,12 @@ app.get('/api/admin/escalation-job/pending-audits', requireAuth, requireRole('Ad
                     ai.Year,
                     cd.CycleName,
                     MIN(n.sent_at) as ReportSentAt,
-                    DATEADD(DAY, ${settings.DeadlineDays}, MIN(n.sent_at)) as Deadline,
-                    DATEDIFF(DAY, GETDATE(), DATEADD(DAY, ${settings.DeadlineDays}, MIN(n.sent_at))) as DaysRemaining,
+                    dbo.fn_AddBusinessDays(MIN(n.sent_at), ${settings.DeadlineDays}) as Deadline,
+                    dbo.fn_GetBusinessDaysDiff(GETDATE(), dbo.fn_AddBusinessDays(MIN(n.sent_at), ${settings.DeadlineDays})) as DaysRemaining,
                     CASE 
-                        WHEN DATEADD(HOUR, ${settings.GracePeriodHours}, DATEADD(DAY, ${settings.DeadlineDays}, MIN(n.sent_at))) < GETDATE() THEN 'Overdue'
-                        WHEN DATEADD(DAY, ${settings.DeadlineDays}, MIN(n.sent_at)) < GETDATE() THEN 'Grace Period'
-                        WHEN DATEDIFF(DAY, GETDATE(), DATEADD(DAY, ${settings.DeadlineDays}, MIN(n.sent_at))) <= ${Math.max(...reminderDays)} THEN 'Reminder Due'
+                        WHEN DATEADD(HOUR, ${settings.GracePeriodHours}, dbo.fn_AddBusinessDays(MIN(n.sent_at), ${settings.DeadlineDays})) < GETDATE() THEN 'Overdue'
+                        WHEN dbo.fn_AddBusinessDays(MIN(n.sent_at), ${settings.DeadlineDays}) < GETDATE() THEN 'Grace Period'
+                        WHEN dbo.fn_GetBusinessDaysDiff(GETDATE(), dbo.fn_AddBusinessDays(MIN(n.sent_at), ${settings.DeadlineDays})) <= ${Math.max(...reminderDays)} THEN 'Reminder Due'
                         ELSE 'On Track'
                     END as Status
                 FROM AuditInstances ai

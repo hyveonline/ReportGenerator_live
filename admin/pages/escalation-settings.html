@@ -503,13 +503,13 @@
                             <div class="icon">📅</div>
                             <div>
                                 <h4>Action Plan Deadline</h4>
-                                <p>Number of days Store Manager has to complete action plan after inspection</p>
+                                <p>Number of <strong>business days</strong> (Mon-Fri) Store Manager has to complete action plan after inspection</p>
                             </div>
                         </div>
                         <div class="input-group">
-                            <label for="deadlineDays">Days to Complete</label>
+                            <label for="deadlineDays">Business Days to Complete</label>
                             <input type="number" id="deadlineDays" min="1" max="30" value="7" onchange="markChanged(this)">
-                            <div class="input-hint">Recommended: 7 days</div>
+                            <div class="input-hint">Recommended: 7 business days (excludes Sat & Sun)</div>
                         </div>
                     </div>
 
@@ -522,16 +522,53 @@
                             </div>
                         </div>
                         <div class="input-group">
-                            <label for="reminderDays">Days Before Deadline (comma-separated)</label>
+                            <label for="reminderDays">Business Days Before Deadline (comma-separated)</label>
                             <input type="text" id="reminderDays" value="3,1" placeholder="e.g., 3,1" onchange="markChanged(this)">
-                            <div class="input-hint">Example: "3,1" sends reminders 3 days and 1 day before deadline</div>
+                            <div class="input-hint">Example: "3,1" sends reminders 3 business days and 1 business day before deadline</div>
                         </div>
                     </div>
                 </div>
 
                 <div class="settings-section">
                     <div class="section-title">
-                        <span>🚨</span>
+                        <span>�</span>
+                        Job Schedule Settings
+                    </div>
+
+                    <div class="setting-item">
+                        <div class="label">
+                            <div class="icon">⏰</div>
+                            <div>
+                                <h4>Scheduled Run Time</h4>
+                                <p>Time of day when reminder and escalation emails are sent</p>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="scheduledRunTime">Send Emails At</label>
+                            <input type="time" id="scheduledRunTime" value="09:00" onchange="markChanged(this)" style="max-width: 150px;">
+                            <div class="input-hint">Emails will be sent once per day at this time</div>
+                        </div>
+                    </div>
+
+                    <div class="setting-item toggle-setting">
+                        <div class="label">
+                            <div class="icon">📅</div>
+                            <div>
+                                <h4>Run on Weekends</h4>
+                                <p>Send emails on Saturday and Sunday as well</p>
+                                <div id="runOnWeekendsStatus" class="toggle-status disabled">❌ Disabled (weekdays only)</div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="runOnWeekendsEnabled" onchange="updateToggleStatus('runOnWeekends'); markChanged(this)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <div class="section-title">
+                        <span>�🚨</span>
                         Escalation Settings
                     </div>
 
@@ -601,10 +638,14 @@
                     <ol>
                         <li><strong>Inspector completes inspection</strong> → Action Plan is generated</li>
                         <li><strong>Store Manager receives notification</strong> to complete action plan</li>
-                        <li><strong>Reminders are sent</strong> at configured intervals before deadline</li>
+                        <li><strong>Reminders are sent</strong> at configured business day intervals before deadline</li>
                         <li><strong>If not completed within deadline</strong> → Assigned Area Manager is notified</li>
                         <li><strong>Area Manager can contact Store Manager</strong> to resolve outstanding items</li>
                     </ol>
+                    <p style="margin-top: 12px; font-size: 13px; color: #0369a1;">
+                        <strong>📅 Note:</strong> All deadlines are calculated in <strong>business days</strong> (Monday to Friday). 
+                        Saturdays and Sundays are not counted.
+                    </p>
                 </div>
             </div>
 
@@ -700,9 +741,24 @@
             document.getElementById('emailNotificationsEnabled').checked = settings.EmailNotificationsEnabled !== false;
             document.getElementById('gracePeriodHours').value = settings.GracePeriodHours || 24;
             document.getElementById('maxReminders').value = settings.MaxReminders || 3;
+            
+            // Handle ScheduledRunTime - SQL Server TIME comes as ISO date string
+            let runTime = '09:00';
+            if (settings.ScheduledRunTime) {
+                const val = settings.ScheduledRunTime;
+                // Check if it's an ISO date string like "1970-01-01T10:00:00.000Z"
+                if (typeof val === 'string' && val.includes('T')) {
+                    runTime = val.split('T')[1].substring(0, 5);
+                } else if (typeof val === 'string' && val.includes(':')) {
+                    runTime = val.substring(0, 5);
+                }
+            }
+            document.getElementById('scheduledRunTime').value = runTime;
+            document.getElementById('runOnWeekendsEnabled').checked = settings.RunOnWeekendsEnabled === true || settings.RunOnWeekendsEnabled === 1;
 
             updateToggleStatus('autoEscalation');
             updateToggleStatus('emailNotifications');
+            updateToggleStatus('runOnWeekends');
         }
 
         // Update toggle status text
@@ -710,12 +766,22 @@
             const checkbox = document.getElementById(type + 'Enabled');
             const status = document.getElementById(type + 'Status');
             
-            if (checkbox.checked) {
-                status.textContent = '✅ Enabled';
-                status.className = 'toggle-status enabled';
+            if (type === 'runOnWeekends') {
+                if (checkbox.checked) {
+                    status.textContent = '✅ Enabled (includes Sat & Sun)';
+                    status.className = 'toggle-status enabled';
+                } else {
+                    status.textContent = '❌ Disabled (weekdays only)';
+                    status.className = 'toggle-status disabled';
+                }
             } else {
-                status.textContent = '❌ Disabled';
-                status.className = 'toggle-status disabled';
+                if (checkbox.checked) {
+                    status.textContent = '✅ Enabled';
+                    status.className = 'toggle-status enabled';
+                } else {
+                    status.textContent = '❌ Disabled';
+                    status.className = 'toggle-status disabled';
+                }
             }
         }
 
@@ -749,7 +815,9 @@
                 AutoEscalationEnabled: document.getElementById('autoEscalationEnabled').checked,
                 EmailNotificationsEnabled: document.getElementById('emailNotificationsEnabled').checked,
                 GracePeriodHours: parseInt(document.getElementById('gracePeriodHours').value) || 24,
-                MaxReminders: parseInt(document.getElementById('maxReminders').value) || 3
+                MaxReminders: parseInt(document.getElementById('maxReminders').value) || 3,
+                ScheduledRunTime: document.getElementById('scheduledRunTime').value + ':00',
+                RunOnWeekendsEnabled: document.getElementById('runOnWeekendsEnabled').checked
             };
 
             try {

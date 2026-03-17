@@ -876,8 +876,9 @@
                 <div class="status-value" id="nextRun">--</div>
             </div>
             <div class="status-card">
-                <h3>Run Interval</h3>
-                <div class="status-value" id="runInterval">--</div>
+                <h3>Scheduled Time</h3>
+                <div class="status-value" id="scheduledTime" style="font-size: 1.25rem;">--</div>
+                <div id="weekendsStatus" style="margin-top: 4px; font-size: 0.75rem; color: var(--gray-500);"></div>
             </div>
             <div class="status-card">
                 <h3>System Sender</h3>
@@ -1010,7 +1011,7 @@
                             <th>Cycle</th>
                             <th>Report Sent</th>
                             <th>Deadline</th>
-                            <th>Days Remaining</th>
+                            <th>Business Days Left</th>
                             <th>Next Scheduled Action</th>
                             <th>Action</th>
                         </tr>
@@ -1335,15 +1336,15 @@
                 
                 if (audit.Status === 'Overdue') {
                     statusBadge = '<span style="background: #fef2f2; color: #dc2626; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🔴 OVERDUE</span>';
-                    daysDisplay = `<span style="color: #dc2626; font-weight: 700;">${Math.abs(audit.DaysRemaining)} days overdue</span>`;
+                    daysDisplay = `<span style="color: #dc2626; font-weight: 700;">${Math.abs(audit.DaysRemaining)} business days overdue</span>`;
                     nextAction = '<span style="color: #dc2626; font-weight: 600;">📧 Escalation on next run</span>';
                 } else if (audit.Status === 'Grace Period') {
                     statusBadge = '<span style="background: #fffbeb; color: #d97706; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟡 GRACE</span>';
-                    daysDisplay = `<span style="color: #d97706; font-weight: 700;">${Math.abs(audit.DaysRemaining)} days overdue (grace)</span>`;
+                    daysDisplay = `<span style="color: #d97706; font-weight: 700;">${Math.abs(audit.DaysRemaining)} business days overdue (grace)</span>`;
                     nextAction = `<span style="color: #d97706;">⏳ Escalation after grace (${escalationSettings.gracePeriodHours}h)</span>`;
                 } else if (audit.Status === 'Reminder Due') {
                     statusBadge = '<span style="background: #fef3c7; color: #b45309; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟠 REMINDER</span>';
-                    daysDisplay = `<span style="color: #b45309; font-weight: 600;">${audit.DaysRemaining} days left</span>`;
+                    daysDisplay = `<span style="color: #b45309; font-weight: 600;">${audit.DaysRemaining} business days left</span>`;
                     // Check if this matches a reminder day
                     const reminderDays = escalationSettings.reminderDays || [3, 1];
                     if (reminderDays.includes(audit.DaysRemaining)) {
@@ -1351,19 +1352,19 @@
                     } else {
                         const nextReminderDay = reminderDays.filter(d => d < audit.DaysRemaining).sort((a,b) => b-a)[0];
                         if (nextReminderDay) {
-                            nextAction = `<span style="color: #6b7280;">📧 Reminder in ${audit.DaysRemaining - nextReminderDay} days</span>`;
+                            nextAction = `<span style="color: #6b7280;">📧 Reminder in ${audit.DaysRemaining - nextReminderDay} business days</span>`;
                         } else {
                             nextAction = '<span style="color: #6b7280;">No reminder scheduled</span>';
                         }
                     }
                 } else {
                     statusBadge = '<span style="background: #f0fdf4; color: #16a34a; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟢 ON TRACK</span>';
-                    daysDisplay = `<span style="color: #16a34a;">${audit.DaysRemaining} days left</span>`;
+                    daysDisplay = `<span style="color: #16a34a;">${audit.DaysRemaining} business days left</span>`;
                     // Calculate next reminder
                     const reminderDays = escalationSettings.reminderDays || [3, 1];
                     const nextReminderDay = reminderDays.filter(d => d < audit.DaysRemaining).sort((a,b) => b-a)[0];
                     if (nextReminderDay) {
-                        nextAction = `<span style="color: #6b7280;">📧 Reminder in ${audit.DaysRemaining - nextReminderDay} days</span>`;
+                        nextAction = `<span style="color: #6b7280;">📧 Reminder in ${audit.DaysRemaining - nextReminderDay} business days</span>`;
                     } else {
                         nextAction = '<span style="color: #9ca3af;">—</span>';
                     }
@@ -1446,9 +1447,14 @@
                 document.getElementById('lastRun').textContent = 
                     data.lastRunTime ? formatRelativeTime(data.lastRunTime) : 'Never';
                 document.getElementById('nextRun').textContent = 
-                    data.nextRunTime ? formatRelativeTime(data.nextRunTime) : '--';
-                document.getElementById('runInterval').textContent = 
-                    `${data.runIntervalMinutes || 60} minutes`;
+                    data.nextRunTime ? formatDateTime(data.nextRunTime) : '--';
+                
+                // Update scheduled time display
+                const scheduledTime = data.scheduledRunTime || '09:00';
+                document.getElementById('scheduledTime').textContent = scheduledTime;
+                document.getElementById('weekendsStatus').textContent = 
+                    data.runOnWeekends ? '📅 Includes weekends' : '📅 Weekdays only (Mon-Fri)';
+                
                 document.getElementById('systemSender').textContent = 
                     data.systemSenderEmail || '--';
 
@@ -1849,7 +1855,7 @@
                         <table class="preview-table">
                             <thead>
                                 <tr>
-                                    <th>Days Left</th>
+                                    <th>Business Days Left</th>
                                     <th>Document #</th>
                                     <th>Store</th>
                                     <th>Recipient</th>
@@ -1860,7 +1866,7 @@
                             <tbody>
                                 ${reminders.map((r, idx) => `
                                     <tr>
-                                        <td><strong>${r.daysRemaining} days</strong></td>
+                                        <td><strong>${r.daysRemaining} biz days</strong></td>
                                         <td>${r.documentNumber}</td>
                                         <td>${r.storeName}</td>
                                         <td>
@@ -1904,7 +1910,7 @@
                         <table class="preview-table">
                             <thead>
                                 <tr>
-                                    <th>Days Overdue</th>
+                                    <th>Biz Days Overdue</th>
                                     <th>Document #</th>
                                     <th>Store</th>
                                     <th>Area Manager</th>
@@ -1916,7 +1922,7 @@
                             <tbody>
                                 ${escalations.map((e, idx) => `
                                     <tr>
-                                        <td><strong style="color: var(--danger);">${e.daysOverdue} days</strong></td>
+                                        <td><strong style="color: var(--danger);">${e.daysOverdue} biz days</strong></td>
                                         <td>${e.documentNumber}</td>
                                         <td>${e.storeName}</td>
                                         <td>
@@ -1970,7 +1976,7 @@
                         <table class="preview-table">
                             <thead>
                                 <tr>
-                                    <th>Days Overdue</th>
+                                    <th>Biz Days Overdue</th>
                                     <th>Document #</th>
                                     <th>Store</th>
                                     <th>Store Manager</th>
@@ -1982,7 +1988,7 @@
                             <tbody>
                                 ${overdueNotices.map((o, idx) => `
                                     <tr>
-                                        <td><strong style="color: #be185d;">${o.daysOverdue} days</strong></td>
+                                        <td><strong style="color: #be185d;">${o.daysOverdue} biz days</strong></td>
                                         <td>${o.documentNumber}</td>
                                         <td>${o.storeName}</td>
                                         <td>
