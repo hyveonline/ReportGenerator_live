@@ -109,6 +109,8 @@ class AnalyticsPage {
                         </div>
                     </div>
                 </div>
+            </div>
+            <div class="filter-row">
                 <div class="filter-group">
                     <label>Area Managers:</label>
                     <div class="multi-select-dropdown" id="areaManagerDropdown">
@@ -121,8 +123,18 @@ class AnalyticsPage {
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="filter-row">
+                <div class="filter-group">
+                    <label>Year:</label>
+                    <div class="multi-select-dropdown" id="yearDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('yearDropdown')">
+                            <span class="selected-text">All Years</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="yearOptions">
+                            <!-- Options populated dynamically -->
+                        </div>
+                    </div>
+                </div>
                 <div class="filter-group">
                     <label>Result:</label>
                     <div class="multi-select-dropdown" id="resultDropdown">
@@ -137,18 +149,6 @@ class AnalyticsPage {
                             <label class="checkbox-option">
                                 <input type="checkbox" value="fail" onchange="updateDropdownText('resultDropdown'); refreshAnalytics()"> ❌ Fail
                             </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="filter-group">
-                    <label>Year:</label>
-                    <div class="multi-select-dropdown" id="yearDropdown">
-                        <div class="multi-select-header" onclick="toggleDropdown('yearDropdown')">
-                            <span class="selected-text">All Years</span>
-                            <span class="dropdown-arrow">▼</span>
-                        </div>
-                        <div class="multi-select-options" id="yearOptions">
-                            <!-- Options populated dynamically -->
                         </div>
                     </div>
                 </div>
