@@ -2590,8 +2590,17 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             FROM ActionPlanResponses
         `);
         
+        // Action Plans Reviewed by Area Managers (count of unique documents with ActionPlanSubmitted notification)
+        const actionPlansReviewedResult = await pool.request().query(`
+            SELECT COUNT(DISTINCT document_number) as ReviewedCount
+            FROM NotificationHistory
+            WHERE notification_type = 'ActionPlanSubmitted'
+            AND status = 'Sent'
+        `);
+        
         const totalActionPlans = actionPlanResult.recordset[0]?.TotalActionPlans || 0;
         const solvedActionPlans = actionPlanResult.recordset[0]?.SolvedActionPlans || 0;
+        const actionPlansReviewed = actionPlansReviewedResult.recordset[0]?.ReviewedCount || 0;
         const actionPlanCompletionRate = totalActionPlans > 0 
             ? (solvedActionPlans * 100.0 / totalActionPlans) 
             : 0;
@@ -2605,6 +2614,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             totalAuditors: auditorsCount.recordset[0]?.cnt || 0,
             actionPlansTotal: totalActionPlans,
             actionPlansSolved: solvedActionPlans,
+            actionPlansReviewed: actionPlansReviewed,
             actionPlanCompletionRate: actionPlanCompletionRate,
             passingThreshold: passingThreshold
         };

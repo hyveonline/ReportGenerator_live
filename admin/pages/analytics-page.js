@@ -15,6 +15,9 @@ class AnalyticsPage {
      */
     static render(req, res) {
         const user = req.currentUser;
+        const userRole = user.role || 'Admin';
+        // Check if user can see Action Plans Reviewed card (Admin, SuperAuditor, HeadOfOperations)
+        const canSeeReviewedCard = ['Admin', 'SuperAuditor', 'HeadOfOperations'].includes(userRole);
         
         const html = `
 <!DOCTYPE html>
@@ -28,6 +31,12 @@ class AnalyticsPage {
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 </head>
 <body>
+    <!-- Store user role for JS access -->
+    <script>
+        const currentUserRole = '${userRole}';
+        const canSeeReviewedCard = ${canSeeReviewedCard};
+    </script>
+    
     <!-- Header -->
     <header class="header">
         <div class="header-content">
@@ -37,7 +46,7 @@ class AnalyticsPage {
             </div>
             <div class="user-section">
                 <span class="user-name">${user.displayName || user.email}</span>
-                <span class="user-role badge-admin">Admin</span>
+                <span class="user-role badge-admin">${userRole}</span>
                 <a href="/admin/users" class="btn-secondary">👥 Users</a>
                 <a href="/dashboard" class="btn-secondary">Back to Dashboard</a>
                 <a href="/auth/logout" class="btn-logout">Logout</a>
@@ -261,6 +270,15 @@ class AnalyticsPage {
                     <span class="click-hint">Click to view unsolved ➡️</span>
                 </div>
             </div>
+            \${canSeeReviewedCard ? \`
+            <div class="summary-card reviewed">
+                <div class="card-icon">👁️</div>
+                <div class="card-content">
+                    <h3 id="actionPlansReviewed">-</h3>
+                    <p>Action Plans Reviewed</p>
+                </div>
+            </div>
+            \` : ''}
         </section>
 
         <!-- Custom Query Builder -->
@@ -992,6 +1010,12 @@ class AnalyticsPage {
                 document.getElementById('actionPlanCompletion').textContent = solved + '/' + total + ' (' + percentage.toFixed(1) + '%)';
             } else {
                 document.getElementById('actionPlanCompletion').textContent = '0/0 (0%)';
+            }
+            
+            // Action Plans Reviewed (only visible for certain roles)
+            const reviewedElement = document.getElementById('actionPlansReviewed');
+            if (reviewedElement) {
+                reviewedElement.textContent = summary.actionPlansReviewed || 0;
             }
         }
 

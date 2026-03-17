@@ -173,6 +173,11 @@ body {
     background: rgba(239, 68, 68, 0.1);
 }
 
+.summary-card.reviewed {
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.1);
+}
+
 .card-icon {
     font-size: 2.5rem;
 }
