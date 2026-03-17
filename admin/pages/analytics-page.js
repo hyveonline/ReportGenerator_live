@@ -718,7 +718,7 @@ class AnalyticsPage {
                                 <td>\${item.SubmittedBy || '-'}</td>
                                 <td>\${item.SubmittedDate ? new Date(item.SubmittedDate).toLocaleDateString() : '-'}</td>
                                 <td>\${item.ReviewedBy || '<span style="color: #94a3b8;">Not yet sent to AM</span>'}</td>
-                                <td><a href="/action-plan/\${item.DocumentNumber}" target="_blank" class="btn-small">View Action Plan</a></td>
+                                <td><a href="/auditor/action-plan?doc=\${item.DocumentNumber}" target="_blank" class="btn-small">View Action Plan</a></td>
                             </tr>
                         \`).join('')}
                     </tbody>
