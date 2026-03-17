@@ -270,7 +270,7 @@ class AnalyticsPage {
                     <span class="click-hint">Click to view unsolved ➡️</span>
                 </div>
             </div>
-            \${canSeeReviewedCard ? \`
+            ${canSeeReviewedCard ? `
             <div class="summary-card reviewed">
                 <div class="card-icon">👁️</div>
                 <div class="card-content">
@@ -278,7 +278,7 @@ class AnalyticsPage {
                     <p>Action Plans Reviewed</p>
                 </div>
             </div>
-            \` : ''}
+            ` : ''}
         </section>
 
         <!-- Custom Query Builder -->
