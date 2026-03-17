@@ -974,7 +974,21 @@
             }
             
             const urlParams = new URLSearchParams(window.location.search);
-            const auditId = urlParams.get('id');
+            let auditId = urlParams.get('id');
+            const docNumber = urlParams.get('doc');
+            
+            // If doc parameter is provided, fetch audit ID from document number
+            if (!auditId && docNumber) {
+                try {
+                    const lookupResponse = await fetch(`/api/audits/lookup-by-doc?doc=${encodeURIComponent(docNumber)}`);
+                    if (lookupResponse.ok) {
+                        const lookupData = await lookupResponse.json();
+                        auditId = lookupData.auditId;
+                    }
+                } catch (e) {
+                    console.error('Error looking up audit by document number:', e);
+                }
+            }
             
             if (!auditId) {
                 showError('No audit ID provided');

@@ -5299,6 +5299,33 @@ app.post('/api/audits/:auditId/reaudit', requireAuth, requireRole('Admin', 'Supe
     }
 });
 
+// Lookup audit ID by document number
+app.get('/api/audits/lookup-by-doc', requireAuth, async (req, res) => {
+    try {
+        const { doc } = req.query;
+        if (!doc) {
+            return res.status(400).json({ error: 'Document number required' });
+        }
+        
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('docNumber', sql.NVarChar(100), doc)
+            .query('SELECT AuditID FROM AuditInstances WHERE DocumentNumber = @docNumber');
+        
+        if (result.recordset.length === 0) {
+            return res.status(404).json({ error: 'Audit not found' });
+        }
+        
+        res.json({ auditId: result.recordset[0].AuditID });
+    } catch (error) {
+        console.error('Error looking up audit by document:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get audits list for Audit List page (MUST be before :auditId route)
 app.get('/api/audits/list', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'StoreManager', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
     try {
