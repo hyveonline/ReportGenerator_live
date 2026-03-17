@@ -343,8 +343,9 @@ class AnalyticsPage {
             </section>
 
             <!-- Section Analysis -->
-            <section class="chart-card">
+            <section class="chart-card full-width">
                 <h2>📊 Section Analysis Report</h2>
+                <p class="section-description">Section performance analysis with category grouping and drill-down details.</p>
                 <div class="section-analysis-controls">
                     <label>Sort By:</label>
                     <select id="sectionSortMode" onchange="changeSectionSort()">
