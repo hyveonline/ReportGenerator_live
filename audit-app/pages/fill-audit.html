@@ -617,6 +617,29 @@
             gap: 0.25rem;
         }
 
+        /* Required Corrective Action Indicator */
+        .cr-required {
+            color: #ef4444;
+            font-weight: 600;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+            animation: pulse 1.5s infinite;
+        }
+
+        .cr-textarea.missing-corrective {
+            border: 2px solid #ef4444 !important;
+            background: rgba(239, 68, 68, 0.1) !important;
+        }
+
+        .cr-warning {
+            color: #ef4444;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
         /* Escalate Section */
         .escalate-section {
             margin-top: 1rem;
@@ -2294,7 +2317,7 @@
                             </div>
                             ${item.selectedChoice === 'Partially' && !item.priority ? '<div class="priority-warning">⚠️ Please select a priority level</div>' : ''}
                         </div>
-                        ${renderCRField(item)}
+                        ${renderCRField(item, showFinding)}
                         <div class="finding-group">
                             <button class="picture-btn ${item.hasPicture ? 'has-picture' : ''}" 
                                 onclick="takePicture(${item.responseId})">
@@ -2366,28 +2389,31 @@
             }).join('');
         }
 
-        // Render CR (Corrective Action) field
-        function renderCRField(item) {
-            if (!item.cr && !item.crNote) return '';
+        // Render CR (Corrective Action) field - Now REQUIRED for No/Partially answers
+        function renderCRField(item, showFinding) {
+            // Always show when No/Partially is selected (showFinding = true)
+            if (!showFinding && !item.cr && !item.crNote) return '';
             
             const crValue = item.cr || '';
-            const crNote = item.crNote || '';
+            const isMissing = showFinding && !crValue.trim();
             
             return `
-                <div class="cr-container">
+                <div class="cr-container finding-group">
                     <div class="cr-header">
                         <span class="cr-label">📋 Corrective Action</span>
+                        ${isMissing ? '<span class="cr-required">* Required</span>' : ''}
                         <button class="cr-toggle-btn" onclick="toggleCREdit(${item.responseId})">
                             ✏️ Edit/Add Note
                         </button>
                     </div>
-                    <textarea class="cr-textarea" 
+                    <textarea class="cr-textarea ${isMissing ? 'missing-corrective' : ''}" 
                         id="cr-${item.responseId}"
                         rows="3"
-                        placeholder="Corrective action details..."
+                        placeholder="Describe the corrective action to be taken..."
                         onchange="updateCR(${item.responseId}, this.value)"
                     >${escapeHtml(crValue)}</textarea>
-                    <div class="cr-note">💡 You can edit this field to add notes or clarifications</div>
+                    ${isMissing ? '<div class="cr-warning">⚠️ Please describe the corrective action</div>' : ''}
+                    <div class="cr-note">💡 Describe what corrective action should be taken to address this finding</div>
                 </div>
             `;
         }
@@ -2473,6 +2499,21 @@
 
                 // Update local data
                 if (item) item.cr = value;
+                
+                // Remove missing class if value is provided
+                const crTextarea = document.getElementById(`cr-${responseId}`);
+                if (crTextarea && value.trim()) {
+                    crTextarea.classList.remove('missing-corrective');
+                    // Also hide the warning and required indicator
+                    const container = crTextarea.closest('.cr-container');
+                    if (container) {
+                        const warning = container.querySelector('.cr-warning');
+                        const required = container.querySelector('.cr-required');
+                        if (warning) warning.style.display = 'none';
+                        if (required) required.style.display = 'none';
+                    }
+                }
+                
                 showToast('Corrective action updated', 'success');
 
             } catch (error) {
@@ -3037,6 +3078,43 @@
                 const sectionIndex = auditData.sections.findIndex(s => s.sectionName === firstMissing.section);
                 if (sectionIndex >= 0) {
                     selectSection(sectionIndex);
+                }
+                return;
+            }
+
+            // Check for missing corrective actions on No/Partially answers (REQUIRED)
+            let missingCorrectiveActions = [];
+            auditData.sections.forEach(section => {
+                section.items.forEach(item => {
+                    if ((item.selectedChoice === 'No' || item.selectedChoice === 'Partially') && (!item.cr || !item.cr.trim())) {
+                        missingCorrectiveActions.push({
+                            section: section.sectionName,
+                            ref: item.referenceValue || '-',
+                            title: item.title,
+                            responseId: item.responseId
+                        });
+                    }
+                });
+            });
+
+            if (missingCorrectiveActions.length > 0) {
+                const itemsList = missingCorrectiveActions.slice(0, 5).map(p => `• ${p.ref} (${p.section})`).join('\n');
+                const moreText = missingCorrectiveActions.length > 5 ? `\n...and ${missingCorrectiveActions.length - 5} more` : '';
+                alert(`⚠️ Corrective Action Required for "No" and "Partially" Answers\n\nPlease describe the corrective action for the following ${missingCorrectiveActions.length} item(s):\n\n${itemsList}${moreText}\n\nCorrective action is required for all non-compliant items.`);
+                
+                // Navigate to the first section with missing corrective action
+                const firstMissing = missingCorrectiveActions[0];
+                const sectionIndex = auditData.sections.findIndex(s => s.sectionName === firstMissing.section);
+                if (sectionIndex >= 0) {
+                    selectSection(sectionIndex);
+                    // Focus on the corrective action textarea after section renders
+                    setTimeout(() => {
+                        const crTextarea = document.getElementById(`cr-${firstMissing.responseId}`);
+                        if (crTextarea) {
+                            crTextarea.focus();
+                            crTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 100);
                 }
                 return;
             }
