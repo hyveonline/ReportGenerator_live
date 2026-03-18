@@ -1640,6 +1640,47 @@ app.get('/api/admin/cycles', requireAuth, requireRole('Admin', 'SuperAuditor'), 
     }
 });
 
+// Get cycle types for a specific schema (multi-cycle support)
+app.get('/api/schemas/:schemaId/cycle-types', requireAuth, async (req, res) => {
+    try {
+        const cycleTypes = await CycleService.getCycleTypesForSchema(parseInt(req.params.schemaId));
+        res.json({ success: true, data: cycleTypes });
+    } catch (error) {
+        console.error('Error getting cycle types for schema:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get cycles for a specific cycle type
+app.get('/api/cycle-types/:cycleTypeId/cycles', requireAuth, async (req, res) => {
+    try {
+        const cycles = await CycleService.getCyclesForCycleType(parseInt(req.params.cycleTypeId));
+        res.json({ success: true, data: cycles });
+    } catch (error) {
+        console.error('Error getting cycles for cycle type:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Update schema cycle types (admin/superauditor only)
+app.put('/api/schemas/:schemaId/cycle-types', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const { cycleTypeIds, defaultCycleTypeId } = req.body;
+        if (!cycleTypeIds || !Array.isArray(cycleTypeIds) || cycleTypeIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one cycle type is required' });
+        }
+        await CycleService.updateSchemaCycleTypes(
+            parseInt(req.params.schemaId), 
+            cycleTypeIds, 
+            defaultCycleTypeId || cycleTypeIds[0]
+        );
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error updating schema cycle types:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Get cycles for a specific schema (used by Start Audit page)
 app.get('/api/schemas/:schemaId/cycles', requireAuth, async (req, res) => {
     try {

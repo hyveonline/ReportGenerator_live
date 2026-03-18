@@ -355,21 +355,27 @@
                         </div>
                     </div>
 
-                    <!-- Cycle and Year -->
+                    <!-- Cycle Type and Cycle Selection -->
                     <div class="form-row">
+                        <div class="form-group">
+                            <label>Cycle Type <span class="required">*</span></label>
+                            <select id="cycleTypeSelect" required onchange="onCycleTypeChange()">
+                                <option value="">Select schema first...</option>
+                            </select>
+                        </div>
                         <div class="form-group">
                             <label>Cycle <span class="required">*</span></label>
                             <select id="auditCycle" required>
-                                <option value="">Select schema first...</option>
+                                <option value="">Select cycle type first...</option>
                             </select>
                             <small id="cycleHint" style="color: #888; font-size: 11px; margin-top: 5px; display: block;"></small>
                         </div>
-                        <div class="form-group">
-                            <label>Year <span class="required">*</span></label>
-                            <select id="auditYear" required>
-                                <option value="">Select year...</option>
-                            </select>
-                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Year <span class="required">*</span></label>
+                        <select id="auditYear" required>
+                            <option value="">Select year...</option>
+                        </select>
                     </div>
 
                     <!-- Auditors -->
@@ -406,7 +412,9 @@
         let stores = [];
         let selectedStore = null;
         let selectedSchemaId = null;
+        let selectedCycleTypeId = null;
         let storeSchemas = []; // Schemas for currently selected store
+        let schemaCycleTypes = []; // Cycle types for currently selected schema
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -560,8 +568,9 @@
                                 await loadCyclesForSchema(selectedSchemaId);
                             } else {
                                 selectedSchemaId = null;
-                                // Reset cycles dropdown
-                                document.getElementById('auditCycle').innerHTML = '<option value="">Select schema first...</option>';
+                                // Reset cycle type and cycles dropdowns
+                                document.getElementById('cycleTypeSelect').innerHTML = '<option value="">Select schema first...</option>';
+                                document.getElementById('auditCycle').innerHTML = '<option value="">Select cycle type first...</option>';
                                 document.getElementById('cycleHint').textContent = '';
                             }
                         }
@@ -573,8 +582,8 @@
                         document.getElementById('schemaSelect').removeAttribute('required');
                         document.getElementById('storeSchema').textContent = selectedStore.schemaName || 'N/A';
                         selectedSchemaId = selectedStore.schemaId;
-                        // Load cycles for fallback schema
-                        await loadCyclesForSchema(selectedSchemaId);
+                        // Load cycle types for fallback schema
+                        await loadCycleTypesForSchema(selectedSchemaId);
                     }
                     
                     storeInfo.classList.add('show');
@@ -582,10 +591,13 @@
             } else {
                 selectedStore = null;
                 selectedSchemaId = null;
+                selectedCycleTypeId = null;
                 storeSchemas = [];
+                schemaCycleTypes = [];
                 storeInfo.classList.remove('show');
-                // Reset cycles dropdown
-                document.getElementById('auditCycle').innerHTML = '<option value="">Select schema first...</option>';
+                // Reset cycle type and cycles dropdowns
+                document.getElementById('cycleTypeSelect').innerHTML = '<option value="">Select schema first...</option>';
+                document.getElementById('auditCycle').innerHTML = '<option value="">Select cycle type first...</option>';
                 document.getElementById('cycleHint').textContent = '';
             }
         }
@@ -594,26 +606,92 @@
         async function onSchemaChange() {
             const schemaId = parseInt(document.getElementById('schemaSelect').value);
             selectedSchemaId = schemaId || null;
+            selectedCycleTypeId = null;
             
-            // Load cycles for this schema
-            await loadCyclesForSchema(schemaId);
+            // Load cycle types for this schema
+            await loadCycleTypesForSchema(schemaId);
         }
 
-        // Load cycles for a schema
-        async function loadCyclesForSchema(schemaId) {
+        // Load cycle types for a schema (multi-cycle support)
+        async function loadCycleTypesForSchema(schemaId) {
+            const cycleTypeSelect = document.getElementById('cycleTypeSelect');
             const cycleSelect = document.getElementById('auditCycle');
             const cycleHint = document.getElementById('cycleHint');
             
             if (!schemaId) {
-                cycleSelect.innerHTML = '<option value="">Select schema first...</option>';
+                cycleTypeSelect.innerHTML = '<option value="">Select schema first...</option>';
+                cycleSelect.innerHTML = '<option value="">Select cycle type first...</option>';
                 cycleHint.textContent = '';
+                schemaCycleTypes = [];
+                selectedCycleTypeId = null;
                 return;
             }
 
+            cycleTypeSelect.innerHTML = '<option value="">Loading cycle types...</option>';
+            cycleSelect.innerHTML = '<option value="">Select cycle type first...</option>';
+
+            try {
+                const response = await fetch(`/api/schemas/${schemaId}/cycle-types`);
+                const result = await response.json();
+
+                if (result.success && result.data.length > 0) {
+                    schemaCycleTypes = result.data;
+                    
+                    if (schemaCycleTypes.length === 1) {
+                        // Single cycle type - auto-select and load cycles
+                        cycleTypeSelect.innerHTML = `<option value="${schemaCycleTypes[0].CycleTypeID}">${schemaCycleTypes[0].TypeName} (${schemaCycleTypes[0].CyclesPerYear}/year)</option>`;
+                        selectedCycleTypeId = schemaCycleTypes[0].CycleTypeID;
+                        await loadCyclesForCycleType(selectedCycleTypeId);
+                    } else {
+                        // Multiple cycle types - show dropdown
+                        cycleTypeSelect.innerHTML = '<option value="">Select cycle type...</option>' + 
+                            schemaCycleTypes.map(ct => 
+                                `<option value="${ct.CycleTypeID}" ${ct.IsDefault ? 'selected' : ''}>${ct.TypeName} (${ct.CyclesPerYear}/year)${ct.IsDefault ? ' ⭐' : ''}</option>`
+                            ).join('');
+                        
+                        // Auto-select default
+                        const defaultCycleType = schemaCycleTypes.find(ct => ct.IsDefault);
+                        if (defaultCycleType) {
+                            selectedCycleTypeId = defaultCycleType.CycleTypeID;
+                            cycleTypeSelect.value = defaultCycleType.CycleTypeID;
+                            await loadCyclesForCycleType(selectedCycleTypeId);
+                        }
+                    }
+                } else {
+                    // Fallback - load cycles directly from schema (old method)
+                    cycleTypeSelect.innerHTML = '<option value="">Default</option>';
+                    await loadCyclesForSchemaFallback(schemaId);
+                }
+            } catch (error) {
+                console.error('Error loading cycle types:', error);
+                // Fallback
+                cycleTypeSelect.innerHTML = '<option value="">Default</option>';
+                await loadCyclesForSchemaFallback(schemaId);
+            }
+        }
+
+        // Handle cycle type selection change
+        async function onCycleTypeChange() {
+            const cycleTypeId = parseInt(document.getElementById('cycleTypeSelect').value);
+            selectedCycleTypeId = cycleTypeId || null;
+            
+            if (cycleTypeId) {
+                await loadCyclesForCycleType(cycleTypeId);
+            } else {
+                document.getElementById('auditCycle').innerHTML = '<option value="">Select cycle type first...</option>';
+                document.getElementById('cycleHint').textContent = '';
+            }
+        }
+
+        // Load cycles for a specific cycle type
+        async function loadCyclesForCycleType(cycleTypeId) {
+            const cycleSelect = document.getElementById('auditCycle');
+            const cycleHint = document.getElementById('cycleHint');
+            
             cycleSelect.innerHTML = '<option value="">Loading cycles...</option>';
 
             try {
-                const response = await fetch(`/api/schemas/${schemaId}/cycles`);
+                const response = await fetch(`/api/cycle-types/${cycleTypeId}/cycles`);
                 const result = await response.json();
 
                 if (result.success && result.data.length > 0) {
@@ -624,14 +702,36 @@
                     // Show cycle type hint
                     cycleHint.textContent = `${cycles[0].CycleTypeName} - ${cycles.length} cycles per year`;
 
-                    // Try to auto-select current cycle
-                    const currentCycleResponse = await fetch(`/api/schemas/${schemaId}/current-cycle`);
-                    const currentCycleResult = await currentCycleResponse.json();
-                    if (currentCycleResult.success && currentCycleResult.data) {
-                        cycleSelect.value = currentCycleResult.data.CycleNumber;
-                    }
+                    // Try to auto-select current cycle based on date
+                    autoSelectCurrentCycle(cycles);
                 } else {
-                    // Fallback to default Monthly cycles
+                    cycleSelect.innerHTML = '<option value="">No cycles defined</option>';
+                    cycleHint.textContent = 'No cycles available for this cycle type';
+                }
+            } catch (error) {
+                console.error('Error loading cycles:', error);
+                cycleSelect.innerHTML = '<option value="">Error loading cycles</option>';
+            }
+        }
+
+        // Fallback: Load cycles directly from schema (old method)
+        async function loadCyclesForSchemaFallback(schemaId) {
+            const cycleSelect = document.getElementById('auditCycle');
+            const cycleHint = document.getElementById('cycleHint');
+
+            try {
+                const response = await fetch(`/api/schemas/${schemaId}/cycles`);
+                const result = await response.json();
+
+                if (result.success && result.data.length > 0) {
+                    const cycles = result.data;
+                    cycleSelect.innerHTML = '<option value="">Select cycle...</option>' + 
+                        cycles.map(c => `<option value="${c.CycleNumber}">${c.CycleNumber} (${c.CycleName})</option>`).join('');
+                    
+                    cycleHint.textContent = `${cycles[0].CycleTypeName} - ${cycles.length} cycles per year`;
+                    autoSelectCurrentCycle(cycles);
+                } else {
+                    // Last resort fallback to hardcoded monthly
                     cycleSelect.innerHTML = '<option value="">Select cycle...</option>' +
                         Array.from({length: 12}, (_, i) => 
                             `<option value="C${i+1}">C${i+1}</option>`
@@ -640,13 +740,30 @@
                 }
             } catch (error) {
                 console.error('Error loading cycles:', error);
-                // Fallback to default
+                // Hardcoded fallback
                 cycleSelect.innerHTML = '<option value="">Select cycle...</option>' +
                     Array.from({length: 12}, (_, i) => 
                         `<option value="C${i+1}">C${i+1}</option>`
                     ).join('');
                 cycleHint.textContent = 'Default: Monthly cycles';
             }
+        }
+
+        // Auto-select current cycle based on date
+        function autoSelectCurrentCycle(cycles) {
+            const now = new Date();
+            const month = now.getMonth() + 1; // 1-12
+            
+            // Find cycle that contains current month
+            const currentCycle = cycles.find(c => month >= c.StartMonth && month <= c.EndMonth);
+            if (currentCycle) {
+                document.getElementById('auditCycle').value = currentCycle.CycleNumber;
+            }
+        }
+
+        // Load cycles for a schema (legacy - kept for backward compatibility)
+        async function loadCyclesForSchema(schemaId) {
+            await loadCycleTypesForSchema(schemaId);
         }
 
         // Start audit

@@ -783,10 +783,11 @@
                                 <input type="text" id="schemaDescription" placeholder="Brief description...">
                             </div>
                             <div class="form-group">
-                                <label>Cycle Type <span class="required">*</span></label>
-                                <select id="schemaCycleType" required>
-                                    <option value="">Loading...</option>
-                                </select>
+                                <label>Cycle Types <span class="required">*</span></label>
+                                <div id="cycleTypeCheckboxes" class="checkbox-group" style="display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">
+                                    <span style="color: #666;">Loading...</span>
+                                </div>
+                                <small style="color: #666; font-size: 12px; margin-top: 5px;">Select one or more cycle types. First selected will be default.</small>
                             </div>
                             <div class="form-group" style="justify-content: flex-end;">
                                 <button type="submit" class="btn btn-primary">➕ Create Schema</button>
@@ -1007,22 +1008,56 @@
         }
 
         function populateCycleTypeDropdowns() {
-            const createDropdown = document.getElementById('schemaCycleType');
+            const checkboxContainer = document.getElementById('cycleTypeCheckboxes');
             const editDropdown = document.getElementById('editSchemaCycleType');
             
-            const options = cycleTypes.map(ct => 
-                `<option value="${ct.CycleTypeID}">${ct.TypeName} (${ct.CyclesPerYear} cycles/year)</option>`
-            ).join('');
-            
-            if (createDropdown) {
-                createDropdown.innerHTML = '<option value="">Select Cycle Type...</option>' + options;
-                // Default to Monthly if available
-                const monthly = cycleTypes.find(ct => ct.TypeCode === 'MONTHLY');
-                if (monthly) createDropdown.value = monthly.CycleTypeID;
+            // Create checkboxes for create form
+            if (checkboxContainer) {
+                checkboxContainer.innerHTML = cycleTypes.map(ct => `
+                    <label style="display: flex; align-items: center; gap: 5px; padding: 5px 10px; background: white; border-radius: 5px; cursor: pointer; border: 1px solid #ddd;">
+                        <input type="checkbox" name="cycleTypes" value="${ct.CycleTypeID}" 
+                               onchange="updateCycleTypeSelection()" style="width: 16px; height: 16px;">
+                        <span>${ct.TypeName} (${ct.CyclesPerYear}/yr)</span>
+                    </label>
+                `).join('');
+                
+                // Default check Bi-Monthly if available
+                const biMonthly = cycleTypes.find(ct => ct.TypeCode === 'BIMONTHLY');
+                if (biMonthly) {
+                    const checkbox = checkboxContainer.querySelector(`input[value="${biMonthly.CycleTypeID}"]`);
+                    if (checkbox) checkbox.checked = true;
+                }
             }
+            
+            // Keep dropdown for edit form (will be replaced with checkboxes too)
             if (editDropdown) {
+                const options = cycleTypes.map(ct => 
+                    `<option value="${ct.CycleTypeID}">${ct.TypeName} (${ct.CyclesPerYear} cycles/year)</option>`
+                ).join('');
                 editDropdown.innerHTML = '<option value="">Select Cycle Type...</option>' + options;
             }
+        }
+        
+        // Get selected cycle types from checkboxes
+        function getSelectedCycleTypes() {
+            const checkboxes = document.querySelectorAll('input[name="cycleTypes"]:checked');
+            return Array.from(checkboxes).map(cb => parseInt(cb.value));
+        }
+        
+        // Update cycle type selection UI
+        function updateCycleTypeSelection() {
+            const selected = getSelectedCycleTypes();
+            const checkboxes = document.querySelectorAll('input[name="cycleTypes"]');
+            checkboxes.forEach(cb => {
+                const label = cb.closest('label');
+                if (cb.checked) {
+                    label.style.borderColor = '#667eea';
+                    label.style.background = '#f0f9ff';
+                } else {
+                    label.style.borderColor = '#ddd';
+                    label.style.background = 'white';
+                }
+            });
         }
 
         // Tab switching
@@ -1102,11 +1137,11 @@
                 }
 
                 container.innerHTML = schemas.map((schema, index) => `
-                    <div class="schema-card" id="schema-card-${schema.schemaId}">
+                    <div class="schema-card" id="schema-card-${schema.schemaId}" data-schema-id="${schema.schemaId}">
                         <div class="schema-header" onclick="selectSchema(${schema.schemaId})">
                             <span class="schema-name">📋 ${index + 1}. ${schema.schemaName}</span>
-                            <div style="display: flex; gap: 8px;">
-                                <span class="card-badge" style="background: #0ea5e9; color: white;">${schema.cycleTypeName || 'Monthly'}</span>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <span class="card-badge cycle-types-badge" id="cycle-badge-${schema.schemaId}" style="background: #0ea5e9; color: white;">${schema.cycleTypeName || 'Loading...'}</span>
                                 <span class="card-badge">${schema.sectionCount} sections</span>
                             </div>
                         </div>
@@ -1117,8 +1152,8 @@
                             <button class="btn btn-view btn-sm" onclick="event.stopPropagation(); viewFullTemplate(${schema.schemaId});">👁️ View</button>
                             <button class="btn btn-download btn-sm" onclick="event.stopPropagation(); downloadSchema(${schema.schemaId});">📥 Backup</button>
                             <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); openRestoreModal(${schema.schemaId}, '${schema.schemaName.replace(/'/g, "\\'")}');">📤 Restore</button>
-                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); selectSchema(${schema.schemaId});">📝 Edit</button>
-                            <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); openEditSchemaModal(${schema.schemaId});">✏️ Rename</button>
+                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); selectSchema(${schema.schemaId});">📝 Sections</button>
+                            <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); openEditSchemaModal(${schema.schemaId});">🔄 Cycles</button>
                             <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); confirmDeleteSchema(${schema.schemaId});">🗑️ Delete</button>
                         </div>
                         <div id="delete-confirm-${schema.schemaId}" class="confirm-delete" style="display: none;">
@@ -1130,8 +1165,31 @@
                         </div>
                     </div>
                 `).join('');
+                
+                // Load cycle types for each schema
+                loadAllSchemaCycleTypes();
             } catch (error) {
                 container.innerHTML = `<div class="empty-state"><p>Error loading schemas: ${error.message}</p></div>`;
+            }
+        }
+        
+        // Load and display all cycle types for each schema
+        async function loadAllSchemaCycleTypes() {
+            for (const schema of schemas) {
+                try {
+                    const response = await fetch(`/api/schemas/${schema.schemaId}/cycle-types`);
+                    const result = await response.json();
+                    if (result.success && result.data.length > 0) {
+                        const badge = document.getElementById(`cycle-badge-${schema.schemaId}`);
+                        if (badge) {
+                            const cycleNames = result.data.map(ct => ct.TypeName + (ct.IsDefault ? ' ⭐' : '')).join(', ');
+                            badge.textContent = cycleNames;
+                            badge.title = 'Cycle Types: ' + cycleNames;
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error loading cycle types for schema ${schema.schemaId}:`, error);
+                }
             }
         }
 
@@ -1273,24 +1331,55 @@
 
             const name = document.getElementById('schemaName').value;
             const description = document.getElementById('schemaDescription').value;
-            const cycleTypeId = document.getElementById('schemaCycleType').value;
+            const selectedCycleTypeIds = getSelectedCycleTypes();
 
-            if (!cycleTypeId) {
-                showToast('Please select a cycle type', 'error');
+            if (selectedCycleTypeIds.length === 0) {
+                showToast('Please select at least one cycle type', 'error');
                 return;
             }
 
             try {
-                await apiCall('/schemas', {
+                // Create schema with first selected cycle type as default
+                const result = await apiCall('/schemas', {
                     method: 'POST',
-                    body: JSON.stringify({ schemaName: name, description, cycleTypeId: parseInt(cycleTypeId) })
+                    body: JSON.stringify({ 
+                        schemaName: name, 
+                        description, 
+                        cycleTypeId: selectedCycleTypeIds[0] 
+                    })
                 });
+                
+                const newSchemaId = result.data.schemaId;
+                
+                // If multiple cycle types selected, add them to junction table
+                if (selectedCycleTypeIds.length > 1) {
+                    await fetch(`/api/schemas/${newSchemaId}/cycle-types`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            cycleTypeIds: selectedCycleTypeIds,
+                            defaultCycleTypeId: selectedCycleTypeIds[0]
+                        })
+                    });
+                }
 
                 showToast('Schema created successfully!', 'success');
                 document.getElementById('createSchemaForm').reset();
-                // Reset cycle type to default
-                const monthly = cycleTypes.find(ct => ct.TypeCode === 'MONTHLY');
-                if (monthly) document.getElementById('schemaCycleType').value = monthly.CycleTypeID;
+                // Reset checkboxes
+                document.querySelectorAll('input[name="cycleTypes"]').forEach(cb => {
+                    cb.checked = false;
+                    cb.closest('label').style.borderColor = '#ddd';
+                    cb.closest('label').style.background = 'white';
+                });
+                // Default check Bi-Monthly
+                const biMonthly = cycleTypes.find(ct => ct.TypeCode === 'BIMONTHLY');
+                if (biMonthly) {
+                    const checkbox = document.querySelector(`input[name="cycleTypes"][value="${biMonthly.CycleTypeID}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                        updateCycleTypeSelection();
+                    }
+                }
                 loadSchemas();
             } catch (error) {
                 showToast('Error creating schema: ' + error.message, 'error');
@@ -1309,22 +1398,108 @@
         }
 
         // Open Edit Schema Modal
-        function openEditSchemaModal(schemaId) {
+        let editingSchemaId = null;
+        let editSchemaCycleTypes = []; // Current cycle types for schema being edited
+        let editDefaultCycleTypeId = null;
+        
+        async function openEditSchemaModal(schemaId) {
             const schema = schemas.find(s => s.schemaId === schemaId);
             if (!schema) {
                 showToast('Schema not found', 'error');
                 return;
             }
 
+            editingSchemaId = schemaId;
             document.getElementById('editSchemaId').value = schemaId;
             document.getElementById('editSchemaName').value = schema.schemaName;
             document.getElementById('editSchemaDescription').value = schema.description || '';
-            document.getElementById('editSchemaCycleType').value = schema.cycleTypeId || '';
+            
+            // Load current cycle types for this schema
+            try {
+                const response = await fetch(`/api/schemas/${schemaId}/cycle-types`);
+                const result = await response.json();
+                editSchemaCycleTypes = result.success ? result.data : [];
+                editDefaultCycleTypeId = editSchemaCycleTypes.find(ct => ct.IsDefault)?.CycleTypeID || schema.cycleTypeId;
+            } catch (error) {
+                console.error('Error loading schema cycle types:', error);
+                editSchemaCycleTypes = [];
+                editDefaultCycleTypeId = schema.cycleTypeId;
+            }
+            
+            // Populate checkboxes
+            populateEditCycleTypeCheckboxes();
+            
             document.getElementById('editSchemaModal').classList.add('active');
+        }
+        
+        function populateEditCycleTypeCheckboxes() {
+            const container = document.getElementById('editCycleTypeCheckboxes');
+            const currentCycleTypeIds = editSchemaCycleTypes.map(ct => ct.CycleTypeID);
+            
+            container.innerHTML = cycleTypes.map(ct => {
+                const isChecked = currentCycleTypeIds.includes(ct.CycleTypeID);
+                const isDefault = ct.CycleTypeID === editDefaultCycleTypeId;
+                return `
+                    <label style="display: flex; align-items: center; gap: 5px; padding: 5px 10px; background: ${isChecked ? '#f0f9ff' : 'white'}; border-radius: 5px; cursor: pointer; border: 1px solid ${isChecked ? '#667eea' : '#ddd'};">
+                        <input type="checkbox" name="editCycleTypes" value="${ct.CycleTypeID}" 
+                               ${isChecked ? 'checked' : ''}
+                               onchange="updateEditCycleTypeSelection()" style="width: 16px; height: 16px;">
+                        <span>${ct.TypeName} (${ct.CyclesPerYear}/yr)</span>
+                        <button type="button" onclick="setEditDefaultCycleType(${ct.CycleTypeID}, event)" 
+                                style="margin-left: 5px; background: ${isDefault ? '#fbbf24' : '#e5e7eb'}; border: none; border-radius: 3px; padding: 2px 5px; cursor: pointer; font-size: 12px;"
+                                title="Set as default">
+                            ${isDefault ? '⭐' : '☆'}
+                        </button>
+                    </label>
+                `;
+            }).join('');
+        }
+        
+        function updateEditCycleTypeSelection() {
+            const checkboxes = document.querySelectorAll('input[name="editCycleTypes"]');
+            checkboxes.forEach(cb => {
+                const label = cb.closest('label');
+                if (cb.checked) {
+                    label.style.borderColor = '#667eea';
+                    label.style.background = '#f0f9ff';
+                } else {
+                    label.style.borderColor = '#ddd';
+                    label.style.background = 'white';
+                }
+            });
+            
+            // Ensure default is still checked
+            const checkedIds = getEditSelectedCycleTypes();
+            if (!checkedIds.includes(editDefaultCycleTypeId) && checkedIds.length > 0) {
+                editDefaultCycleTypeId = checkedIds[0];
+                populateEditCycleTypeCheckboxes();
+            }
+        }
+        
+        function setEditDefaultCycleType(cycleTypeId, event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Make sure this cycle type is checked
+            const checkbox = document.querySelector(`input[name="editCycleTypes"][value="${cycleTypeId}"]`);
+            if (checkbox && !checkbox.checked) {
+                checkbox.checked = true;
+            }
+            
+            editDefaultCycleTypeId = cycleTypeId;
+            populateEditCycleTypeCheckboxes();
+        }
+        
+        function getEditSelectedCycleTypes() {
+            const checkboxes = document.querySelectorAll('input[name="editCycleTypes"]:checked');
+            return Array.from(checkboxes).map(cb => parseInt(cb.value));
         }
 
         function closeEditSchemaModal() {
             document.getElementById('editSchemaModal').classList.remove('active');
+            editingSchemaId = null;
+            editSchemaCycleTypes = [];
+            editDefaultCycleTypeId = null;
         }
 
         // Download schema as JSON backup
@@ -1395,28 +1570,51 @@
             const schemaId = document.getElementById('editSchemaId').value;
             const schemaName = document.getElementById('editSchemaName').value.trim();
             const description = document.getElementById('editSchemaDescription').value.trim();
-            const cycleTypeId = document.getElementById('editSchemaCycleType').value;
+            const selectedCycleTypeIds = getEditSelectedCycleTypes();
 
             if (!schemaName) {
                 showToast('Schema name is required', 'error');
                 return;
             }
 
-            if (!cycleTypeId) {
-                showToast('Please select a cycle type', 'error');
+            if (selectedCycleTypeIds.length === 0) {
+                showToast('Please select at least one cycle type', 'error');
                 return;
             }
 
             try {
+                // Update schema basic info
                 await apiCall(`/schemas/${schemaId}`, {
                     method: 'PUT',
-                    body: JSON.stringify({ schemaName, description, cycleTypeId: parseInt(cycleTypeId) })
+                    body: JSON.stringify({ 
+                        schemaName, 
+                        description, 
+                        cycleTypeId: editDefaultCycleTypeId || selectedCycleTypeIds[0]
+                    })
                 });
+                
+                // Update cycle types in junction table
+                const cycleResponse = await fetch(`/api/schemas/${schemaId}/cycle-types`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        cycleTypeIds: selectedCycleTypeIds,
+                        defaultCycleTypeId: editDefaultCycleTypeId || selectedCycleTypeIds[0]
+                    })
+                });
+                
+                const cycleResult = await cycleResponse.json();
+                if (!cycleResult.success) {
+                    throw new Error(cycleResult.error || 'Failed to update cycle types');
+                }
+                
+                console.log('Cycle types updated:', selectedCycleTypeIds, 'Default:', editDefaultCycleTypeId);
 
-                showToast('Schema updated successfully!', 'success');
+                showToast(`Schema updated! ${selectedCycleTypeIds.length} cycle type(s) saved.`, 'success');
                 closeEditSchemaModal();
                 loadSchemas();
             } catch (error) {
+                console.error('Save error:', error);
                 showToast('Error updating schema: ' + error.message, 'error');
             }
         }
@@ -2292,10 +2490,11 @@
                     <textarea id="editSchemaDescription" rows="3" placeholder="Brief description of this audit schema..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
                 </div>
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label>Cycle Type <span class="required">*</span></label>
-                    <select id="editSchemaCycleType" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background: white;">
-                        <option value="">Select Cycle Type...</option>
-                    </select>
+                    <label>Cycle Types <span class="required">*</span></label>
+                    <div id="editCycleTypeCheckboxes" class="checkbox-group" style="display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">
+                        <span style="color: #666;">Loading...</span>
+                    </div>
+                    <small style="color: #666; font-size: 12px; margin-top: 5px;">Select one or more cycle types. Click ⭐ to set default.</small>
                 </div>
                 <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
                     <button type="button" class="btn" onclick="closeEditSchemaModal()" style="background: #6b7280;">Cancel</button>

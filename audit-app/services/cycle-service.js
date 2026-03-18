@@ -353,11 +353,88 @@ class CycleService {
     // ==================== HELPER METHODS ====================
 
     /**
-     * Get cycles for a schema (used by Start Audit page)
+     * Get all cycle types for a schema (from junction table)
+     */
+    async getCycleTypesForSchema(schemaId) {
+        try {
+            const pool = await this.getPool();
+            const result = await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`
+                    SELECT 
+                        ct.CycleTypeID,
+                        ct.TypeName,
+                        ct.TypeCode,
+                        ct.CyclesPerYear,
+                        sct.IsDefault
+                    FROM SchemaCycleTypes sct
+                    INNER JOIN CycleTypes ct ON sct.CycleTypeID = ct.CycleTypeID
+                    WHERE sct.SchemaID = @schemaId AND ct.IsActive = 1
+                    ORDER BY sct.IsDefault DESC, ct.TypeName
+                `);
+            
+            // If no records in junction table, fallback to old CycleTypeID column
+            if (result.recordset.length === 0) {
+                const fallbackResult = await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`
+                        SELECT 
+                            ct.CycleTypeID,
+                            ct.TypeName,
+                            ct.TypeCode,
+                            ct.CyclesPerYear,
+                            1 as IsDefault
+                        FROM AuditSchemas s
+                        INNER JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                        WHERE s.SchemaID = @schemaId AND ct.IsActive = 1
+                    `);
+                return fallbackResult.recordset;
+            }
+            
+            return result.recordset;
+        } catch (error) {
+            console.error('Error getting cycle types for schema:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get cycles for a specific cycle type
+     */
+    async getCyclesForCycleType(cycleTypeId) {
+        try {
+            const pool = await this.getPool();
+            const result = await pool.request()
+                .input('cycleTypeId', sql.Int, cycleTypeId)
+                .query(`
+                    SELECT 
+                        cd.CycleDefID,
+                        cd.CycleNumber,
+                        cd.CycleName,
+                        cd.StartMonth,
+                        cd.EndMonth,
+                        cd.DisplayOrder,
+                        ct.TypeName as CycleTypeName,
+                        ct.TypeCode as CycleTypeCode
+                    FROM CycleTypes ct
+                    INNER JOIN CycleDefinitions cd ON ct.CycleTypeID = cd.CycleTypeID
+                    WHERE ct.CycleTypeID = @cycleTypeId AND cd.IsActive = 1
+                    ORDER BY cd.DisplayOrder
+                `);
+            return result.recordset;
+        } catch (error) {
+            console.error('Error getting cycles for cycle type:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get cycles for a schema (used by Start Audit page) - uses default cycle type
      */
     async getCyclesForSchema(schemaId) {
         try {
             const pool = await this.getPool();
+            // First try junction table with default
             const result = await pool.request()
                 .input('schemaId', sql.Int, schemaId)
                 .query(`
@@ -369,16 +446,120 @@ class CycleService {
                         cd.EndMonth,
                         cd.DisplayOrder,
                         ct.TypeName as CycleTypeName,
-                        ct.TypeCode as CycleTypeCode
-                    FROM AuditSchemas s
-                    INNER JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                        ct.TypeCode as CycleTypeCode,
+                        ct.CycleTypeID
+                    FROM SchemaCycleTypes sct
+                    INNER JOIN CycleTypes ct ON sct.CycleTypeID = ct.CycleTypeID
                     INNER JOIN CycleDefinitions cd ON ct.CycleTypeID = cd.CycleTypeID
-                    WHERE s.SchemaID = @schemaId AND cd.IsActive = 1
+                    WHERE sct.SchemaID = @schemaId AND sct.IsDefault = 1 AND cd.IsActive = 1
                     ORDER BY cd.DisplayOrder
                 `);
+            
+            // If no default in junction table, fallback to old method
+            if (result.recordset.length === 0) {
+                const fallbackResult = await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`
+                        SELECT 
+                            cd.CycleDefID,
+                            cd.CycleNumber,
+                            cd.CycleName,
+                            cd.StartMonth,
+                            cd.EndMonth,
+                            cd.DisplayOrder,
+                            ct.TypeName as CycleTypeName,
+                            ct.TypeCode as CycleTypeCode,
+                            ct.CycleTypeID
+                        FROM AuditSchemas s
+                        INNER JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                        INNER JOIN CycleDefinitions cd ON ct.CycleTypeID = cd.CycleTypeID
+                        WHERE s.SchemaID = @schemaId AND cd.IsActive = 1
+                        ORDER BY cd.DisplayOrder
+                    `);
+                return fallbackResult.recordset;
+            }
+            
             return result.recordset;
         } catch (error) {
             console.error('Error getting cycles for schema:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Add cycle type to schema (junction table)
+     */
+    async addCycleTypeToSchema(schemaId, cycleTypeId, isDefault = false) {
+        try {
+            const pool = await this.getPool();
+            
+            // If setting as default, unset other defaults first
+            if (isDefault) {
+                await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`UPDATE SchemaCycleTypes SET IsDefault = 0 WHERE SchemaID = @schemaId`);
+            }
+            
+            await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .input('cycleTypeId', sql.Int, cycleTypeId)
+                .input('isDefault', sql.Bit, isDefault)
+                .query(`
+                    IF NOT EXISTS (SELECT 1 FROM SchemaCycleTypes WHERE SchemaID = @schemaId AND CycleTypeID = @cycleTypeId)
+                        INSERT INTO SchemaCycleTypes (SchemaID, CycleTypeID, IsDefault) VALUES (@schemaId, @cycleTypeId, @isDefault)
+                    ELSE
+                        UPDATE SchemaCycleTypes SET IsDefault = @isDefault WHERE SchemaID = @schemaId AND CycleTypeID = @cycleTypeId
+                `);
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Error adding cycle type to schema:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Remove cycle type from schema (junction table)
+     */
+    async removeCycleTypeFromSchema(schemaId, cycleTypeId) {
+        try {
+            const pool = await this.getPool();
+            await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .input('cycleTypeId', sql.Int, cycleTypeId)
+                .query(`DELETE FROM SchemaCycleTypes WHERE SchemaID = @schemaId AND CycleTypeID = @cycleTypeId`);
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Error removing cycle type from schema:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update schema cycle types (replace all)
+     */
+    async updateSchemaCycleTypes(schemaId, cycleTypeIds, defaultCycleTypeId) {
+        try {
+            const pool = await this.getPool();
+            
+            // Delete existing
+            await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`DELETE FROM SchemaCycleTypes WHERE SchemaID = @schemaId`);
+            
+            // Insert new ones
+            for (const cycleTypeId of cycleTypeIds) {
+                await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .input('cycleTypeId', sql.Int, cycleTypeId)
+                    .input('isDefault', sql.Bit, cycleTypeId === defaultCycleTypeId)
+                    .query(`INSERT INTO SchemaCycleTypes (SchemaID, CycleTypeID, IsDefault) VALUES (@schemaId, @cycleTypeId, @isDefault)`);
+            }
+            
+            return { success: true };
+        } catch (error) {
+            console.error('Error updating schema cycle types:', error);
             throw error;
         }
     }
