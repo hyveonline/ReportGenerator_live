@@ -1821,8 +1821,9 @@ app.put('/api/brands/:brandId', requireAuth, requirePagePermission(BRAND_PAGE, '
 // Delete/deactivate brand
 app.delete('/api/brands/:brandId', requireAuth, requirePagePermission(BRAND_PAGE, 'Admin', 'SuperAuditor'), async (req, res) => {
     try {
-        const result = await BrandService.deleteBrand(parseInt(req.params.brandId));
-        console.log(`🏷️ [BRAND] Deactivated brand ID ${req.params.brandId} by ${req.currentUser.email}`);
+        // Use permanent delete instead of soft delete for brands with 0 stores
+        const result = await BrandService.permanentlyDeleteBrand(parseInt(req.params.brandId));
+        console.log(`🏷️ [BRAND] Permanently deleted brand ID ${req.params.brandId} by ${req.currentUser.email}`);
         res.json(result);
     } catch (error) {
         console.error('Error deleting brand:', error);
