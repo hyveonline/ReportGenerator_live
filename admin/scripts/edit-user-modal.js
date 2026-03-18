@@ -46,17 +46,7 @@ window.openEditUserModal = async function(user) {
                     <div class="form-group">
                         <label for="userRole">Role *</label>
                         <select id="userRole" name="role" class="form-control" required onchange="handleRoleChange()">
-                            <option value="Pending" ${user.role === 'Pending' ? 'selected' : ''}>Pending Approval</option>
-                            <option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option>
-                            <option value="SuperAuditor" ${user.role === 'SuperAuditor' ? 'selected' : ''}>Super Auditor</option>
-                            <option value="Auditor" ${user.role === 'Auditor' ? 'selected' : ''}>Auditor</option>
-                            <option value="HeadOfOperations" ${user.role === 'HeadOfOperations' ? 'selected' : ''}>Head of Operations</option>
-                            <option value="AreaManager" ${user.role === 'AreaManager' ? 'selected' : ''}>Area Manager</option>
-                            <option value="StoreManager" ${user.role === 'StoreManager' ? 'selected' : ''}>Store Manager</option>
-                            <option value="CleaningHead" ${user.role === 'CleaningHead' ? 'selected' : ''}>Cleaning Head</option>
-                            <option value="ProcurementHead" ${user.role === 'ProcurementHead' ? 'selected' : ''}>Procurement Head</option>
-                            <option value="MaintenanceHead" ${user.role === 'MaintenanceHead' ? 'selected' : ''}>Maintenance Head</option>
-                            <option value="Notification" ${user.role === 'Notification' ? 'selected' : ''}>Notification</option>
+                            <option value="">Loading roles...</option>
                         </select>
                         <small class="form-hint">Assign appropriate role based on user's responsibilities</small>
                     </div>
@@ -151,6 +141,9 @@ window.openEditUserModal = async function(user) {
         
         // Reset area store selection tracking for new user
         window.selectedAreaStoreIds = null;
+        
+        // Load roles dynamically from database
+        await loadRolesForModal(user);
         
         // Load stores list for checkbox selection
         await loadStoresForModal(user);
@@ -525,6 +518,44 @@ function escapeHtml(text) {
         "'": '&#039;'
     };
     return String(text || '').replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
+ * Load roles dynamically from database for the edit modal
+ */
+async function loadRolesForModal(user) {
+    const roleSelect = document.getElementById('userRole');
+    if (!roleSelect) return;
+    
+    try {
+        const response = await fetch('/api/roles');
+        const data = await response.json();
+        
+        if (data.success && data.roles) {
+            roleSelect.innerHTML = '';
+            data.roles.forEach(role => {
+                const option = document.createElement('option');
+                option.value = role.RoleName;
+                option.textContent = role.DisplayName || role.RoleName;
+                if (user.role === role.RoleName) {
+                    option.selected = true;
+                }
+                roleSelect.appendChild(option);
+            });
+        } else {
+            throw new Error('Failed to load roles');
+        }
+    } catch (error) {
+        console.error('Error loading roles for modal:', error);
+        // Fallback to basic roles
+        roleSelect.innerHTML = `
+            <option value="Pending" ${user.role === 'Pending' ? 'selected' : ''}>Pending Approval</option>
+            <option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option>
+            <option value="SuperAuditor" ${user.role === 'SuperAuditor' ? 'selected' : ''}>Super Auditor</option>
+            <option value="Auditor" ${user.role === 'Auditor' ? 'selected' : ''}>Auditor</option>
+            <option value="StoreManager" ${user.role === 'StoreManager' ? 'selected' : ''}>Store Manager</option>
+        `;
+    }
 }
 
 // Add modal-specific styles

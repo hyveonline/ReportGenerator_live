@@ -8,12 +8,55 @@
 // Global state
 let allUsers = [];
 let filteredUsers = [];
+let availableRoles = []; // Loaded from database
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
+    loadRoles(); // Load roles first
     loadUsers();
 });
+
+/**
+ * Load available roles from database
+ */
+async function loadRoles() {
+    try {
+        const response = await fetch('/api/roles');
+        const data = await response.json();
+        
+        if (data.success && data.roles) {
+            availableRoles = data.roles;
+            populateRoleFilter();
+        }
+    } catch (error) {
+        console.error('Error loading roles:', error);
+        // Fallback to basic roles if API fails
+        availableRoles = [
+            { RoleName: 'Admin' }, { RoleName: 'SuperAuditor' }, { RoleName: 'Auditor' },
+            { RoleName: 'StoreManager' }, { RoleName: 'Pending' }
+        ];
+        populateRoleFilter();
+    }
+}
+
+/**
+ * Populate role filter dropdown
+ */
+function populateRoleFilter() {
+    const select = document.getElementById('roleFilter');
+    if (!select) return;
+    
+    // Keep the "All Roles" option
+    select.innerHTML = '<option value="">All Roles</option>';
+    
+    availableRoles.forEach(role => {
+        const option = document.createElement('option');
+        option.value = role.RoleName;
+        option.textContent = role.DisplayName || role.RoleName;
+        select.appendChild(option);
+    });
+}
 
 /**
  * Initialize all event listeners

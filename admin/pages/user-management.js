@@ -86,17 +86,7 @@ class UserManagementPage {
             <div class="filter-section">
                 <select id="roleFilter" class="filter-select">
                     <option value="">All Roles</option>
-                    <option value="Admin">Admin</option>
-                    <option value="SuperAuditor">Super Auditor</option>
-                    <option value="Auditor">Auditor</option>
-                    <option value="HeadOfOperations">Head of Operations</option>
-                    <option value="AreaManager">Area Manager</option>
-                    <option value="StoreManager">Store Manager</option>
-                    <option value="CleaningHead">Cleaning Head</option>
-                    <option value="ProcurementHead">Procurement Head</option>
-                    <option value="MaintenanceHead">Maintenance Head</option>
-                    <option value="Notification">Notification</option>
-                    <option value="Pending">Pending Approval</option>
+                    <!-- Roles will be loaded dynamically from database -->
                 </select>
                 <select id="statusFilter" class="filter-select">
                     <option value="">All Statuses</option>

@@ -6,7 +6,7 @@
  * Impersonation state is stored in a cookie, not in the database
  */
 
-const ALLOWED_ROLES = ['Admin', 'Auditor', 'SuperAuditor', 'StoreManager', 'HeadOfOperations', 'AreaManager', 'Maintenance', 'Procurement', 'Cleaning', 'Pending'];
+const ALLOWED_ROLES = ['Admin', 'Auditor', 'SuperAuditor', 'QualitySuperAuditor', 'StoreManager', 'HeadOfOperations', 'AreaManager', 'Maintenance', 'Procurement', 'Cleaning', 'Pending'];
 
 // Cache for stores list (5 minute cache)
 let storesCache = null;
@@ -42,6 +42,7 @@ class ImpersonationService {
             'Admin': 'Full system access, user management, all features',
             'Auditor': 'Create audits, generate reports, manage action plans',
             'SuperAuditor': 'Template management + Auditor permissions',
+            'QualitySuperAuditor': 'Quality audits only - limited admin access',
             'StoreManager': 'View reports for assigned stores, action plan responses',
             'HeadOfOperations': 'View all audits for assigned brands (read-only)',
             'AreaManager': 'View audits for assigned stores (read-only)',

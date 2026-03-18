@@ -5375,12 +5375,12 @@ console.log('[APP] Checklist info API loaded');
 // ==========================================
 
 // Serve Start Audit page
-app.get('/auditor/start-audit', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), (req, res) => {
+app.get('/auditor/start-audit', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), (req, res) => {
     res.sendFile(path.join(__dirname, 'audit-app/pages/start-audit.html'));
 });
 
 // Start a new audit
-app.post('/api/audits/start', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/start', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const auditData = {
             ...req.body,
@@ -5395,7 +5395,7 @@ app.post('/api/audits/start', requireAuth, requireRole('Admin', 'SuperAuditor', 
 });
 
 // Create a re-audit by duplicating an existing completed audit
-app.post('/api/audits/:auditId/reaudit', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/:auditId/reaudit', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         const createdBy = req.currentUser.email;
@@ -5443,7 +5443,7 @@ app.get('/api/audits/lookup-by-doc', requireAuth, async (req, res) => {
 });
 
 // Get audits list for Audit List page (MUST be before :auditId route)
-app.get('/api/audits/list', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'StoreManager', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
+app.get('/api/audits/list', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor', 'StoreManager', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
     try {
         const user = req.currentUser;
         let audits = await AuditService.getAuditsList();
@@ -7508,7 +7508,7 @@ app.post('/api/calendar/audits', requireAuth, requireRole('Admin', 'SuperAuditor
 });
 
 // Update scheduled audit
-app.put('/api/calendar/audits/:id', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.put('/api/calendar/audits/:id', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const auditId = req.params.id;
         const { store_id, scheduled_date, scheduled_time, auditor_user_id, checklist_schema_id, priority, notes, status } = req.body;
@@ -8288,7 +8288,7 @@ app.get('/api/audits', requireAuth, async (req, res) => {
 });
 
 // Update audit response
-app.put('/api/audits/response/:responseId', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.put('/api/audits/response/:responseId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const userRole = req.currentUser.role;
         const responseId = parseInt(req.params.responseId);
@@ -8312,7 +8312,7 @@ app.put('/api/audits/response/:responseId', requireAuth, requireRole('Admin', 'S
 });
 
 // Complete audit
-app.post('/api/audits/:auditId/complete', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/:auditId/complete', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const result = await AuditService.completeAudit(parseInt(req.params.auditId));
         res.json({ success: true, data: result });
@@ -8323,7 +8323,7 @@ app.post('/api/audits/:auditId/complete', requireAuth, requireRole('Admin', 'Sup
 });
 
 // Upload picture for a response
-app.post('/api/audits/pictures', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/pictures', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const userRole = req.currentUser.role;
         const responseId = req.body.responseId;
@@ -8360,7 +8360,7 @@ app.get('/api/audits/pictures/:responseId', requireAuth, async (req, res) => {
 });
 
 // Delete picture
-app.delete('/api/audits/pictures/:pictureId', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.delete('/api/audits/pictures/:pictureId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const result = await AuditService.deletePicture(parseInt(req.params.pictureId));
         res.json({ success: true, data: result });
@@ -8508,7 +8508,7 @@ app.delete('/api/audits/:auditId', requireAuth, requireRole('Admin', 'SuperAudit
 // ==========================================
 
 // Save fridge readings
-app.post('/api/audits/:auditId/fridge-readings', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/:auditId/fridge-readings', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const { documentNumber, goodReadings, badReadings, enabledSections } = req.body;
         const auditId = parseInt(req.params.auditId);
@@ -8716,7 +8716,7 @@ app.get('/api/score-calculator/stats', requireAuth, requireRole('Admin', 'SuperA
 // ==========================================
 
 // Generate full audit report
-app.post('/api/audits/:auditId/generate-report', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/:auditId/generate-report', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         console.log(`📊 [API] Generating report for audit ${auditId}`);
@@ -8747,7 +8747,7 @@ app.post('/api/audits/:auditId/generate-report', requireAuth, requireRole('Admin
 });
 
 // Generate action plan report
-app.post('/api/audits/:auditId/generate-action-plan', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/:auditId/generate-action-plan', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         console.log(`📋 [API] Generating action plan for audit ${auditId}`);
@@ -8775,7 +8775,7 @@ app.post('/api/audits/:auditId/generate-action-plan', requireAuth, requireRole('
 });
 
 // Generate PDF report (full version with proper page breaks)
-app.post('/api/audits/:auditId/generate-pdf', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/:auditId/generate-pdf', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         console.log(`📄 [API] Generating PDF for audit ${auditId}`);
@@ -8808,7 +8808,7 @@ app.post('/api/audits/:auditId/generate-pdf', requireAuth, requireRole('Admin', 
 });
 
 // Generate Summary PDF (2-3 pages, key info only)
-app.post('/api/audits/:auditId/generate-summary-pdf', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/:auditId/generate-summary-pdf', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         console.log(`📋 [API] Generating Summary PDF for audit ${auditId}`);
@@ -9290,7 +9290,7 @@ app.get('/api/audits/:auditId/latest-report', requireAuth, async (req, res) => {
 });
 
 // Publish report WITHOUT sending email (for testing)
-app.post('/api/audits/publish-report-no-email', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/publish-report-no-email', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const { documentNumber, auditId, fileName, storeName, totalScore } = req.body;
         const user = req.currentUser;
@@ -9379,7 +9379,7 @@ app.post('/api/audits/unpublish-report', requireAuth, requireRole('Admin'), asyn
 });
 
 // Save report for Store Manager (Admin/Auditor saves it so SM can view)
-app.post('/api/audits/save-report-for-store-manager', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.post('/api/audits/save-report-for-store-manager', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const { documentNumber, auditId, fileName, storeName, totalScore } = req.body;
         const user = req.currentUser;
@@ -9970,7 +9970,7 @@ app.post('/api/audits/export-pdf', requireAuth, async (req, res) => {
 });
 
 // Delete audit
-app.delete('/api/audits/:auditId', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor'), async (req, res) => {
+app.delete('/api/audits/:auditId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
     try {
         const result = await AuditService.deleteAudit(parseInt(req.params.auditId));
         res.json({ success: true, data: result });
@@ -9981,24 +9981,24 @@ app.delete('/api/audits/:auditId', requireAuth, requireRole('Admin', 'SuperAudit
 });
 
 // Serve Audit List page (StoreManager can view their assigned stores only)
-app.get('/auditor/audit-list', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
+app.get('/auditor/audit-list', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
     res.sendFile(path.join(__dirname, 'audit-app/pages/audit-list.html'));
 });
 
 // Serve Fill Audit page (with query params - for view/continue from audit list)
 // StoreManager can view in readonly mode
-app.get('/auditor/fill-audit', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
+app.get('/auditor/fill-audit', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
     res.sendFile(path.join(__dirname, 'audit-app/pages/fill-audit.html'));
 });
 
 // Serve Fill Audit page (with path param - legacy)
 // StoreManager can view in readonly mode
-app.get('/auditor/fill-audit/:auditId', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
+app.get('/auditor/fill-audit/:auditId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
     res.sendFile(path.join(__dirname, 'audit-app/pages/fill-audit.html'));
 });
 
 // Serve Action Plan page (StoreManager can view and respond to action plans)
-app.get('/auditor/action-plan', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
+app.get('/auditor/action-plan', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor', 'StoreManager'), (req, res) => {
     res.sendFile(path.join(__dirname, 'audit-app/pages/action-plan.html'));
 });
 
