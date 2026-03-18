@@ -715,7 +715,7 @@ app.get('/api/cycle-dashboard/schemas', requireAuth, requireRole('Admin', 'Super
 // Get cycle definitions for a schema (all cycles in the year)
 app.get('/api/cycle-dashboard/cycle-definitions', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
-        const { schemaId } = req.query;
+        const { schemaId, cycleTypeId } = req.query;
         if (!schemaId) {
             return res.status(400).json({ success: false, error: 'Schema ID required' });
         }
@@ -725,18 +725,34 @@ app.get('/api/cycle-dashboard/cycle-definitions', requireAuth, requireRole('Admi
         const pool = await sql.connect(dbConfig);
         const currentMonth = new Date().getMonth() + 1;
 
-        // Get schema's cycle type
-        const schemaResult = await pool.request()
-            .input('schemaId', sql.Int, schemaId)
-            .query(`
-                SELECT s.CycleTypeID FROM AuditSchemas s WHERE s.SchemaID = @schemaId
-            `);
-
-        const cycleTypeId = schemaResult.recordset[0]?.CycleTypeID;
+        // Determine which cycle type to use
+        let targetCycleTypeId = cycleTypeId;
+        
+        if (!targetCycleTypeId) {
+            // If cycleTypeId not provided, get the default from SchemaCycleTypes junction table
+            const schemaResult = await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`
+                    SELECT TOP 1 sct.CycleTypeID 
+                    FROM SchemaCycleTypes sct 
+                    WHERE sct.SchemaID = @schemaId
+                    ORDER BY sct.IsDefault DESC, sct.CycleTypeID ASC
+                `);
+            
+            if (schemaResult.recordset.length === 0) {
+                // Fallback to old CycleTypeID in AuditSchemas if no junction entries
+                const fallbackResult = await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`SELECT CycleTypeID FROM AuditSchemas WHERE SchemaID = @schemaId`);
+                targetCycleTypeId = fallbackResult.recordset[0]?.CycleTypeID;
+            } else {
+                targetCycleTypeId = schemaResult.recordset[0].CycleTypeID;
+            }
+        }
 
         // Get all cycle definitions for this cycle type
         const cyclesResult = await pool.request()
-            .input('cycleTypeId', sql.Int, cycleTypeId)
+            .input('cycleTypeId', sql.Int, targetCycleTypeId)
             .query(`
                 SELECT CycleNumber as cycleNumber, CycleName as displayName, StartMonth, EndMonth
                 FROM CycleDefinitions
@@ -765,7 +781,7 @@ app.get('/api/cycle-dashboard/cycle-definitions', requireAuth, requireRole('Admi
 // Get cycle progress for a schema
 app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
-        const { schemaId, cycle } = req.query;
+        const { schemaId, cycle, cycleTypeId } = req.query;
         if (!schemaId) {
             return res.status(400).json({ success: false, error: 'Schema ID required' });
         }
@@ -776,13 +792,12 @@ app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'Supe
         const currentYear = new Date().getFullYear();
         const currentMonth = new Date().getMonth() + 1;
 
-        // Get schema info and cycle type
+        // Get schema info
         const schemaResult = await pool.request()
             .input('schemaId', sql.Int, schemaId)
             .query(`
-                SELECT s.SchemaID, s.SchemaName, ct.TypeName, ct.CyclesPerYear, ct.CycleTypeID
+                SELECT s.SchemaID, s.SchemaName
                 FROM AuditSchemas s
-                LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
                 WHERE s.SchemaID = @schemaId
             `);
 
@@ -792,13 +807,44 @@ app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'Supe
 
         const schema = schemaResult.recordset[0];
 
+        // Determine which cycle type to use
+        let targetCycleTypeId = cycleTypeId;
+        if (!targetCycleTypeId) {
+            // Get default from SchemaCycleTypes junction table
+            const cycleTypeResult = await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`
+                    SELECT TOP 1 sct.CycleTypeID 
+                    FROM SchemaCycleTypes sct 
+                    WHERE sct.SchemaID = @schemaId
+                    ORDER BY sct.IsDefault DESC, sct.CycleTypeID ASC
+                `);
+            if (cycleTypeResult.recordset.length > 0) {
+                targetCycleTypeId = cycleTypeResult.recordset[0].CycleTypeID;
+            } else {
+                // Fallback to old CycleTypeID
+                const fallbackResult = await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`SELECT CycleTypeID FROM AuditSchemas WHERE SchemaID = @schemaId`);
+                targetCycleTypeId = fallbackResult.recordset[0]?.CycleTypeID;
+            }
+        }
+
+        // Get cycle type info
+        const cycleTypeInfo = await pool.request()
+            .input('cycleTypeId', sql.Int, targetCycleTypeId)
+            .query(`SELECT TypeName, CyclesPerYear FROM CycleTypes WHERE CycleTypeID = @cycleTypeId`);
+        
+        const typeName = cycleTypeInfo.recordset[0]?.TypeName || 'Unknown';
+        const cyclesPerYear = cycleTypeInfo.recordset[0]?.CyclesPerYear || 6;
+
         // Use provided cycle or determine current cycle based on month
         let selectedCycle = cycle;
         let cycleName = '';
         
         if (!selectedCycle) {
             const cycleDefResult = await pool.request()
-                .input('cycleTypeId', sql.Int, schema.CycleTypeID)
+                .input('cycleTypeId', sql.Int, targetCycleTypeId)
                 .input('currentMonth', sql.Int, currentMonth)
                 .query(`
                     SELECT CycleNumber, CycleName
@@ -815,7 +861,7 @@ app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'Supe
         } else {
             // Get cycle name for provided cycle
             const cycleNameResult = await pool.request()
-                .input('cycleTypeId', sql.Int, schema.CycleTypeID)
+                .input('cycleTypeId', sql.Int, targetCycleTypeId)
                 .input('cycleNumber', sql.NVarChar, selectedCycle)
                 .query(`
                     SELECT CycleName
@@ -860,8 +906,8 @@ app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'Supe
             success: true,
             schemaId: parseInt(schemaId),
             schemaName: schema.SchemaName,
-            cycleTypeName: schema.TypeName || 'Unknown',
-            cyclesPerYear: schema.CyclesPerYear || 6,
+            cycleTypeName: typeName,
+            cyclesPerYear: cyclesPerYear,
             currentCycle: `${selectedCycle} (${cycleName})`,
             totalStores,
             auditedCount,
@@ -878,7 +924,7 @@ app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'Supe
 // Get pending stores for a schema in selected cycle
 app.get('/api/cycle-dashboard/pending-stores', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
-        const { schemaId, cycle } = req.query;
+        const { schemaId, cycle, cycleTypeId: reqCycleTypeId } = req.query;
         if (!schemaId) {
             return res.status(400).json({ success: false, error: 'Schema ID required' });
         }
@@ -889,14 +935,28 @@ app.get('/api/cycle-dashboard/pending-stores', requireAuth, requireRole('Admin',
         const currentYear = new Date().getFullYear();
         const currentMonth = new Date().getMonth() + 1;
 
-        // Get schema's cycle type
-        const schemaResult = await pool.request()
-            .input('schemaId', sql.Int, schemaId)
-            .query(`
-                SELECT s.CycleTypeID FROM AuditSchemas s WHERE s.SchemaID = @schemaId
-            `);
-
-        const cycleTypeId = schemaResult.recordset[0]?.CycleTypeID;
+        // Determine which cycle type to use
+        let cycleTypeId = reqCycleTypeId;
+        if (!cycleTypeId) {
+            // Get default from SchemaCycleTypes junction table
+            const cycleTypeResult = await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`
+                    SELECT TOP 1 sct.CycleTypeID 
+                    FROM SchemaCycleTypes sct 
+                    WHERE sct.SchemaID = @schemaId
+                    ORDER BY sct.IsDefault DESC, sct.CycleTypeID ASC
+                `);
+            if (cycleTypeResult.recordset.length > 0) {
+                cycleTypeId = cycleTypeResult.recordset[0].CycleTypeID;
+            } else {
+                // Fallback to old CycleTypeID
+                const fallbackResult = await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`SELECT CycleTypeID FROM AuditSchemas WHERE SchemaID = @schemaId`);
+                cycleTypeId = fallbackResult.recordset[0]?.CycleTypeID;
+            }
+        }
 
         // Use provided cycle or determine current cycle
         let selectedCycle = cycle;
@@ -979,7 +1039,7 @@ app.get('/api/cycle-dashboard/pending-stores', requireAuth, requireRole('Admin',
 // Get audited stores for a schema in selected cycle
 app.get('/api/cycle-dashboard/audited-stores', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
-        const { schemaId, cycle } = req.query;
+        const { schemaId, cycle, cycleTypeId: reqCycleTypeId } = req.query;
         if (!schemaId) {
             return res.status(400).json({ success: false, error: 'Schema ID required' });
         }
@@ -990,14 +1050,28 @@ app.get('/api/cycle-dashboard/audited-stores', requireAuth, requireRole('Admin',
         const currentYear = new Date().getFullYear();
         const currentMonth = new Date().getMonth() + 1;
 
-        // Get schema's cycle type
-        const schemaResult = await pool.request()
-            .input('schemaId', sql.Int, schemaId)
-            .query(`
-                SELECT s.CycleTypeID FROM AuditSchemas s WHERE s.SchemaID = @schemaId
-            `);
-
-        const cycleTypeId = schemaResult.recordset[0]?.CycleTypeID;
+        // Determine which cycle type to use
+        let cycleTypeId = reqCycleTypeId;
+        if (!cycleTypeId) {
+            // Get default from SchemaCycleTypes junction table
+            const cycleTypeResult = await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`
+                    SELECT TOP 1 sct.CycleTypeID 
+                    FROM SchemaCycleTypes sct 
+                    WHERE sct.SchemaID = @schemaId
+                    ORDER BY sct.IsDefault DESC, sct.CycleTypeID ASC
+                `);
+            if (cycleTypeResult.recordset.length > 0) {
+                cycleTypeId = cycleTypeResult.recordset[0].CycleTypeID;
+            } else {
+                // Fallback to old CycleTypeID
+                const fallbackResult = await pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`SELECT CycleTypeID FROM AuditSchemas WHERE SchemaID = @schemaId`);
+                cycleTypeId = fallbackResult.recordset[0]?.CycleTypeID;
+            }
+        }
 
         // Use provided cycle or determine current cycle
         let selectedCycle = cycle;

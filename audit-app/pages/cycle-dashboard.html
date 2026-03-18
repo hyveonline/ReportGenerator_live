@@ -703,6 +703,12 @@
                         <option value="">-- Select Schema --</option>
                     </select>
                 </div>
+                <div class="filter-group" id="cycleTypeSelectGroup" style="display: none; min-width: 180px;">
+                    <label>📆 Cycle Type</label>
+                    <select id="cycleTypeSelect" onchange="onCycleTypeChange()">
+                        <option value="">-- Select Type --</option>
+                    </select>
+                </div>
                 <div class="filter-group" id="cycleSelectGroup" style="display: none; min-width: 200px;">
                     <label>🔄 Select Cycle</label>
                     <select id="cycleSelect" onchange="loadCycleData()">
@@ -820,6 +826,8 @@
         let currentView = 'schema';
         let cycleDefinitions = []; // Store cycle definitions for selected schema
         let selectedCycle = null; // Currently selected cycle
+        let schemaCycleTypes = []; // Cycle types for selected schema (multi-cycle support)
+        let selectedCycleTypeId = null; // Currently selected cycle type
         
         // Auto-refresh settings
         let autoRefreshEnabled = true;
@@ -1061,10 +1069,7 @@
                 groupedSchemas[brand].forEach(schema => {
                     const option = document.createElement('option');
                     option.value = schema.schemaId;
-                    option.textContent = `${schema.schemaName} (${schema.cycleTypeName})`;
-                    option.dataset.cycleType = schema.cycleTypeName;
-                    option.dataset.cyclesPerYear = schema.cyclesPerYear;
-                    option.dataset.cycleTypeId = schema.cycleTypeId;
+                    option.textContent = schema.schemaName;
                     optgroup.appendChild(option);
                 });
                 
@@ -1072,28 +1077,91 @@
             });
         }
 
-        // Handle schema change - load cycle definitions
+        // Handle schema change - load cycle types for this schema
         async function onSchemaChange() {
             const schemaId = document.getElementById('schemaSelect').value;
             
+            // Reset all dependent elements
+            document.getElementById('cycleTypeSelectGroup').style.display = 'none';
+            document.getElementById('cycleSelectGroup').style.display = 'none';
+            document.getElementById('statsGrid').style.display = 'none';
+            document.getElementById('progressSection').style.display = 'none';
+            document.getElementById('tablesGrid').style.display = 'none';
+            document.getElementById('cycleInfo').style.display = 'none';
+            document.getElementById('cycleTypeInfo').style.display = 'none';
+            
             if (!schemaId) {
-                document.getElementById('cycleSelectGroup').style.display = 'none';
-                document.getElementById('statsGrid').style.display = 'none';
-                document.getElementById('progressSection').style.display = 'none';
-                document.getElementById('tablesGrid').style.display = 'none';
                 document.getElementById('initialState').style.display = 'block';
-                document.getElementById('cycleInfo').style.display = 'none';
-                document.getElementById('cycleTypeInfo').style.display = 'none';
                 return;
             }
 
-            // Get the schema's cycle type
-            const selectedOption = document.getElementById('schemaSelect').selectedOptions[0];
-            const cycleTypeId = selectedOption.dataset.cycleTypeId;
-            
-            // Load cycle definitions for this schema
+            // Load cycle types for this schema (multi-cycle support)
             try {
-                const response = await fetch(`/api/cycle-dashboard/cycle-definitions?schemaId=${schemaId}`);
+                const response = await fetch(`/api/schemas/${schemaId}/cycle-types`);
+                const data = await response.json();
+                
+                if (data.success && data.data && data.data.length > 0) {
+                    schemaCycleTypes = data.data;
+                    populateCycleTypeDropdown();
+                    document.getElementById('cycleTypeSelectGroup').style.display = 'block';
+                    
+                    // Auto-select default cycle type (or first one)
+                    const defaultCycleType = schemaCycleTypes.find(ct => ct.IsDefault) || schemaCycleTypes[0];
+                    if (defaultCycleType) {
+                        document.getElementById('cycleTypeSelect').value = defaultCycleType.CycleTypeID;
+                        selectedCycleTypeId = defaultCycleType.CycleTypeID;
+                        await loadCycleDefinitions();
+                    }
+                } else {
+                    showToast('No cycle types configured for this schema', 'error');
+                    document.getElementById('initialState').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading cycle types:', error);
+                showToast('Failed to load cycle types', 'error');
+                document.getElementById('initialState').style.display = 'block';
+            }
+        }
+
+        // Populate cycle type dropdown
+        function populateCycleTypeDropdown() {
+            const select = document.getElementById('cycleTypeSelect');
+            select.innerHTML = '';
+            
+            schemaCycleTypes.forEach(ct => {
+                const option = document.createElement('option');
+                option.value = ct.CycleTypeID;
+                option.textContent = ct.IsDefault ? `${ct.TypeName} ⭐` : ct.TypeName;
+                if (ct.IsDefault) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        }
+
+        // Handle cycle type change
+        async function onCycleTypeChange() {
+            const cycleTypeId = document.getElementById('cycleTypeSelect').value;
+            
+            if (!cycleTypeId) {
+                document.getElementById('cycleSelectGroup').style.display = 'none';
+                return;
+            }
+            
+            selectedCycleTypeId = cycleTypeId;
+            await loadCycleDefinitions();
+        }
+
+        // Load cycle definitions for selected cycle type
+        async function loadCycleDefinitions() {
+            const schemaId = document.getElementById('schemaSelect').value;
+            
+            if (!schemaId || !selectedCycleTypeId) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/cycle-dashboard/cycle-definitions?schemaId=${schemaId}&cycleTypeId=${selectedCycleTypeId}`);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -1157,11 +1225,12 @@
                 document.getElementById('cycleInfo').style.display = 'block';
                 document.getElementById('cycleTypeInfo').style.display = 'block';
 
-                // Fetch data with selected cycle
+                // Fetch data with selected cycle and cycle type
+                const cycleTypeParam = selectedCycleTypeId ? `&cycleTypeId=${selectedCycleTypeId}` : '';
                 const [progressRes, pendingRes, auditedRes] = await Promise.all([
-                    fetch(`/api/cycle-dashboard/progress?schemaId=${schemaId}&cycle=${encodeURIComponent(selectedCycle)}`),
-                    fetch(`/api/cycle-dashboard/pending-stores?schemaId=${schemaId}&cycle=${encodeURIComponent(selectedCycle)}`),
-                    fetch(`/api/cycle-dashboard/audited-stores?schemaId=${schemaId}&cycle=${encodeURIComponent(selectedCycle)}`)
+                    fetch(`/api/cycle-dashboard/progress?schemaId=${schemaId}&cycle=${encodeURIComponent(selectedCycle)}${cycleTypeParam}`),
+                    fetch(`/api/cycle-dashboard/pending-stores?schemaId=${schemaId}&cycle=${encodeURIComponent(selectedCycle)}${cycleTypeParam}`),
+                    fetch(`/api/cycle-dashboard/audited-stores?schemaId=${schemaId}&cycle=${encodeURIComponent(selectedCycle)}${cycleTypeParam}`)
                 ]);
 
                 const progressData = await progressRes.json();
