@@ -98,10 +98,12 @@ class ActionPlanService {
 
     /**
      * Get Action Plan Responses for a Document
+     * @param {string} documentNumber - The document number
+     * @param {boolean} includePictures - Whether to include picture data (default: true since we now store URLs not base64)
      */
-    async getResponses(documentNumber) {
+    async getResponses(documentNumber, includePictures = true) {
         try {
-            if (DEBUG_VERBOSE) console.log(`📋 Fetching action plan responses for ${documentNumber}...`);
+            if (DEBUG_VERBOSE) console.log(`📋 Fetching action plan responses for ${documentNumber} (includePictures: ${includePictures})...`);
             
             const pool = await this.sqlConnector.connect();
             const request = pool.request();
@@ -110,6 +112,27 @@ class ActionPlanService {
             const result = await request.execute('sp_GetActionPlanResponses');
             
             if (DEBUG_VERBOSE) console.log(`✅ Found ${result.recordset.length} action plan responses`);
+            
+            // Pictures are now URLs (small) so we include them by default
+            // Only strip if explicitly requested not to include
+            if (!includePictures) {
+                result.recordset.forEach(r => {
+                    if (r.PicturesPaths && r.PicturesPaths !== '[]') {
+                        try {
+                            const pics = JSON.parse(r.PicturesPaths);
+                            r.HasPictures = pics.length > 0;
+                            r.PictureCount = pics.length;
+                        } catch {
+                            r.HasPictures = false;
+                            r.PictureCount = 0;
+                        }
+                    } else {
+                        r.HasPictures = false;
+                        r.PictureCount = 0;
+                    }
+                    r.PicturesPaths = null; // Don't send the actual data
+                });
+            }
             
             return result.recordset;
         } catch (error) {

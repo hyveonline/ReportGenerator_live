@@ -533,6 +533,30 @@
             border-color: #6b7280;
         }
 
+        .load-pictures-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 8px;
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            color: #1d4ed8;
+            transition: all 0.2s;
+            margin-top: 4px;
+        }
+
+        .load-pictures-btn:hover {
+            background: #bfdbfe;
+        }
+
+        .load-pictures-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
         .picture-input {
             display: none;
         }
@@ -775,7 +799,7 @@
                 <button class="back-btn" onclick="goBack()">
                     ← Back
                 </button>
-                <button class="save-btn" onclick="saveActionPlan()">
+                <button class="save-btn" id="saveBtn" onclick="saveActionPlan()">
                     💾 Save
                 </button>
                 <button class="submit-btn" id="submitBtn" onclick="submitToAuditor()" style="background: #10b981 !important; display: none;">
@@ -1072,12 +1096,20 @@
                         // Check for saved response
                         const saved = savedResponses[item.referenceValue] || {};
                         
-                        // Parse pictures - could be in PicturesPaths or Pictures field
+                        // Pictures are loaded lazily - just store metadata
                         let pictures = [];
+                        let hasPictures = saved.HasPictures || false;
+                        let pictureCount = saved.PictureCount || 0;
+                        let picturesLoaded = false;
+                        
+                        // If pictures were included in response (backward compatibility)
                         const picturesData = saved.PicturesPaths || saved.Pictures;
                         if (picturesData) {
                             try {
                                 pictures = typeof picturesData === 'string' ? JSON.parse(picturesData) : picturesData;
+                                picturesLoaded = pictures.length > 0;
+                                hasPictures = pictures.length > 0;
+                                pictureCount = pictures.length;
                             } catch (e) {
                                 console.warn('Error parsing pictures:', e);
                             }
@@ -1099,7 +1131,10 @@
                             deadline: saved.Deadline ? saved.Deadline.split('T')[0] : '',
                             personInCharge: saved.PersonInCharge || '',
                             status: saved.Status || 'Pending',
-                            pictures: pictures
+                            pictures: pictures,
+                            hasPictures: hasPictures,
+                            pictureCount: pictureCount,
+                            picturesLoaded: picturesLoaded
                         });
                     }
                 }
@@ -1279,7 +1314,7 @@
                             data-index="${index}"
                             placeholder="${canEdit ? 'Describe action taken...' : ''}"
                             ${readonlyAttr}
-                            onchange="updateItem(${index}, 'actionTaken', this.value)">${escapeHtml(item.actionTaken)}</textarea>
+                            oninput="updateItem(${index}, 'actionTaken', this.value)">${escapeHtml(item.actionTaken)}</textarea>
                     </td>
                     <td class="input-col">
                         <input type="date" class="deadline-input ${!canEdit ? 'readonly-field' : ''}" 
@@ -1287,7 +1322,7 @@
                             data-index="${index}"
                             value="${item.deadline}"
                             ${readonlyAttr}
-                            onchange="updateItem(${index}, 'deadline', this.value)">
+                            oninput="updateItem(${index}, 'deadline', this.value)">
                     </td>
                     <td class="input-col">
                         <input type="text" class="person-input ${!canEdit ? 'readonly-field' : ''}" 
@@ -1296,7 +1331,7 @@
                             placeholder="${canEdit ? 'Name' : ''}"
                             value="${escapeHtml(item.personInCharge)}"
                             ${readonlyAttr}
-                            onchange="updateItem(${index}, 'personInCharge', this.value)">
+                            oninput="updateItem(${index}, 'personInCharge', this.value)">
                     </td>
                     <td class="input-col">
                         <select class="status-select ${statusClass} ${!canEdit ? 'readonly-field' : ''}" 
@@ -1321,13 +1356,17 @@
                                     data-index="${index}"
                                     onchange="handlePictureUpload(${index}, this.files)">
                             </label>` : ''}
+                            ${item.hasPictures && !item.picturesLoaded ? `
+                            <button class="load-pictures-btn" onclick="loadPictures(${index}, '${item.referenceValue}')">
+                                🖼️ Load (${item.pictureCount})
+                            </button>` : ''}
                             <div class="picture-preview" id="preview-${index}">
-                                ${(item.pictures || []).map((pic, picIndex) => `
+                                ${item.picturesLoaded ? (item.pictures || []).map((pic, picIndex) => `
                                     <div class="picture-thumb-wrapper">
                                         <img src="${pic}" class="picture-thumb" onclick="openLightbox('${pic}')">
                                         ${canEdit ? `<button class="remove-picture" onclick="removePicture(${index}, ${picIndex})">×</button>` : ''}
                                     </div>
-                                `).join('')}
+                                `).join('') : ''}
                             </div>
                         </div>
                     </td>
@@ -1363,12 +1402,16 @@
                 reader.onload = function(e) {
                     const base64 = e.target.result;
                     
+                    // Only push to actionItems - filteredItems references the same objects
+                    // so we don't need to push twice (that would cause duplicates!)
                     if (mainIndex !== -1) {
                         if (!actionItems[mainIndex].pictures) actionItems[mainIndex].pictures = [];
                         actionItems[mainIndex].pictures.push(base64);
+                    } else {
+                        // Fallback: if item not in actionItems, push directly to item
+                        if (!item.pictures) item.pictures = [];
+                        item.pictures.push(base64);
                     }
-                    if (!item.pictures) item.pictures = [];
-                    item.pictures.push(base64);
                     
                     // Update preview
                     updatePicturePreview(index);
@@ -1388,6 +1431,43 @@
                         <button class="remove-picture" onclick="removePicture(${index}, ${picIndex})">×</button>
                     </div>
                 `).join('');
+            }
+        }
+
+        async function loadPictures(index, referenceValue) {
+            const item = filteredItems[index];
+            const mainIndex = actionItems.findIndex(i => i.referenceValue === item.referenceValue);
+            
+            // Show loading state
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Loading...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch(`/api/action-plan/${auditData.documentNumber}/pictures/${encodeURIComponent(referenceValue)}`);
+                const result = await response.json();
+                
+                if (result.success && result.pictures) {
+                    // Update both filtered and main items
+                    if (mainIndex !== -1) {
+                        actionItems[mainIndex].pictures = result.pictures;
+                        actionItems[mainIndex].picturesLoaded = true;
+                    }
+                    item.pictures = result.pictures;
+                    item.picturesLoaded = true;
+                    
+                    // Hide the load button and show pictures
+                    btn.style.display = 'none';
+                    updatePicturePreview(index);
+                } else {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error loading pictures:', error);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
 
@@ -1416,7 +1496,22 @@
 
         async function saveActionPlan() {
             try {
+                // Validate data before sending
+                if (!auditData || !auditData.documentNumber) {
+                    console.error('❌ Save failed: auditData or documentNumber is missing', { auditData });
+                    showToast('Error: Audit data not loaded. Please refresh the page.', 'error');
+                    return;
+                }
+                
+                if (!actionItems || actionItems.length === 0) {
+                    console.error('❌ Save failed: No action items to save');
+                    showToast('Error: No action items to save.', 'error');
+                    return;
+                }
+                
                 showToast('Saving...', 'info');
+                
+                console.log(`📊 Saving ${actionItems.length} items for ${auditData.documentNumber}`);
                 
                 const actions = actionItems.map(item => ({
                     referenceValue: item.referenceValue,
@@ -1445,12 +1540,13 @@
                 if (result.success) {
                     showToast('Action plan saved successfully!', 'success');
                 } else {
+                    console.error('❌ Save response error:', result);
                     showToast('Failed to save: ' + (result.message || result.error), 'error');
                 }
 
             } catch (error) {
-                console.error('Error saving action plan:', error);
-                showToast('Failed to save action plan', 'error');
+                console.error('❌ Error saving action plan:', error);
+                showToast('Failed to save action plan: ' + error.message, 'error');
             }
         }
 

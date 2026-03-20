@@ -178,6 +178,9 @@ app.use('/dashboard', express.static(path.join(__dirname, 'dashboard')));
 // Serve static files from checklist folder
 app.use('/checklist', express.static(path.join(__dirname, 'checklist')));
 
+// Serve uploaded action plan images
+app.use('/uploads/action-plans', express.static(path.join(__dirname, 'uploads', 'action-plans')));
+
 // ==========================================
 // Initialize Authentication System (Phase 2)
 // ==========================================
@@ -10303,12 +10306,16 @@ app.post('/api/export-doc', requireAuth, requireRole('Admin', 'Auditor'), async 
 app.post('/api/action-plan/save', requireAuth, async (req, res) => {
     try {
         const userRole = req.currentUser?.role;
+        const userEmail = req.currentUser?.email;
+        
+        console.log(`📊 [ACTION-PLAN] Save request from ${userEmail} (${userRole})`);
+        console.log(`📊 [ACTION-PLAN] Request body keys: ${Object.keys(req.body).join(', ')}`);
         
         // Block Auditors from modifying action plan data
         // Only StoreManager, SuperAuditor, Admin, AreaManager, HeadOfOperations can edit
         const canEditRoles = ['StoreManager', 'SuperAuditor', 'Admin', 'AreaManager', 'HeadOfOperations'];
         if (!canEditRoles.includes(userRole)) {
-            console.log(`⚠️ Action plan save blocked - User ${req.currentUser?.email} (${userRole}) not authorized to edit`);
+            console.log(`⚠️ [ACTION-PLAN] Save blocked - User ${userEmail} (${userRole}) not authorized to edit`);
             return res.status(403).json({
                 success: false,
                 message: 'You do not have permission to edit action plan responses. Only Store Managers, SuperAuditors, and Admins can modify action plans.'
@@ -10317,20 +10324,37 @@ app.post('/api/action-plan/save', requireAuth, async (req, res) => {
         
         const { documentNumber, actions, updatedBy } = req.body;
         
+        console.log(`📊 [ACTION-PLAN] documentNumber: ${documentNumber}, actions count: ${actions?.length}, updatedBy: ${updatedBy}`);
+        
         if (!documentNumber || !actions || !Array.isArray(actions)) {
+            console.log(`❌ [ACTION-PLAN] Invalid request - documentNumber: ${!!documentNumber}, actions: ${!!actions}, isArray: ${Array.isArray(actions)}`);
             return res.status(400).json({
                 success: false,
-                message: 'Invalid request: documentNumber and actions array required'
+                message: `Invalid request: documentNumber and actions array required. Received: documentNumber=${!!documentNumber}, actions=${!!actions}`
             });
         }
         
-        console.log(`📊 Saving ${actions.length} actions for document ${documentNumber}`);
+        console.log(`📊 [ACTION-PLAN] Saving ${actions.length} actions for document ${documentNumber}`);
+        
+        // Import image upload service
+        const imageUploadService = require('./src/image-upload-service');
         
         // Transform the data to match database schema
-        const responses = actions.map(action => {
-            const picturesJson = JSON.stringify(action.pictures || []);
+        // Process images: compress base64 images and save to disk
+        const responses = [];
+        for (const action of actions) {
+            let pictureUrls = [];
             
-            return {
+            // Process pictures - convert base64 to compressed files
+            if (action.pictures && action.pictures.length > 0) {
+                pictureUrls = await imageUploadService.saveImages(
+                    action.pictures, 
+                    documentNumber, 
+                    action.referenceValue
+                );
+            }
+            
+            responses.push({
                 documentNumber: documentNumber,
                 referenceValue: action.referenceValue,
                 section: action.section,
@@ -10341,10 +10365,10 @@ app.post('/api/action-plan/save', requireAuth, async (req, res) => {
                 deadline: action.deadline || null,
                 personInCharge: action.personInCharge,
                 status: action.status,
-                picturesPaths: picturesJson,
+                picturesPaths: JSON.stringify(pictureUrls),
                 updatedBy: updatedBy || req.currentUser?.email || 'Store Manager'
-            };
-        });
+            });
+        }
         
         // Save to database
         const result = await actionPlanService.saveMultipleResponses(responses, updatedBy || req.currentUser?.email || 'Store Manager');
@@ -10370,7 +10394,8 @@ app.post('/api/action-plan/save', requireAuth, async (req, res) => {
         }
         
     } catch (error) {
-        console.error('❌ Error saving action plan:', error);
+        console.error(`❌ [ACTION-PLAN] Error saving for ${req.body?.documentNumber}:`, error.message);
+        console.error(`❌ [ACTION-PLAN] Full error:`, error);
         res.status(500).json({
             success: false,
             message: 'Failed to save action plan: ' + error.message
@@ -10381,12 +10406,15 @@ app.post('/api/action-plan/save', requireAuth, async (req, res) => {
 /**
  * GET /api/action-plan/:documentNumber
  * Retrieve saved action plan data from MSSQL
+ * Pictures are NOT included by default for faster loading
+ * Use ?includePictures=true to include them
  */
 app.get('/api/action-plan/:documentNumber', requireAuth, async (req, res) => {
     try {
         const { documentNumber } = req.params;
+        const includePictures = req.query.includePictures === 'true';
         
-        const responses = await actionPlanService.getResponses(documentNumber);
+        const responses = await actionPlanService.getResponses(documentNumber, includePictures);
         
         res.json({
             success: true,
@@ -10400,6 +10428,32 @@ app.get('/api/action-plan/:documentNumber', requireAuth, async (req, res) => {
             success: false,
             message: 'Failed to retrieve action plan: ' + error.message
         });
+    }
+});
+
+/**
+ * GET /api/action-plan/:documentNumber/pictures/:referenceValue
+ * Get pictures for a specific action plan item (lazy loading)
+ */
+app.get('/api/action-plan/:documentNumber/pictures/:referenceValue', requireAuth, async (req, res) => {
+    try {
+        const { documentNumber, referenceValue } = req.params;
+        
+        const pool = await actionPlanService.sqlConnector.connect();
+        const result = await pool.request()
+            .input('DocumentNumber', require('mssql').NVarChar(50), documentNumber)
+            .input('ReferenceValue', require('mssql').NVarChar(20), referenceValue)
+            .query('SELECT PicturesPaths FROM ActionPlanResponses WHERE DocumentNumber = @DocumentNumber AND ReferenceValue = @ReferenceValue');
+        
+        if (result.recordset.length > 0 && result.recordset[0].PicturesPaths) {
+            const pictures = JSON.parse(result.recordset[0].PicturesPaths);
+            res.json({ success: true, pictures });
+        } else {
+            res.json({ success: true, pictures: [] });
+        }
+    } catch (error) {
+        console.error('❌ Error retrieving pictures:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
