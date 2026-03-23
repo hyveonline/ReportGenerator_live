@@ -888,6 +888,7 @@ app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'Supe
         const totalStores = storesResult.recordset[0].totalStores;
 
         // Get audited stores count for selected cycle and year
+        // Only count stores that are actually assigned to this schema in the Stores table
         const auditedResult = await pool.request()
             .input('schemaId', sql.Int, schemaId)
             .input('selectedCycle', sql.NVarChar, selectedCycle)
@@ -895,6 +896,7 @@ app.get('/api/cycle-dashboard/progress', requireAuth, requireRole('Admin', 'Supe
             .query(`
                 SELECT COUNT(DISTINCT ai.StoreID) as auditedCount
                 FROM AuditInstances ai
+                INNER JOIN Stores s ON ai.StoreID = s.StoreID AND s.SchemaID = @schemaId AND s.IsActive = 1
                 WHERE ai.SchemaID = @schemaId
                   AND ai.Cycle = @selectedCycle
                   AND ai.Year = @currentYear
