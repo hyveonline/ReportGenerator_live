@@ -275,7 +275,54 @@ class DataService {
                 totalPictures++;
             }
 
-            console.log(`   ✅ Processed ${totalPictures} pictures for ${Object.keys(pictures).length} responses (URL-based)`);
+            // Also fetch gallery pictures with assignments
+            console.log(`   🖼️ Fetching gallery pictures with assignments...`);
+            const galleryResult = await this.pool.request()
+                .input('AuditID', sql.Int, auditId)
+                .query(`
+                    SELECT 
+                        a.AssignmentID, a.ResponseID, a.PictureType,
+                        p.PictureID, p.FileName, p.FilePath, p.ThumbnailPath, p.ContentType,
+                        p.Category, p.Caption
+                    FROM AuditPictureAssignments a
+                    INNER JOIN AuditGalleryPictures p ON a.PictureID = p.PictureID
+                    WHERE p.AuditID = @AuditID
+                    ORDER BY a.ResponseID, a.AssignedAt
+                `);
+
+            let galleryPictures = 0;
+            for (const row of galleryResult.recordset) {
+                const responseId = row.ResponseID;
+                
+                if (!pictures[responseId]) {
+                    pictures[responseId] = [];
+                }
+
+                // Use gallery API endpoint for serving
+                const dataUrl = `/api/gallery/${auditId}/${row.PictureID}/image`;
+
+                const pic = {
+                    pictureId: row.PictureID,
+                    assignmentId: row.AssignmentID,
+                    fileName: row.FileName,
+                    contentType: row.ContentType,
+                    pictureType: row.PictureType,
+                    category: row.Category || null,
+                    caption: row.Caption || null,
+                    dataUrl: dataUrl,
+                    thumbnailUrl: `/api/gallery/${auditId}/${row.PictureID}/thumbnail`,
+                    isGallery: true
+                };
+                
+                pictures[responseId].push(pic);
+                galleryPictures++;
+            }
+
+            if (galleryPictures > 0) {
+                console.log(`   ✅ Added ${galleryPictures} gallery pictures`);
+            }
+
+            console.log(`   ✅ Total: ${totalPictures + galleryPictures} pictures for ${Object.keys(pictures).length} responses`);
 
             return pictures;
         } catch (error) {
@@ -380,24 +427,94 @@ class DataService {
                 bad: []
             };
             
-            // Helper to get picture URLs (supports multiple pictures stored as JSON array)
-            const getPictureUrls = (picturePath) => {
+            // Helper to load fridge picture file as base64
+            const loadFridgePictureAsBase64 = async (picturePath) => {
+                try {
+                    const fs = require('fs').promises;
+                    const path = require('path');
+                    const FRIDGE_STORAGE_BASE = path.join(__dirname, '..', '..', '..', 'storage', 'fridge-pictures');
+                    const fullPath = path.join(FRIDGE_STORAGE_BASE, picturePath);
+                    const buffer = await fs.readFile(fullPath);
+                    const ext = path.extname(picturePath).toLowerCase().replace('.', '');
+                    const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+                    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+                } catch (err) {
+                    console.warn(`   ⚠️ Could not load fridge picture: ${picturePath}`, err.message);
+                    return null;
+                }
+            };
+            
+            // Helper to load gallery picture as base64
+            const loadGalleryPictureAsBase64 = async (pictureId, auditId) => {
+                try {
+                    // Fetch gallery picture from database
+                    const picResult = await this.pool.request()
+                        .input('PictureID', sql.Int, pictureId)
+                        .query(`
+                            SELECT FileName, FilePath FROM AuditGalleryPictures WHERE PictureID = @PictureID
+                        `);
+                    
+                    if (picResult.recordset.length === 0) return null;
+                    
+                    const { FileName, FilePath } = picResult.recordset[0];
+                    const fs = require('fs').promises;
+                    const path = require('path');
+                    const GALLERY_BASE = path.join(__dirname, '..', '..', '..', 'uploads', 'audit-gallery');
+                    const fullPath = path.join(GALLERY_BASE, String(auditId), FileName);
+                    
+                    const buffer = await fs.readFile(fullPath);
+                    const ext = path.extname(FileName).toLowerCase().replace('.', '');
+                    const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+                    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+                } catch (err) {
+                    console.warn(`   ⚠️ Could not load gallery picture ${pictureId}:`, err.message);
+                    return null;
+                }
+            };
+            
+            // Helper to get picture paths (supports multiple pictures stored as JSON array)
+            const getPicturePaths = (picturePath) => {
                 if (!picturePath) return [];
                 try {
                     // Check if it's a JSON array
                     if (picturePath.startsWith('[')) {
-                        const paths = JSON.parse(picturePath);
-                        return paths.map(p => `/api/fridge-pictures/file/${p}`);
+                        return JSON.parse(picturePath);
                     }
                 } catch (e) {
                     // Not JSON, treat as single path
                 }
-                return [`/api/fridge-pictures/file/${picturePath}`];
+                return [picturePath];
+            };
+            
+            // Helper to parse gallery picture IDs
+            const parseGalleryPictureIds = (json) => {
+                if (!json) return [];
+                try {
+                    return JSON.parse(json);
+                } catch (e) {
+                    return [];
+                }
             };
 
             for (const row of result.recordset) {
-                // Get picture URLs (not base64 - pictures served via API endpoint)
-                const pictures = getPictureUrls(row.PicturePath);
+                // Load uploaded fridge pictures as base64
+                const uploadedPaths = getPicturePaths(row.PicturePath);
+                const uploadedPictures = [];
+                for (const p of uploadedPaths) {
+                    const base64 = await loadFridgePictureAsBase64(p);
+                    if (base64) uploadedPictures.push(base64);
+                }
+                
+                // Load gallery pictures as base64
+                const galleryIds = parseGalleryPictureIds(row.GalleryPictureIds);
+                const galleryPictures = [];
+                for (const picId of galleryIds) {
+                    const base64 = await loadGalleryPictureAsBase64(picId, auditId);
+                    if (base64) galleryPictures.push(base64);
+                }
+                
+                // Combine all pictures
+                const allPictures = [...uploadedPictures, ...galleryPictures];
                 
                 const reading = {
                     readingId: row.ReadingID,
@@ -410,8 +527,8 @@ class DataService {
                     displayTemp: row.DisplayTemp,
                     probeTemp: row.ProbeTemp,
                     issue: row.Issue,
-                    picture: pictures.length > 0 ? pictures[0] : null, // Backward compatibility
-                    pictures: pictures, // Multiple pictures support
+                    picture: allPictures.length > 0 ? allPictures[0] : null, // Backward compatibility
+                    pictures: allPictures, // Multiple pictures support (now base64 for embedding)
                     readingType: row.ReadingType,
                     createdAt: row.CreatedAt
                 };

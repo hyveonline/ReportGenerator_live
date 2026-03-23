@@ -272,6 +272,11 @@
             border-left: 4px solid #64748b;
         }
 
+        .question-card.gallery-target {
+            border-right: 4px solid #8b5cf6;
+            background: linear-gradient(90deg, rgba(255,255,255,0.95) 0%, rgba(139, 92, 246, 0.08) 100%);
+        }
+
         .question-header {
             display: flex;
             justify-content: space-between;
@@ -730,6 +735,78 @@
             color: #6ee7b7;
         }
 
+        /* Gallery Pictures in Question Card */
+        .gallery-pictures {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(99, 102, 241, 0.1);
+        }
+
+        .gallery-pictures:empty {
+            display: none;
+        }
+
+        .gallery-picture-item {
+            position: relative;
+            width: 60px;
+            height: 60px;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .gallery-picture-item:hover {
+            border-color: #6366f1;
+            transform: scale(1.05);
+        }
+
+        .gallery-picture-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-picture-item .badge {
+            position: absolute;
+            bottom: 2px;
+            left: 2px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 0.55rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .gallery-picture-item .badge.finding { background: #ef4444; }
+        .gallery-picture-item .badge.good { background: #10b981; }
+        .gallery-picture-item .badge.corrective { background: #3b82f6; }
+
+        .gallery-picture-item .remove-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border: none;
+            font-size: 0.6rem;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-picture-item:hover .remove-btn {
+            display: flex;
+        }
+
         /* Good Observation Button */
         .good-observation-btn {
             background: rgba(16, 185, 129, 0.1);
@@ -917,6 +994,10 @@
                 display: none;
             }
             
+            .gallery-panel {
+                display: none;
+            }
+            
             .footer-actions {
                 left: 0;
             }
@@ -924,6 +1005,512 @@
             .audit-info {
                 display: none;
             }
+        }
+
+        /* ==========================================
+           Gallery Panel Styles
+           ========================================== */
+        .gallery-panel {
+            width: 320px;
+            background: rgba(255, 255, 255, 0.98);
+            border-left: 1px solid rgba(99, 102, 241, 0.2);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .gallery-panel.gallery-upload-success {
+            animation: galleryFlash 0.5s ease 2;
+            border-left-color: #10b981;
+            box-shadow: -2px 0 20px rgba(16, 185, 129, 0.3);
+        }
+
+        @keyframes galleryFlash {
+            0%, 100% { background: rgba(255, 255, 255, 0.98); }
+            50% { background: rgba(16, 185, 129, 0.15); }
+        }
+
+        .gallery-stat.stat-updated {
+            animation: statPop 0.3s ease;
+            background: #10b981 !important;
+            color: white !important;
+        }
+
+        @keyframes statPop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); }
+        }
+
+        .gallery-panel.collapsed {
+            width: 48px;
+        }
+
+        .gallery-panel.collapsed .gallery-content,
+        .gallery-panel.collapsed .gallery-tabs,
+        .gallery-panel.collapsed .gallery-title-text,
+        .gallery-panel.collapsed .gallery-stats {
+            display: none;
+        }
+
+        .gallery-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+        }
+
+        .gallery-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .gallery-title-icon {
+            font-size: 1.25rem;
+        }
+
+        .gallery-stats {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .gallery-stat {
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .gallery-stat.total { background: #e2e8f0; color: #475569; }
+        .gallery-stat.assigned { background: #dcfce7; color: #16a34a; }
+        .gallery-stat.unassigned { background: #fef3c7; color: #d97706; }
+
+        .gallery-toggle {
+            background: transparent;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            padding: 0.35rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .gallery-toggle:hover {
+            background: rgba(99, 102, 241, 0.1);
+            color: #6366f1;
+        }
+
+        .gallery-tabs {
+            display: flex;
+            padding: 0.5rem;
+            gap: 0.25rem;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+            background: #f8fafc;
+        }
+
+        .gallery-tab {
+            flex: 1;
+            padding: 0.4rem 0.25rem;
+            border: none;
+            background: transparent;
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .gallery-tab:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .gallery-tab.active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+        }
+
+        .gallery-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+        }
+
+        .gallery-upload-zone {
+            border: 2px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(99, 102, 241, 0.03);
+        }
+
+        .gallery-upload-zone:hover {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .gallery-upload-zone.dragover {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .gallery-upload-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .gallery-upload-text {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .gallery-upload-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            justify-content: center;
+        }
+
+        .gallery-upload-btn {
+            padding: 0.35rem 0.75rem;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 6px;
+            background: white;
+            color: #475569;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .gallery-upload-btn:hover {
+            background: #6366f1;
+            color: white;
+            border-color: #6366f1;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        .gallery-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .gallery-item:hover {
+            border-color: #6366f1;
+            transform: scale(1.02);
+        }
+
+        .gallery-item.selected {
+            border-color: #10b981;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+        }
+
+        .gallery-item-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-item-badge {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .gallery-item-badge.finding { background: #ef4444; }
+        .gallery-item-badge.good { background: #10b981; }
+        .gallery-item-badge.corrective { background: #3b82f6; }
+        .gallery-item-badge.unassigned { background: #f59e0b; }
+        .gallery-item-badge.fridge { background: #06b6d4; }
+        .gallery-item-badge.fridgegood { background: #14b8a6; }
+        .gallery-item-badge.fridgebad { background: #f43f5e; }
+        .gallery-item-badge.new { background: #a855f7; }
+
+        .gallery-item-ref {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 0.55rem;
+            font-weight: 700;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .gallery-item-assigned {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: #10b981;
+            color: white;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+        }
+
+        .gallery-item-actions {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            display: none;
+        }
+
+        .gallery-item:hover .gallery-item-actions {
+            display: flex;
+            gap: 2px;
+        }
+
+        .gallery-item-action {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.65rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-item-action:hover {
+            background: #ef4444;
+        }
+
+        .gallery-empty {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #94a3b8;
+        }
+
+        .gallery-empty-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
+        .gallery-empty-text {
+            font-size: 0.85rem;
+        }
+
+        /* Gallery Assign Modal */
+        .gallery-assign-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-assign-modal.show {
+            display: flex;
+        }
+
+        .gallery-assign-content {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .gallery-assign-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .gallery-assign-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #1e293b;
+        }
+
+        .gallery-assign-close {
+            background: transparent;
+            border: none;
+            color: #64748b;
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+
+        .gallery-assign-preview {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .gallery-assign-preview img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+        }
+
+        .gallery-assign-type-label {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+
+        .gallery-assign-types {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .gallery-assign-type-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .gallery-assign-type-btn:hover {
+            border-color: #6366f1;
+        }
+
+        .gallery-assign-type-btn.selected {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .gallery-assign-type-btn .type-icon {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .gallery-assign-type-btn .type-label {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .gallery-assign-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .gallery-assign-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .gallery-assign-btn.cancel {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .gallery-assign-btn.confirm {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .gallery-assign-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        /* Lightbox for gallery preview */
+        .gallery-lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 1200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-lightbox.show {
+            display: flex;
+        }
+
+        .gallery-lightbox-img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 8px;
+        }
+
+        .gallery-lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-lightbox-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .gallery-lightbox-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            font-size: 0.85rem;
         }
 
         /* Image Modal */
@@ -1451,6 +2038,217 @@
             50% { transform: translateY(-5px); }
         }
 
+        /* Fridge picture buttons layout */
+        .fridge-picture-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .fridge-picture-buttons .fridge-picture-zone,
+        .fridge-gallery-pick-zone {
+            flex: 1;
+        }
+
+        .fridge-gallery-pick-zone {
+            border: 2px dashed rgba(139, 92, 246, 0.4);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(139, 92, 246, 0.03);
+        }
+
+        .fridge-gallery-pick-zone:hover {
+            border-color: rgba(139, 92, 246, 0.7);
+            background: rgba(139, 92, 246, 0.08);
+        }
+
+        .fridge-gallery-pick-zone .fridge-picture-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .fridge-gallery-pick-zone .fridge-picture-text {
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+
+        .fridge-gallery-pick-zone .drag-hint {
+            display: block;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 0.25rem;
+        }
+
+        /* Fridge Gallery Picker Modal */
+        .fridge-gallery-picker-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fridge-gallery-picker-modal.show {
+            display: flex;
+        }
+
+        .fridge-gallery-picker-content {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fridge-gallery-picker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .fridge-gallery-picker-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .fridge-gallery-picker-close {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            color: #64748b;
+            cursor: pointer;
+        }
+
+        .fridge-gallery-picker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 0.75rem;
+            overflow-y: auto;
+            flex: 1;
+            padding: 0.5rem;
+        }
+
+        .fridge-gallery-picker-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .fridge-gallery-picker-item:hover {
+            border-color: #6366f1;
+            transform: scale(1.03);
+        }
+
+        .fridge-gallery-picker-item.selected {
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+        }
+
+        .fridge-gallery-picker-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .fridge-gallery-picker-item .check-mark {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #10b981;
+            color: white;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+
+        .fridge-gallery-picker-item.selected .check-mark {
+            display: flex;
+        }
+
+        .fridge-gallery-category-badge {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 4px;
+            border-radius: 3px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .fridge-gallery-picker-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .fridge-gallery-picker-btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .fridge-gallery-picker-btn.cancel {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .fridge-gallery-picker-btn.confirm {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .fridge-gallery-picker-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .fridge-gallery-picker-empty {
+            text-align: center;
+            padding: 3rem;
+            color: #94a3b8;
+        }
+
+        .fridge-gallery-picker-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
         .fridge-picture-icon {
             font-size: 2rem;
             margin-bottom: 0.5rem;
@@ -1519,6 +2317,18 @@
 
         .fridge-picture-item:hover .remove-btn {
             opacity: 1;
+        }
+
+        .fridge-picture-item .gallery-badge {
+            position: absolute;
+            bottom: 2px;
+            left: 2px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-weight: 600;
         }
 
         .fridge-pictures-count {
@@ -1719,6 +2529,98 @@
                 <p>Loading audit data...</p>
             </div>
         </div>
+
+        <!-- Gallery Panel (Right Side) -->
+        <div class="gallery-panel" id="galleryPanel">
+            <div class="gallery-header">
+                <div class="gallery-title">
+                    <span class="gallery-title-icon">🖼️</span>
+                    <span class="gallery-title-text">Gallery</span>
+                </div>
+                <div class="gallery-stats" id="galleryStats">
+                    <span class="gallery-stat total" id="galleryTotal">0</span>
+                    <span class="gallery-stat assigned" id="galleryAssigned">0 ✓</span>
+                </div>
+                <button class="gallery-toggle" onclick="toggleGalleryPanel()" title="Toggle Gallery">
+                    ◀
+                </button>
+            </div>
+            <div class="gallery-tabs">
+                <button class="gallery-tab active" data-filter="all" onclick="filterGallery('all')">All</button>
+                <button class="gallery-tab" data-filter="unassigned" onclick="filterGallery('unassigned')">New</button>
+                <button class="gallery-tab" data-filter="Finding" onclick="filterGallery('Finding')">Finding</button>
+                <button class="gallery-tab" data-filter="Good" onclick="filterGallery('Good')">Good</button>
+                <button class="gallery-tab" data-filter="Corrective" onclick="filterGallery('Corrective')">Corrective</button>
+                <button class="gallery-tab" data-filter="Fridge" onclick="filterGallery('Fridge')">Fridge</button>
+            </div>
+            <div class="gallery-content">
+                <!-- Upload Zone -->
+                <div class="gallery-upload-zone" id="galleryUploadZone">
+                    <div class="gallery-upload-icon">📤</div>
+                    <div class="gallery-upload-text">Drop images or click to upload</div>
+                    <div class="gallery-upload-buttons">
+                        <button class="gallery-upload-btn" onclick="event.stopPropagation(); document.getElementById('galleryFileInput').click();">
+                            📁 Files
+                        </button>
+                        <button class="gallery-upload-btn" onclick="event.stopPropagation(); openGalleryCamera();">
+                            📷 Camera
+                        </button>
+                    </div>
+                    <input type="file" id="galleryFileInput" accept="image/*" multiple style="display: none;" onchange="handleGalleryFileSelect(event)">
+                    <input type="file" id="galleryCameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleGalleryFileSelect(event)">
+                </div>
+
+                <!-- Gallery Grid -->
+                <div class="gallery-grid" id="galleryGrid">
+                    <!-- Gallery items will be rendered here -->
+                </div>
+
+                <!-- Empty State -->
+                <div class="gallery-empty" id="galleryEmpty" style="display: none;">
+                    <div class="gallery-empty-icon">📷</div>
+                    <div class="gallery-empty-text">No pictures yet.<br>Upload or capture images to get started.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gallery Assign Modal -->
+    <div class="gallery-assign-modal" id="galleryAssignModal">
+        <div class="gallery-assign-content">
+            <div class="gallery-assign-header">
+                <span class="gallery-assign-title">📌 Assign Picture to Question</span>
+                <button class="gallery-assign-close" onclick="closeGalleryAssignModal()">×</button>
+            </div>
+            <div class="gallery-assign-preview">
+                <img id="galleryAssignPreview" src="" alt="Preview">
+            </div>
+            <div class="gallery-assign-type-label">Select picture type:</div>
+            <div class="gallery-assign-types">
+                <button class="gallery-assign-type-btn" data-type="Finding" onclick="selectGalleryAssignType('Finding')">
+                    <div class="type-icon">❌</div>
+                    <div class="type-label">Finding</div>
+                </button>
+                <button class="gallery-assign-type-btn" data-type="Good" onclick="selectGalleryAssignType('Good')">
+                    <div class="type-icon">✅</div>
+                    <div class="type-label">Good</div>
+                </button>
+                <button class="gallery-assign-type-btn" data-type="Corrective" onclick="selectGalleryAssignType('Corrective')">
+                    <div class="type-icon">🔧</div>
+                    <div class="type-label">Corrective</div>
+                </button>
+            </div>
+            <div class="gallery-assign-actions">
+                <button class="gallery-assign-btn cancel" onclick="closeGalleryAssignModal()">Cancel</button>
+                <button class="gallery-assign-btn confirm" onclick="confirmGalleryAssign()">Assign Picture</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gallery Lightbox -->
+    <div class="gallery-lightbox" id="galleryLightbox">
+        <button class="gallery-lightbox-close" onclick="closeGalleryLightbox()">×</button>
+        <img class="gallery-lightbox-img" id="galleryLightboxImg" src="" alt="Full size">
+        <div class="gallery-lightbox-info" id="galleryLightboxInfo"></div>
     </div>
 
     <!-- Footer Actions -->
@@ -1872,13 +2774,22 @@
             
             <div class="fridge-form-group">
                 <label class="fridge-form-label">📷 Pictures <span style="font-size: 0.75rem; color: #94a3b8;">(multiple allowed)</span></label>
-                <div class="fridge-picture-zone" id="fridgeGoodDropZone" onclick="document.getElementById('fridgeGoodPicture').click()">
-                    <div class="fridge-picture-icon">📤</div>
-                    <div class="fridge-picture-text">
-                        Click to upload or drag & drop
-                        <span class="drag-hint">Supports: JPG, PNG, GIF (multiple files)</span>
+                <div class="fridge-picture-buttons">
+                    <div class="fridge-picture-zone" id="fridgeGoodDropZone" onclick="document.getElementById('fridgeGoodPicture').click()">
+                        <div class="fridge-picture-icon">📤</div>
+                        <div class="fridge-picture-text">
+                            Upload new
+                            <span class="drag-hint">Click or drag & drop</span>
+                        </div>
+                        <input type="file" id="fridgeGoodPicture" accept="image/*" multiple style="display: none;" onchange="handleFridgePictureSelect('good', this)">
                     </div>
-                    <input type="file" id="fridgeGoodPicture" accept="image/*" multiple style="display: none;" onchange="handleFridgePictureSelect('good', this)">
+                    <div class="fridge-gallery-pick-zone" onclick="openFridgeGalleryPicker('good')">
+                        <div class="fridge-picture-icon">🖼️</div>
+                        <div class="fridge-picture-text">
+                            From Gallery
+                            <span class="drag-hint">Select existing pictures</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="fridge-pictures-gallery" id="fridgeGoodGallery"></div>
                 <div class="fridge-pictures-count" id="fridgeGoodCount"></div>
@@ -1964,13 +2875,22 @@
             
             <div class="fridge-form-group">
                 <label class="fridge-form-label">📷 Pictures <span style="font-size: 0.75rem; color: #94a3b8;">(multiple allowed)</span></label>
-                <div class="fridge-picture-zone" id="fridgeBadDropZone" onclick="document.getElementById('fridgeBadPicture').click()">
-                    <div class="fridge-picture-icon">📤</div>
-                    <div class="fridge-picture-text">
-                        Click to upload or drag & drop
-                        <span class="drag-hint">Supports: JPG, PNG, GIF (multiple files)</span>
+                <div class="fridge-picture-buttons">
+                    <div class="fridge-picture-zone" id="fridgeBadDropZone" onclick="document.getElementById('fridgeBadPicture').click()">
+                        <div class="fridge-picture-icon">📤</div>
+                        <div class="fridge-picture-text">
+                            Upload new
+                            <span class="drag-hint">Click or drag & drop</span>
+                        </div>
+                        <input type="file" id="fridgeBadPicture" accept="image/*" multiple style="display: none;" onchange="handleFridgePictureSelect('bad', this)">
                     </div>
-                    <input type="file" id="fridgeBadPicture" accept="image/*" multiple style="display: none;" onchange="handleFridgePictureSelect('bad', this)">
+                    <div class="fridge-gallery-pick-zone" onclick="openFridgeGalleryPicker('bad')">
+                        <div class="fridge-picture-icon">🖼️</div>
+                        <div class="fridge-picture-text">
+                            From Gallery
+                            <span class="drag-hint">Select existing pictures</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="fridge-pictures-gallery" id="fridgeBadGallery"></div>
                 <div class="fridge-pictures-count" id="fridgeBadCount"></div>
@@ -1979,6 +2899,23 @@
             <div class="fridge-modal-actions">
                 <button class="fridge-modal-btn cancel" onclick="closeFridgeModal('bad')">Cancel</button>
                 <button class="fridge-modal-btn save-bad" onclick="saveFridgeReading('bad')">✓ Save Reading</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fridge Gallery Picker Modal -->
+    <div class="fridge-gallery-picker-modal" id="fridgeGalleryPickerModal">
+        <div class="fridge-gallery-picker-content">
+            <div class="fridge-gallery-picker-header">
+                <span class="fridge-gallery-picker-title">🖼️ Select Pictures from Gallery</span>
+                <button class="fridge-gallery-picker-close" onclick="closeFridgeGalleryPicker()">×</button>
+            </div>
+            <div class="fridge-gallery-picker-grid" id="fridgeGalleryPickerGrid">
+                <!-- Gallery items will be rendered here -->
+            </div>
+            <div class="fridge-gallery-picker-actions">
+                <button class="fridge-gallery-picker-btn cancel" onclick="closeFridgeGalleryPicker()">Cancel</button>
+                <button class="fridge-gallery-picker-btn confirm" onclick="confirmFridgeGallerySelection()">Add Selected (<span id="fridgeGallerySelectedCount">0</span>)</button>
             </div>
         </div>
     </div>
@@ -2062,6 +2999,9 @@
             
             // Load fridge readings if available
             await loadFridgeReadings();
+            
+            // Initialize gallery panel
+            await initGallery();
             
             // Re-render to show loaded fridge readings
             if (auditData && auditData.sections) {
@@ -2254,6 +3194,83 @@
                     ${section.items.map((item, qIndex) => renderQuestion(item, index, qIndex)).join('')}
                 </div>
             `;
+            
+            // Load gallery pictures for all questions in this section
+            loadSectionGalleryPictures(section);
+        }
+        
+        // Load gallery pictures for all questions in a section
+        async function loadSectionGalleryPictures(section) {
+            if (!section || !section.items) return;
+            
+            for (const item of section.items) {
+                const container = document.getElementById(`gallery-pictures-${item.responseId}`);
+                if (!container) continue;
+                
+                try {
+                    const assignments = await getResponseGalleryPictures(item.responseId);
+                    if (assignments.length > 0) {
+                        container.innerHTML = assignments.map(a => `
+                            <div class="gallery-picture-item" 
+                                 onclick="openGalleryLightbox(${a.pictureId})"
+                                 title="${a.pictureType || 'Picture'}">
+                                <img src="${a.thumbnailUrl}" 
+                                     alt="${a.caption || 'Gallery picture'}" loading="lazy">
+                                <span class="badge ${(a.pictureType || '').toLowerCase()}">${a.pictureType || 'Pic'}</span>
+                                <button class="remove-btn" onclick="event.stopPropagation(); removeGalleryAssignment(${a.assignmentId}, ${item.responseId})" title="Remove">×</button>
+                            </div>
+                        `).join('');
+                    } else {
+                        container.innerHTML = '';
+                    }
+                } catch (error) {
+                    console.warn(`Could not load gallery pictures for response ${item.responseId}:`, error);
+                }
+            }
+        }
+        
+        // Remove gallery assignment from a question
+        async function removeGalleryAssignment(assignmentId, responseId) {
+            if (!confirm('Remove this picture from this question?')) return;
+            
+            try {
+                const response = await fetch(`/api/gallery/assign/${assignmentId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showToast('Picture removed from question', 'success');
+                    
+                    // Update gallery stats
+                    await loadGalleryPictures();
+                    
+                    // Reload this question's pictures
+                    const container = document.getElementById(`gallery-pictures-${responseId}`);
+                    if (container) {
+                        const assignments = await getResponseGalleryPictures(responseId);
+                        if (assignments.length > 0) {
+                            container.innerHTML = assignments.map(a => `
+                                <div class="gallery-picture-item" 
+                                     onclick="openGalleryLightbox(${a.pictureId})"
+                                     title="${a.pictureType || 'Picture'}">
+                                    <img src="${a.thumbnailUrl}" 
+                                         alt="${a.caption || 'Gallery picture'}" loading="lazy">
+                                    <span class="badge ${(a.pictureType || '').toLowerCase()}">${a.pictureType || 'Pic'}</span>
+                                    <button class="remove-btn" onclick="event.stopPropagation(); removeGalleryAssignment(${a.assignmentId}, ${responseId})" title="Remove">×</button>
+                                </div>
+                            `).join('');
+                        } else {
+                            container.innerHTML = '';
+                        }
+                    }
+                } else {
+                    showToast(result.error || 'Failed to remove picture', 'error');
+                }
+            } catch (error) {
+                console.error('Error removing assignment:', error);
+                showToast('Failed to remove picture', 'error');
+            }
         }
 
         // Render question card
@@ -2272,7 +3289,7 @@
             const isTempMonitoringEnabled = sectionId && tempMonitoringSections[sectionId] === true;
 
             return `
-                <div class="question-card ${answerClass}" id="q-${item.responseId}">
+                <div class="question-card ${answerClass}" id="q-${item.responseId}" data-response-id="${item.responseId}" onclick="setCurrentResponse(${item.responseId})">
                     <div class="question-header">
                         <span class="question-ref">${item.referenceValue || '-'}</span>
                         <span class="question-coeff">Coeff: ${item.coeff}</span>
@@ -2323,6 +3340,11 @@
                                 onclick="takePicture(${item.responseId})">
                                 📷 ${item.hasPicture ? 'Picture Added' : 'Add Picture'}
                             </button>
+                        </div>
+                        
+                        <!-- Gallery Pictures for Finding -->
+                        <div class="gallery-pictures" id="gallery-pictures-${item.responseId}">
+                            <!-- Will be populated dynamically -->
                         </div>
                         
                         <!-- Escalate Section -->
@@ -3119,6 +4141,47 @@
                 return;
             }
 
+            // Check for unassigned gallery pictures
+            const unassignedPictures = galleryPictures.filter(p => !p.assignmentCount || p.assignmentCount === 0);
+            if (unassignedPictures.length > 0) {
+                const picList = unassignedPictures.slice(0, 5).map(p => `• ${p.originalFileName || p.fileName}`).join('\n');
+                const moreText = unassignedPictures.length > 5 ? `\n...and ${unassignedPictures.length - 5} more` : '';
+                
+                const action = confirm(
+                    `📷 Unassigned Pictures Found\n\n` +
+                    `You have ${unassignedPictures.length} picture(s) that are not assigned to any question:\n\n` +
+                    `${picList}${moreText}\n\n` +
+                    `Click OK to open the gallery and assign or delete them.\n` +
+                    `Click Cancel to DELETE these pictures and complete the audit.`
+                );
+                
+                if (action) {
+                    // Open gallery panel and filter to show unassigned
+                    toggleGalleryPanel();
+                    galleryFilter = 'unassigned';
+                    document.querySelectorAll('.gallery-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelector('.gallery-tab[data-filter="unassigned"]')?.classList.add('active');
+                    renderGalleryGrid();
+                    return;
+                }
+                
+                // If Cancel, delete all unassigned pictures to save storage
+                showToast(`Deleting ${unassignedPictures.length} unassigned picture(s)...`, 'info');
+                for (const pic of unassignedPictures) {
+                    try {
+                        await fetch(`/api/gallery/${auditData.auditId}/${pic.pictureId}`, {
+                            method: 'DELETE'
+                        });
+                    } catch (err) {
+                        console.warn('Could not delete picture:', pic.pictureId, err);
+                    }
+                }
+                // Refresh gallery pictures list
+                galleryPictures = galleryPictures.filter(p => p.assignmentCount > 0);
+                updateGalleryStats();
+                renderGalleryGrid();
+            }
+
             try {
                 const response = await fetch(`/api/audits/${auditData.auditId}/complete`, {
                     method: 'POST',
@@ -3216,12 +4279,17 @@
                 return '';
             }
             
-            // Helper to get picture count
+            // Helper to get picture count (includes both uploaded and gallery pictures)
             const getPicCount = (entry) => {
-                if (entry.pictures && entry.pictures.length > 0) return entry.pictures.length;
-                if (entry.picture) return 1;
-                return 0;
+                let count = 0;
+                if (entry.pictures && entry.pictures.length > 0) count += entry.pictures.length;
+                else if (entry.picture) count += 1;
+                if (entry.galleryPictureIds && entry.galleryPictureIds.length > 0) count += entry.galleryPictureIds.length;
+                return count;
             };
+            
+            // Helper to check if entry has gallery pictures
+            const hasGalleryPics = (entry) => entry.galleryPictureIds && entry.galleryPictureIds.length > 0;
             
             let html = '<div class="fridge-entries-list">';
             
@@ -3344,12 +4412,40 @@
                 document.getElementById('fridgeBadIssue').value = entry.issue;
             }
             
-            // Show existing picture if available
-            if (entry.picture) {
-                const preview = document.getElementById(prefix + 'Preview');
-                preview.src = entry.picture;
-                preview.style.display = 'block';
+            // Clear pending pictures and load existing ones
+            pendingFridgePictures[type] = [];
+            
+            // Load existing uploaded pictures
+            if (entry.pictures && entry.pictures.length > 0) {
+                for (const picUrl of entry.pictures) {
+                    pendingFridgePictures[type].push({
+                        name: 'existing_picture',
+                        data: picUrl, // This is a URL for existing pictures
+                        fromGallery: false
+                    });
+                }
+            } else if (entry.picture) {
+                pendingFridgePictures[type].push({
+                    name: 'existing_picture',
+                    data: entry.picture,
+                    fromGallery: false
+                });
             }
+            
+            // Load existing gallery picture references
+            if (entry.galleryPictureIds && entry.galleryPictureIds.length > 0) {
+                for (const pictureId of entry.galleryPictureIds) {
+                    pendingFridgePictures[type].push({
+                        name: `gallery_${pictureId}.jpg`,
+                        fromGallery: true,
+                        galleryPictureId: pictureId,
+                        thumbnailUrl: `/api/gallery/${auditData.auditId}/${pictureId}/thumbnail`
+                    });
+                }
+            }
+            
+            // Render the pictures gallery
+            renderFridgePicturesGallery(type);
         }
         
         // Close fridge modal
@@ -3440,12 +4536,18 @@
                 return;
             }
             
-            gallery.innerHTML = pictures.map((pic, idx) => `
-                <div class="fridge-picture-item">
-                    <img src="${pic.data}" alt="Picture ${idx + 1}">
-                    <button type="button" class="remove-btn" onclick="event.stopPropagation(); removeFridgePicture('${type}', ${idx})">×</button>
-                </div>
-            `).join('');
+            gallery.innerHTML = pictures.map((pic, idx) => {
+                // Use thumbnailUrl for gallery pictures, data for uploaded pictures
+                const imgSrc = pic.fromGallery && pic.thumbnailUrl ? pic.thumbnailUrl : pic.data;
+                const badgeHtml = pic.fromGallery ? '<span class="gallery-badge">Gallery</span>' : '';
+                return `
+                    <div class="fridge-picture-item">
+                        <img src="${imgSrc}" alt="Picture ${idx + 1}">
+                        ${badgeHtml}
+                        <button type="button" class="remove-btn" onclick="event.stopPropagation(); removeFridgePicture('${type}', ${idx})">×</button>
+                    </div>
+                `;
+            }).join('');
             
             countEl.textContent = `${pictures.length} picture${pictures.length > 1 ? 's' : ''} selected`;
         }
@@ -3517,6 +4619,121 @@
             });
         }
         
+        // Fridge Gallery Picker variables
+        let fridgeGalleryPickerType = null;
+        let fridgeGallerySelectedPictures = [];
+        
+        // Open fridge gallery picker
+        function openFridgeGalleryPicker(type) {
+            fridgeGalleryPickerType = type;
+            fridgeGallerySelectedPictures = [];
+            
+            const modal = document.getElementById('fridgeGalleryPickerModal');
+            const grid = document.getElementById('fridgeGalleryPickerGrid');
+            
+            // Check if gallery has pictures
+            if (!galleryPictures || galleryPictures.length === 0) {
+                grid.innerHTML = `
+                    <div class="fridge-gallery-picker-empty">
+                        <div class="fridge-gallery-picker-empty-icon">📷</div>
+                        <div>No pictures in gallery yet.</div>
+                        <div style="font-size: 0.85rem; margin-top: 0.5rem;">Upload pictures to the gallery panel first.</div>
+                    </div>
+                `;
+            } else {
+                // Render gallery items with category badges
+                grid.innerHTML = galleryPictures.map(pic => {
+                    const categoryBadge = pic.category 
+                        ? `<div class="fridge-gallery-category-badge">${pic.category}</div>` 
+                        : '';
+                    return `
+                    <div class="fridge-gallery-picker-item" 
+                         data-picture-id="${pic.pictureId}"
+                         onclick="toggleFridgeGallerySelection(${pic.pictureId})">
+                        <img src="/api/gallery/${auditData.auditId}/${pic.pictureId}/thumbnail" 
+                             alt="${pic.caption || 'Gallery picture'}" loading="lazy">
+                        ${categoryBadge}
+                        <div class="check-mark">✓</div>
+                    </div>
+                `;
+                }).join('');
+            }
+            
+            updateFridgeGallerySelectedCount();
+            modal.classList.add('show');
+        }
+        
+        // Toggle selection in fridge gallery picker
+        function toggleFridgeGallerySelection(pictureId) {
+            const index = fridgeGallerySelectedPictures.indexOf(pictureId);
+            if (index === -1) {
+                fridgeGallerySelectedPictures.push(pictureId);
+            } else {
+                fridgeGallerySelectedPictures.splice(index, 1);
+            }
+            
+            // Update UI
+            const item = document.querySelector(`.fridge-gallery-picker-item[data-picture-id="${pictureId}"]`);
+            if (item) {
+                item.classList.toggle('selected', index === -1);
+            }
+            updateFridgeGallerySelectedCount();
+        }
+        
+        // Update selected count
+        function updateFridgeGallerySelectedCount() {
+            const countEl = document.getElementById('fridgeGallerySelectedCount');
+            if (countEl) countEl.textContent = fridgeGallerySelectedPictures.length;
+        }
+        
+        // Close fridge gallery picker
+        function closeFridgeGalleryPicker() {
+            document.getElementById('fridgeGalleryPickerModal').classList.remove('show');
+            fridgeGalleryPickerType = null;
+            fridgeGallerySelectedPictures = [];
+        }
+        
+        // Confirm fridge gallery selection
+        async function confirmFridgeGallerySelection() {
+            if (fridgeGallerySelectedPictures.length === 0) {
+                showToast('Please select at least one picture', 'error');
+                return;
+            }
+            
+            const type = fridgeGalleryPickerType;
+            
+            // Add selected gallery pictures to pending fridge pictures (metadata only, no base64)
+            for (const pictureId of fridgeGallerySelectedPictures) {
+                const numPicId = Number(pictureId);
+                const picIndex = galleryPictures.findIndex(p => Number(p.pictureId || p.PictureID) === numPicId);
+                
+                if (picIndex !== -1) {
+                    const pic = galleryPictures[picIndex];
+                    
+                    // Store reference to gallery picture - no base64 copy needed
+                    pendingFridgePictures[type].push({
+                        name: pic.fileName || `gallery_${pictureId}.jpg`,
+                        fromGallery: true,
+                        galleryPictureId: numPicId,
+                        // Store thumbnail URL for preview display
+                        thumbnailUrl: `/api/gallery/${auditData.auditId}/${numPicId}/thumbnail`
+                    });
+                    
+                    // Update local gallery to show as Fridge type immediately
+                    galleryPictures[picIndex].assignedPictureType = 'Fridge';
+                    galleryPictures[picIndex].assignmentCount = (galleryPictures[picIndex].assignmentCount || 0) + 1;
+                }
+            }
+            
+            // Refresh gallery display
+            renderGalleryGrid();
+            updateGalleryStats();
+            
+            renderFridgePicturesGallery(type);
+            showToast(`${fridgeGallerySelectedPictures.length} picture(s) added from gallery`, 'success');
+            closeFridgeGalleryPicker();
+        }
+        
         // Save fridge reading
         async function saveFridgeReading(type) {
             const prefix = type === 'good' ? 'fridgeGood' : 'fridgeBad';
@@ -3557,9 +4774,19 @@
             }
             
             // Get pictures array (from pending pictures or keep existing when editing)
+            // For gallery pictures, only store the ID reference - no base64 copying
             let pictures = [];
+            let galleryPictureIds = [];
             if (pendingFridgePictures[type].length > 0) {
-                pictures = pendingFridgePictures[type].map(p => p.data);
+                // Separate uploaded pictures (with base64) from gallery references
+                const uploadedPics = pendingFridgePictures[type].filter(p => !p.fromGallery && p.data);
+                const galleryPics = pendingFridgePictures[type].filter(p => p.fromGallery && p.galleryPictureId);
+                
+                // Only include base64 data for newly uploaded pictures
+                pictures = uploadedPics.map(p => p.data);
+                
+                // Track gallery picture IDs (no base64 needed - server will use gallery files)
+                galleryPictureIds = galleryPics.map(p => p.galleryPictureId);
             } else if (editingFridgeEntry) {
                 // Keep existing pictures when editing
                 const existingEntries = type === 'good' 
@@ -3571,6 +4798,10 @@
                 } else if (existingEntry && existingEntry.picture) {
                     // Backward compatibility: single picture to array
                     pictures = [existingEntry.picture];
+                }
+                // Preserve existing gallery picture IDs
+                if (existingEntry && existingEntry.galleryPictureIds) {
+                    galleryPictureIds = existingEntry.galleryPictureIds;
                 }
             }
             
@@ -3584,6 +4815,7 @@
                 probeTemp: probeTemp.trim(),
                 pictures: pictures, // Now an array
                 picture: pictures.length > 0 ? pictures[0] : null, // Keep backward compatibility
+                galleryPictureIds: galleryPictureIds, // Track gallery pictures used
                 timestamp: new Date().toISOString()
             };
             
@@ -3684,6 +4916,34 @@
                 throw new Error(result.error || 'Failed to save fridge readings');
             }
             
+            // Assign gallery pictures used for fridge readings as 'Fridge' type
+            const allReadings = [...fridgeGoodReadings, ...fridgeBadReadings];
+            for (const reading of allReadings) {
+                if (reading.galleryPictureIds && reading.galleryPictureIds.length > 0) {
+                    for (const pictureId of reading.galleryPictureIds) {
+                        try {
+                            // Use the correct API endpoint for assigning pictures
+                            await fetch('/api/gallery/assign', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    pictureId: pictureId,
+                                    responseId: reading.responseId,
+                                    pictureType: 'Fridge'
+                                })
+                            });
+                        } catch (err) {
+                            console.warn('Could not assign gallery picture to fridge:', err);
+                        }
+                    }
+                }
+            }
+            
+            // Refresh gallery to show updated assignments
+            if (galleryPanel && galleryPanel.classList.contains('show')) {
+                await loadGalleryPictures();
+            }
+            
             return result;
         }
         
@@ -3704,6 +4964,503 @@
                 }
             } catch (error) {
                 console.warn('Could not load fridge readings:', error.message);
+            }
+        }
+
+        // ==========================================
+        // Gallery System Functions
+        // ==========================================
+        
+        // Gallery state
+        let galleryPictures = [];
+        let galleryFilter = 'all';
+        let galleryAssignPictureId = null;
+        let galleryAssignType = null;
+        let galleryPanelCollapsed = false;
+        
+        // Initialize gallery
+        async function initGallery() {
+            if (!auditData) return;
+            
+            // Set up drag & drop on upload zone
+            const uploadZone = document.getElementById('galleryUploadZone');
+            if (uploadZone) {
+                uploadZone.addEventListener('click', () => {
+                    document.getElementById('galleryFileInput').click();
+                });
+                
+                uploadZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadZone.classList.add('dragover');
+                });
+                
+                uploadZone.addEventListener('dragleave', () => {
+                    uploadZone.classList.remove('dragover');
+                });
+                
+                uploadZone.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    uploadZone.classList.remove('dragover');
+                    
+                    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                    if (files.length > 0) {
+                        await uploadGalleryFiles(files);
+                    }
+                });
+            }
+            
+            // Load gallery from server
+            await loadGalleryPictures();
+        }
+        
+        // Load gallery pictures from server
+        async function loadGalleryPictures() {
+            if (!auditData) return;
+            
+            try {
+                const response = await fetch(`/api/gallery/${auditData.auditId}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    galleryPictures = result.data || [];
+                    // Log each picture's ID to debug
+                    console.log(`Loaded ${galleryPictures.length} gallery pictures:`, 
+                        galleryPictures.map(p => ({ id: p.pictureId, name: p.fileName })));
+                    renderGalleryGrid();
+                    updateGalleryStats();
+                }
+            } catch (error) {
+                console.warn('Could not load gallery pictures:', error.message);
+            }
+        }
+        
+        // Update gallery stats display
+        function updateGalleryStats() {
+            const totalEl = document.getElementById('galleryTotal');
+            const assignedEl = document.getElementById('galleryAssigned');
+            
+            const total = galleryPictures.length;
+            const assigned = galleryPictures.filter(p => p.assignmentCount > 0).length;
+            
+            if (totalEl) totalEl.textContent = total;
+            if (assignedEl) assignedEl.textContent = `${assigned} ✓`;
+        }
+        
+        // Render gallery grid
+        function renderGalleryGrid() {
+            const grid = document.getElementById('galleryGrid');
+            const emptyState = document.getElementById('galleryEmpty');
+            
+            if (!grid) return;
+            
+            // Filter pictures - use assignedPictureType for Finding/Good/Corrective filters
+            let filtered = galleryPictures;
+            if (galleryFilter === 'unassigned') {
+                filtered = galleryPictures.filter(p => !p.assignmentCount || p.assignmentCount === 0);
+            } else if (galleryFilter === 'Finding' || galleryFilter === 'Good' || galleryFilter === 'Corrective') {
+                // Filter by assigned picture type
+                filtered = galleryPictures.filter(p => p.assignedPictureType === galleryFilter);
+            } else if (galleryFilter === 'Fridge') {
+                // Filter for fridge pictures - either assigned as Fridge type OR category contains fridge-related terms
+                filtered = galleryPictures.filter(p => 
+                    p.assignedPictureType === 'Fridge' ||
+                    (p.category && (
+                        p.category.toLowerCase().includes('fridge') ||
+                        p.category.toLowerCase().includes('freezer') ||
+                        p.category.toLowerCase().includes('chilled') ||
+                        p.category.toLowerCase().includes('frozen') ||
+                        p.category.toLowerCase().includes('cold')
+                    ))
+                );
+            } else if (galleryFilter !== 'all') {
+                // Filter by category for other filters
+                filtered = galleryPictures.filter(p => p.category === galleryFilter);
+            }
+            
+            if (filtered.length === 0) {
+                grid.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            grid.style.display = 'grid';
+            emptyState.style.display = 'none';
+            
+            grid.innerHTML = filtered.map(pic => {
+                // Determine badge type - prioritize assignedPictureType, then category
+                const badgeType = pic.assignedPictureType || pic.category;
+                const badgeClass = badgeType ? badgeType.toLowerCase().replace(/\s+/g, '-') : 'unassigned';
+                const badgeText = badgeType || 'New';
+                
+                // Ensure pictureId is valid - check both pictureId and PictureID (case sensitivity)
+                const picId = pic.pictureId || pic.PictureID || 0;
+                if (!picId) {
+                    console.warn('⚠️ Picture missing ID:', pic);
+                }
+                
+                // Reference value badge (if assigned to a question)
+                const refBadge = pic.assignedReferenceValue ? 
+                    `<span class="gallery-item-ref">#${pic.assignedReferenceValue}</span>` : '';
+                
+                return `
+                <div class="gallery-item" 
+                     data-picture-id="${picId}"
+                     onclick="handleGalleryItemClick(this.dataset.pictureId, event)"
+                     ondblclick="openGalleryLightbox(this.dataset.pictureId)">
+                    <img class="gallery-item-img" 
+                         src="/api/gallery/${auditData.auditId}/${picId}/thumbnail" 
+                         alt="${pic.caption || 'Gallery picture'}"
+                         loading="lazy">
+                    <span class="gallery-item-badge ${badgeClass}">${badgeText}</span>
+                    ${refBadge}
+                    ${pic.assignmentCount > 0 ? `<span class="gallery-item-assigned">${pic.assignmentCount}</span>` : ''}
+                    <div class="gallery-item-actions">
+                        <button class="gallery-item-action" onclick="event.stopPropagation(); deleteGalleryPicture(this.closest('.gallery-item').dataset.pictureId)" title="Delete">🗑️</button>
+                    </div>
+                </div>
+            `;
+            }).join('');
+        }
+        
+        // Handle gallery item click - show assign modal
+        function handleGalleryItemClick(pictureId, event) {
+            // Don't trigger on action buttons
+            if (event.target.closest('.gallery-item-actions')) return;
+            
+            // Open assign modal for current question
+            if (!currentResponseId) {
+                showToast('Please select a question first', 'error');
+                return;
+            }
+            
+            // Ensure pictureId is a number
+            galleryAssignPictureId = Number(pictureId);
+            galleryAssignType = null;
+            
+            console.log(`🖼️ Gallery item clicked, setting pictureId: ${galleryAssignPictureId}`);
+            
+            const pic = galleryPictures.find(p => Number(p.pictureId) === galleryAssignPictureId);
+            if (pic) {
+                document.getElementById('galleryAssignPreview').src = `/api/gallery/${auditData.auditId}/${pictureId}/thumbnail`;
+                
+                // Pre-select type if picture already assigned or has matching category
+                const preSelectType = pic.assignedPictureType || 
+                    (['Finding', 'Good', 'Corrective'].includes(pic.category) ? pic.category : null);
+                    
+                if (preSelectType) {
+                    selectGalleryAssignType(preSelectType);
+                } else {
+                    // Clear selection
+                    document.querySelectorAll('.gallery-assign-type-btn').forEach(btn => {
+                        btn.classList.remove('selected');
+                    });
+                }
+            }
+            
+            document.getElementById('galleryAssignModal').classList.add('show');
+        }
+        
+        // Select assign type
+        function selectGalleryAssignType(type) {
+            galleryAssignType = type;
+            document.querySelectorAll('.gallery-assign-type-btn').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.type === type);
+            });
+        }
+        
+        // Confirm gallery assignment
+        async function confirmGalleryAssign() {
+            if (!galleryAssignPictureId || !galleryAssignType) {
+                showToast('Please select a picture type', 'error');
+                return;
+            }
+            
+            if (!currentResponseId) {
+                showToast('No question selected', 'error');
+                return;
+            }
+            
+            try {
+                // Capture IDs before they get cleared
+                const pictureIdToAssign = Number(galleryAssignPictureId);
+                const typeToAssign = galleryAssignType;
+                
+                const response = await fetch('/api/gallery/assign', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pictureId: pictureIdToAssign,
+                        responseId: currentResponseId,
+                        pictureType: typeToAssign
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showToast(`Picture assigned as ${typeToAssign}`, 'success');
+                    closeGalleryAssignModal();
+                    
+                    // Find the reference value from the current item
+                    let referenceValue = null;
+                    const currentSection = auditData.sections[currentSectionIndex];
+                    if (currentSection) {
+                        const currentItem = currentSection.items.find(i => i.responseId === currentResponseId);
+                        if (currentItem) {
+                            referenceValue = currentItem.referenceValue;
+                        }
+                    }
+                    
+                    // Update assigned picture type on local object
+                    console.log(`🎯 Looking for picture ID: ${pictureIdToAssign} in ${galleryPictures.length} pictures`);
+                    const picIndex = galleryPictures.findIndex(p => {
+                        const pId = Number(p.pictureId || p.PictureID);
+                        return pId === pictureIdToAssign;
+                    });
+                    
+                    if (picIndex !== -1) {
+                        // Set the assignedPictureType so filters work correctly
+                        galleryPictures[picIndex].assignedPictureType = typeToAssign;
+                        
+                        // Set the reference value for display
+                        galleryPictures[picIndex].assignedReferenceValue = referenceValue;
+                        
+                        // Also update category if not set
+                        if (!galleryPictures[picIndex].category) {
+                            galleryPictures[picIndex].category = typeToAssign;
+                            // Update on server too
+                            fetch(`/api/gallery/${auditData.auditId}/${pictureIdToAssign}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ Category: typeToAssign })
+                            }).catch(err => console.warn('Category update failed:', err));
+                        }
+                        
+                        // Increment assignment count
+                        galleryPictures[picIndex].assignmentCount = (galleryPictures[picIndex].assignmentCount || 0) + 1;
+                        
+                        console.log(`✅ Updated gallery picture ${pictureIdToAssign}: type=${typeToAssign}, ref=${referenceValue}`);
+                    } else {
+                        console.warn(`⚠️ Could not find picture ${pictureIdToAssign} in gallery array`);
+                    }
+                    
+                    renderGalleryGrid();
+                    updateGalleryStats();
+                    
+                    // Refresh question display to show new picture
+                    renderSection(currentSectionIndex);
+                } else {
+                    showToast(result.error || 'Failed to assign picture', 'error');
+                }
+            } catch (error) {
+                console.error('Error assigning picture:', error);
+                showToast('Failed to assign picture', 'error');
+            }
+        }
+        
+        // Close assign modal
+        function closeGalleryAssignModal() {
+            document.getElementById('galleryAssignModal').classList.remove('show');
+            galleryAssignPictureId = null;
+            galleryAssignType = null;
+        }
+        
+        // Open lightbox
+        function openGalleryLightbox(pictureId) {
+            const pic = galleryPictures.find(p => p.pictureId === pictureId);
+            if (!pic) return;
+            
+            // Determine display type - prioritize assignedPictureType
+            const displayType = pic.assignedPictureType || pic.category;
+            
+            document.getElementById('galleryLightboxImg').src = `/api/gallery/${auditData.auditId}/${pictureId}/image`;
+            document.getElementById('galleryLightboxInfo').innerHTML = `
+                ${pic.caption || 'No caption'} 
+                ${displayType ? `<span style="margin-left: 1rem; padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.2); border-radius: 4px;">${displayType}</span>` : ''}
+                ${pic.category && pic.assignedPictureType ? `<span style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; background: rgba(99,102,241,0.3); border-radius: 4px;">📁 ${pic.category}</span>` : ''}
+                ${pic.assignmentCount > 0 ? `<span style="margin-left: 0.5rem;">📌 Assigned to ${pic.assignmentCount} question(s)</span>` : ''}
+            `;
+            document.getElementById('galleryLightbox').classList.add('show');
+        }
+        
+        // Close lightbox
+        function closeGalleryLightbox() {
+            document.getElementById('galleryLightbox').classList.remove('show');
+        }
+        
+        // Filter gallery
+        function filterGallery(filter) {
+            galleryFilter = filter;
+            
+            // Update tab styling
+            document.querySelectorAll('.gallery-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.filter === filter);
+            });
+            
+            renderGalleryGrid();
+        }
+        
+        // Toggle gallery panel
+        function toggleGalleryPanel() {
+            const panel = document.getElementById('galleryPanel');
+            const toggle = panel.querySelector('.gallery-toggle');
+            
+            galleryPanelCollapsed = !galleryPanelCollapsed;
+            panel.classList.toggle('collapsed', galleryPanelCollapsed);
+            toggle.textContent = galleryPanelCollapsed ? '▶' : '◀';
+        }
+        
+        // Open camera for gallery
+        function openGalleryCamera() {
+            document.getElementById('galleryCameraInput').click();
+        }
+        
+        // Handle file selection for gallery
+        async function handleGalleryFileSelect(event) {
+            const files = Array.from(event.target.files).filter(f => f.type.startsWith('image/'));
+            if (files.length > 0) {
+                await uploadGalleryFiles(files);
+            }
+            event.target.value = ''; // Reset input
+        }
+        
+        // Upload files to gallery
+        async function uploadGalleryFiles(files) {
+            if (!auditData) return;
+            
+            showToast(`Uploading ${files.length} picture(s)...`, 'success');
+            
+            let successCount = 0;
+            
+            for (const file of files) {
+                try {
+                    // Convert to base64
+                    const base64 = await fileToBase64(file);
+                    const base64Data = base64.split(',')[1]; // Remove data:image/... prefix
+                    
+                    // Get GPS coordinates if available
+                    let latitude = null, longitude = null;
+                    if (navigator.geolocation) {
+                        try {
+                            const position = await new Promise((resolve, reject) => {
+                                navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+                            });
+                            latitude = position.coords.latitude;
+                            longitude = position.coords.longitude;
+                        } catch (e) {
+                            console.log('Could not get GPS coordinates');
+                        }
+                    }
+                    
+                    // Get device info
+                    const deviceInfo = `${navigator.platform || 'Unknown'} - ${navigator.userAgent.substring(0, 50)}`;
+                    
+                    // Upload to server
+                    const response = await fetch(`/api/gallery/${auditData.auditId}/upload`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            base64Data,
+                            originalFileName: file.name,
+                            contentType: file.type,
+                            category: null, // Will be set on assignment
+                            caption: file.name.replace(/\.[^/.]+$/, ''), // Filename without extension
+                            latitude,
+                            longitude,
+                            deviceInfo
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        successCount++;
+                        // Add to local array - ensure pictureId is a number
+                        const newPic = {
+                            ...result.data,
+                            pictureId: Number(result.data.pictureId)
+                        };
+                        console.log(`📷 Uploaded picture with ID: ${newPic.pictureId}`, newPic);
+                        galleryPictures.unshift(newPic);
+                    } else {
+                        console.error('Upload failed:', result.error);
+                    }
+                } catch (error) {
+                    console.error('Error uploading file:', error);
+                }
+            }
+            
+            if (successCount > 0) {
+                showToast(`✅ ${successCount} picture(s) added to gallery!`, 'success');
+                renderGalleryGrid();
+                updateGalleryStats();
+                
+                // Visual feedback - flash the gallery panel
+                const panel = document.getElementById('galleryPanel');
+                if (panel) {
+                    panel.classList.add('gallery-upload-success');
+                    setTimeout(() => panel.classList.remove('gallery-upload-success'), 1500);
+                }
+                
+                // Update stats with animation
+                const totalEl = document.getElementById('galleryTotal');
+                if (totalEl) {
+                    totalEl.classList.add('stat-updated');
+                    setTimeout(() => totalEl.classList.remove('stat-updated'), 1000);
+                }
+            } else {
+                showToast('Failed to upload pictures', 'error');
+            }
+        }
+        
+        // Delete gallery picture
+        async function deleteGalleryPicture(pictureId) {
+            if (!confirm('Delete this picture from gallery? This will also remove all assignments.')) return;
+            
+            try {
+                const response = await fetch(`/api/gallery/${auditData.auditId}/${pictureId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Remove from local array
+                    galleryPictures = galleryPictures.filter(p => p.pictureId !== pictureId);
+                    renderGalleryGrid();
+                    updateGalleryStats();
+                    showToast('Picture deleted', 'success');
+                    
+                    // Refresh current section to update any removed pictures
+                    renderSection(currentSectionIndex);
+                } else {
+                    showToast(result.error || 'Failed to delete picture', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting picture:', error);
+                showToast('Failed to delete picture', 'error');
+            }
+        }
+        
+        // Track current response ID for assignments
+        let currentResponseId = null;
+        
+        // Set current response ID when clicking on a question
+        function setCurrentResponse(responseId) {
+            currentResponseId = responseId;
+            
+            // Update visual indicator
+            document.querySelectorAll('.question-card').forEach(card => {
+                card.classList.toggle('gallery-target', card.dataset.responseId === String(responseId));
+            });
+        }
+        
+        // Get gallery pictures assigned to a response
+        async function getResponseGalleryPictures(responseId) {
+            try {
+                const response = await fetch(`/api/gallery/assignments/${responseId}`);
+                const result = await response.json();
+                return result.success ? result.data : [];
+            } catch (error) {
+                console.error('Error getting response gallery pictures:', error);
+                return [];
             }
         }
 

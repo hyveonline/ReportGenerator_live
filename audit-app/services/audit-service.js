@@ -1099,6 +1099,7 @@ class AuditService {
                         Issue NVARCHAR(500),
                         Picture NVARCHAR(MAX),
                         PicturePath NVARCHAR(500),
+                        GalleryPictureIds NVARCHAR(500),
                         CreatedAt DATETIME DEFAULT GETDATE()
                     )
                 END
@@ -1117,6 +1118,11 @@ class AuditService {
                     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('FridgeReadings') AND name = 'PicturePath')
                     BEGIN
                         ALTER TABLE FridgeReadings ADD PicturePath NVARCHAR(500) NULL;
+                    END
+                    -- Ensure GalleryPictureIds column exists
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('FridgeReadings') AND name = 'GalleryPictureIds')
+                    BEGIN
+                        ALTER TABLE FridgeReadings ADD GalleryPictureIds NVARCHAR(500) NULL;
                     END
                 END;
                 
@@ -1200,6 +1206,10 @@ class AuditService {
             
             // Insert good readings (with file-based picture storage)
             for (const reading of (goodReadings || [])) {
+                // Get gallery picture IDs if any
+                const galleryPictureIds = reading.galleryPictureIds || [];
+                const galleryPictureIdsJson = galleryPictureIds.length > 0 ? JSON.stringify(galleryPictureIds) : null;
+                
                 // First insert the reading to get the ReadingID
                 const insertResult = await pool.request()
                     .input('AuditID', sql.Int, auditId)
@@ -1212,13 +1222,14 @@ class AuditService {
                     .input('DisplayTemp', sql.NVarChar(50), String(reading.displayTemp))
                     .input('ProbeTemp', sql.NVarChar(50), String(reading.probeTemp))
                     .input('Issue', sql.NVarChar(500), null)
+                    .input('GalleryPictureIds', sql.NVarChar(500), galleryPictureIdsJson)
                     .query(`
                         INSERT INTO FridgeReadings (
                             AuditID, DocumentNumber, ResponseID, ReadingType,
-                            Section, Category, Unit, DisplayTemp, ProbeTemp, Issue
+                            Section, Category, Unit, DisplayTemp, ProbeTemp, Issue, GalleryPictureIds
                         ) VALUES (
                             @AuditID, @DocumentNumber, @ResponseID, @ReadingType,
-                            @Section, @Category, @Unit, @DisplayTemp, @ProbeTemp, @Issue
+                            @Section, @Category, @Unit, @DisplayTemp, @ProbeTemp, @Issue, @GalleryPictureIds
                         );
                         SELECT SCOPE_IDENTITY() as ReadingID;
                     `);
@@ -1246,6 +1257,10 @@ class AuditService {
             
             // Insert bad readings (with file-based picture storage)
             for (const reading of (badReadings || [])) {
+                // Get gallery picture IDs if any
+                const galleryPictureIds = reading.galleryPictureIds || [];
+                const galleryPictureIdsJson = galleryPictureIds.length > 0 ? JSON.stringify(galleryPictureIds) : null;
+                
                 // First insert the reading to get the ReadingID
                 const insertResult = await pool.request()
                     .input('AuditID', sql.Int, auditId)
@@ -1258,13 +1273,14 @@ class AuditService {
                     .input('DisplayTemp', sql.NVarChar(50), String(reading.displayTemp))
                     .input('ProbeTemp', sql.NVarChar(50), String(reading.probeTemp))
                     .input('Issue', sql.NVarChar(500), reading.issue)
+                    .input('GalleryPictureIds', sql.NVarChar(500), galleryPictureIdsJson)
                     .query(`
                         INSERT INTO FridgeReadings (
                             AuditID, DocumentNumber, ResponseID, ReadingType,
-                            Section, Category, Unit, DisplayTemp, ProbeTemp, Issue
+                            Section, Category, Unit, DisplayTemp, ProbeTemp, Issue, GalleryPictureIds
                         ) VALUES (
                             @AuditID, @DocumentNumber, @ResponseID, @ReadingType,
-                            @Section, @Category, @Unit, @DisplayTemp, @ProbeTemp, @Issue
+                            @Section, @Category, @Unit, @DisplayTemp, @ProbeTemp, @Issue, @GalleryPictureIds
                         );
                         SELECT SCOPE_IDENTITY() as ReadingID;
                     `);
@@ -1350,6 +1366,7 @@ class AuditService {
                         ProbeTemp as probeTemp,
                         Issue as issue,
                         PicturePath as picturePath,
+                        GalleryPictureIds as galleryPictureIdsJson,
                         CreatedAt
                     FROM FridgeReadings
                     WHERE AuditID = @AuditID
@@ -1377,6 +1394,16 @@ class AuditService {
                 return [`/api/fridge-pictures/file/${picturePath}`];
             };
             
+            // Helper to parse gallery picture IDs
+            const parseGalleryPictureIds = (json) => {
+                if (!json) return [];
+                try {
+                    return JSON.parse(json);
+                } catch (e) {
+                    return [];
+                }
+            };
+            
             const goodReadings = result.recordset
                 .filter(r => r.readingType === 'Good')
                 .map(r => ({
@@ -1388,7 +1415,8 @@ class AuditService {
                     probeTemp: r.probeTemp,
                     picturePath: r.picturePath, // Raw path for file access
                     picture: getPictureUrl(r.picturePath), // Backward compatibility
-                    pictures: getPictureUrls(r.picturePath) // Multiple pictures support
+                    pictures: getPictureUrls(r.picturePath), // Multiple pictures support
+                    galleryPictureIds: parseGalleryPictureIds(r.galleryPictureIdsJson) // Gallery picture references
                 }));
             
             const badReadings = result.recordset
@@ -1403,7 +1431,8 @@ class AuditService {
                     issue: r.issue,
                     picturePath: r.picturePath, // Raw path for file access
                     picture: getPictureUrl(r.picturePath), // Backward compatibility
-                    pictures: getPictureUrls(r.picturePath) // Multiple pictures support
+                    pictures: getPictureUrls(r.picturePath), // Multiple pictures support
+                    galleryPictureIds: parseGalleryPictureIds(r.galleryPictureIdsJson) // Gallery picture references
                 }));
             
             return { goodReadings, badReadings, enabledSections };

@@ -28,6 +28,7 @@ const SessionManager = require('./auth/services/session-manager');
 const CycleService = require('./audit-app/services/cycle-service');
 const { activityLogService, logLogin, logLogout, logReportGenerated, logEmailSent, logBroadcast, logActionPlanSaved, logActionPlanSubmitted, logUserRoleChanged, logTemplateUpdated } = require('./services/activity-log-service');
 const FileStorageService = require('./services/file-storage-service');
+const GalleryService = require('./src/gallery-service');
 
 /**
  * Get friendly greeting name from full name
@@ -8469,6 +8470,193 @@ app.get('/api/fridge-pictures/file/*', requireAuth, async (req, res) => {
             return res.status(404).json({ success: false, error: 'File not found' });
         }
         console.error('Error serving fridge picture:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ==========================================
+// Gallery API (New Picture Gallery System)
+// ==========================================
+
+// Upload picture to gallery
+app.post('/api/gallery/:auditId/upload', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
+    try {
+        const auditId = parseInt(req.params.auditId);
+        const { base64Data, originalFileName, contentType, category, caption, latitude, longitude, deviceInfo } = req.body;
+
+        if (!base64Data) {
+            return res.status(400).json({ success: false, error: 'Image data required' });
+        }
+
+        const result = await GalleryService.uploadPicture({
+            auditId,
+            base64Data,
+            originalFileName: originalFileName || 'image.jpg',
+            contentType: contentType || 'image/jpeg',
+            category,
+            caption,
+            latitude,
+            longitude,
+            deviceInfo,
+            createdBy: req.currentUser.email
+        });
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error uploading to gallery:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get all pictures in gallery
+app.get('/api/gallery/:auditId', requireAuth, async (req, res) => {
+    try {
+        const auditId = parseInt(req.params.auditId);
+        const category = req.query.category || null;
+        const pictures = await GalleryService.getGalleryPictures(auditId, category);
+        res.json({ success: true, data: pictures });
+    } catch (error) {
+        console.error('Error getting gallery:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get gallery stats
+app.get('/api/gallery/:auditId/stats', requireAuth, async (req, res) => {
+    try {
+        const auditId = parseInt(req.params.auditId);
+        const stats = await GalleryService.getGalleryStats(auditId);
+        res.json({ success: true, data: stats });
+    } catch (error) {
+        console.error('Error getting gallery stats:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get categories in gallery
+app.get('/api/gallery/:auditId/categories', requireAuth, async (req, res) => {
+    try {
+        const auditId = parseInt(req.params.auditId);
+        const categories = await GalleryService.getCategories(auditId);
+        res.json({ success: true, data: categories });
+    } catch (error) {
+        console.error('Error getting categories:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Serve gallery picture image
+app.get('/api/gallery/:auditId/:pictureId/image', requireAuth, async (req, res) => {
+    try {
+        const pictureId = parseInt(req.params.pictureId);
+        const result = await GalleryService.getPictureFile(pictureId, 'image');
+        
+        if (!result) {
+            return res.status(404).json({ success: false, error: 'Picture not found' });
+        }
+        
+        res.set('Content-Type', result.contentType);
+        res.set('Cache-Control', 'public, max-age=86400');
+        res.send(result.buffer);
+    } catch (error) {
+        console.error('Error serving gallery image:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Serve gallery picture thumbnail
+app.get('/api/gallery/:auditId/:pictureId/thumbnail', requireAuth, async (req, res) => {
+    try {
+        const pictureId = parseInt(req.params.pictureId);
+        const result = await GalleryService.getPictureFile(pictureId, 'thumbnail');
+        
+        if (!result) {
+            return res.status(404).json({ success: false, error: 'Thumbnail not found' });
+        }
+        
+        res.set('Content-Type', result.contentType);
+        res.set('Cache-Control', 'public, max-age=86400');
+        res.send(result.buffer);
+    } catch (error) {
+        console.error('Error serving gallery thumbnail:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Delete picture from gallery
+app.delete('/api/gallery/:auditId/:pictureId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
+    try {
+        const pictureId = parseInt(req.params.pictureId);
+        await GalleryService.deletePicture(pictureId);
+        res.json({ success: true, message: 'Picture deleted' });
+    } catch (error) {
+        console.error('Error deleting from gallery:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Update picture metadata
+app.patch('/api/gallery/:auditId/:pictureId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
+    try {
+        const pictureId = parseInt(req.params.pictureId);
+        const { Category, Caption } = req.body;
+        await GalleryService.updatePicture(pictureId, { Category, Caption });
+        res.json({ success: true, message: 'Picture updated' });
+    } catch (error) {
+        console.error('Error updating picture:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Assign picture to response
+app.post('/api/gallery/assign', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
+    try {
+        const { pictureId, responseId, pictureType } = req.body;
+        
+        if (!pictureId || !responseId || !pictureType) {
+            return res.status(400).json({ success: false, error: 'pictureId, responseId, and pictureType required' });
+        }
+        
+        const result = await GalleryService.assignPicture(pictureId, responseId, pictureType);
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error assigning picture:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Unassign picture from response
+app.delete('/api/gallery/assign/:assignmentId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor'), async (req, res) => {
+    try {
+        const assignmentId = parseInt(req.params.assignmentId);
+        await GalleryService.unassignPicture(assignmentId);
+        res.json({ success: true, message: 'Assignment removed' });
+    } catch (error) {
+        console.error('Error unassigning picture:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get assignments for a response
+app.get('/api/gallery/assignments/:responseId', requireAuth, async (req, res) => {
+    try {
+        const responseId = parseInt(req.params.responseId);
+        const assignments = await GalleryService.getResponseAssignments(responseId);
+        res.json({ success: true, data: assignments });
+    } catch (error) {
+        console.error('Error getting assignments:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get all assignments for an audit (for reports)
+app.get('/api/gallery/:auditId/assignments', requireAuth, async (req, res) => {
+    try {
+        const auditId = parseInt(req.params.auditId);
+        const assignments = await GalleryService.getAuditAssignments(auditId);
+        res.json({ success: true, data: assignments });
+    } catch (error) {
+        console.error('Error getting audit assignments:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
