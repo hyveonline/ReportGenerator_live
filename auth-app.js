@@ -5532,7 +5532,7 @@ app.get('/api/audits/list', requireAuth, requireRole('Admin', 'SuperAuditor', 'Q
 });
 
 // Get notification statuses for multiple audits
-app.post('/api/audits/notification-statuses', requireAuth, requireRole('Admin', 'SuperAuditor', 'Auditor', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
+app.post('/api/audits/notification-statuses', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor', 'Auditor', 'HeadOfOperations', 'AreaManager'), async (req, res) => {
     try {
         const { auditIds } = req.body;
         
@@ -8637,7 +8637,7 @@ app.get('/api/audits/section-scores/:auditId', requireAuth, async (req, res) => 
 // ==========================================
 
 // Get audits list for score calculator dropdown
-app.get('/api/score-calculator/audits', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+app.get('/api/score-calculator/audits', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor'), async (req, res) => {
     try {
         const audits = await ScoreCalculatorService.getAuditsList();
         res.json({ success: true, data: audits });
@@ -8648,7 +8648,7 @@ app.get('/api/score-calculator/audits', requireAuth, requireRole('Admin', 'Super
 });
 
 // Get audit sections with scores and exclusion status
-app.get('/api/score-calculator/:auditId', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+app.get('/api/score-calculator/:auditId', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         const data = await ScoreCalculatorService.getAuditSectionsWithScores(auditId);
@@ -8660,7 +8660,7 @@ app.get('/api/score-calculator/:auditId', requireAuth, requireRole('Admin', 'Sup
 });
 
 // Save section exclusions
-app.post('/api/score-calculator/:auditId/exclusions', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+app.post('/api/score-calculator/:auditId/exclusions', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         const { excludedSectionIds } = req.body;
@@ -8675,7 +8675,7 @@ app.post('/api/score-calculator/:auditId/exclusions', requireAuth, requireRole('
 });
 
 // Get exclusion history for an audit
-app.get('/api/score-calculator/:auditId/history', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+app.get('/api/score-calculator/:auditId/history', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor'), async (req, res) => {
     try {
         const auditId = parseInt(req.params.auditId);
         const history = await ScoreCalculatorService.getExclusionHistory(auditId);
@@ -8687,7 +8687,7 @@ app.get('/api/score-calculator/:auditId/history', requireAuth, requireRole('Admi
 });
 
 // Get all exclusion history across all audits
-app.get('/api/score-calculator/history/all', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+app.get('/api/score-calculator/history/all', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor'), async (req, res) => {
     try {
         const filters = {
             startDate: req.query.startDate,
@@ -8704,7 +8704,7 @@ app.get('/api/score-calculator/history/all', requireAuth, requireRole('Admin', '
 });
 
 // Get exclusion statistics
-app.get('/api/score-calculator/stats', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+app.get('/api/score-calculator/stats', requireAuth, requireRole('Admin', 'SuperAuditor', 'QualitySuperAuditor'), async (req, res) => {
     try {
         const stats = await ScoreCalculatorService.getExclusionStats();
         res.json({ success: true, data: stats });
