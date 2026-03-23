@@ -139,6 +139,7 @@ class AuditService {
                 .input('TimeIn', sql.NVarChar(10), auditData.timeIn)
                 .input('TimeOut', sql.NVarChar(10), auditData.timeOut || null)
                 .input('Cycle', sql.NVarChar(10), auditData.cycle)
+                .input('CycleTypeID', sql.Int, auditData.cycleTypeId || null)
                 .input('Year', sql.Int, auditData.year)
                 .input('Auditors', sql.NVarChar(500), auditData.auditors)
                 .input('AccompaniedBy', sql.NVarChar(500), auditData.accompaniedBy || null)
@@ -146,11 +147,11 @@ class AuditService {
                 .query(`
                     INSERT INTO AuditInstances (
                         DocumentNumber, StoreID, StoreCode, StoreName, SchemaID,
-                        AuditDate, TimeIn, TimeOut, Cycle, Year, Auditors, AccompaniedBy,
+                        AuditDate, TimeIn, TimeOut, Cycle, CycleTypeID, Year, Auditors, AccompaniedBy,
                         Status, CreatedBy, CreatedAt
                     ) VALUES (
                         @DocumentNumber, @StoreID, @StoreCode, @StoreName, @SchemaID,
-                        @AuditDate, @TimeIn, @TimeOut, @Cycle, @Year, @Auditors, @AccompaniedBy,
+                        @AuditDate, @TimeIn, @TimeOut, @Cycle, @CycleTypeID, @Year, @Auditors, @AccompaniedBy,
                         'In Progress', @CreatedBy, GETDATE()
                     );
                     SELECT SCOPE_IDENTITY() AS AuditID;
@@ -935,7 +936,7 @@ class AuditService {
                     a.Cycle AS AuditCycle,
                     a.Year AS AuditYear,
                     cd.CycleName AS AuditCycleName,
-                    s.CycleTypeID,
+                    ISNULL(a.CycleTypeID, s.CycleTypeID) AS CycleTypeID,
                     ct.TypeName AS CycleTypeName,
                     a.Auditors,
                     a.Status,
@@ -975,7 +976,7 @@ class AuditService {
                     orig.DocumentNumber AS OriginalDocumentNumber
                 FROM AuditInstances a
                 INNER JOIN AuditSchemas s ON a.SchemaID = s.SchemaID
-                LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
+                LEFT JOIN CycleTypes ct ON ISNULL(a.CycleTypeID, s.CycleTypeID) = ct.CycleTypeID
                 LEFT JOIN CycleDefinitions cd ON ct.CycleTypeID = cd.CycleTypeID AND a.Cycle = cd.CycleNumber
                 LEFT JOIN SystemSettings ss ON ss.SchemaID = a.SchemaID AND ss.SettingType = 'Overall'
                 LEFT JOIN AuditInstances orig ON a.OriginalAuditID = orig.AuditID
