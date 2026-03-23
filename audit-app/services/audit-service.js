@@ -1501,6 +1501,7 @@ class AuditService {
             // Fetch all pictures in one query (return URLs, not base64)
             let picturesByResponse = {};
             if (responseIds.length > 0) {
+                // Fetch from AuditPictures table (traditional storage)
                 const picturesResult = await pool.request()
                     .query(`
                         SELECT PictureID, ResponseID, FileName, FilePath, ContentType, PictureType
@@ -1525,7 +1526,41 @@ class AuditService {
                         filePath: pic.FilePath,
                         url: pic.FilePath ? `/api/pictures/file/${pic.FilePath}` : `/api/pictures/${pic.PictureID}`,
                         contentType: pic.ContentType,
-                        pictureType: pic.PictureType
+                        pictureType: pic.PictureType,
+                        source: 'auditPictures'
+                    });
+                }
+                
+                // Also fetch from Gallery pictures (AuditPictureAssignments + AuditGalleryPictures)
+                const galleryPicsResult = await pool.request()
+                    .query(`
+                        SELECT a.AssignmentID, a.ResponseID, a.PictureType, a.PictureID,
+                               p.FileName, p.FilePath, p.ContentType, p.AuditID
+                        FROM AuditPictureAssignments a
+                        INNER JOIN AuditGalleryPictures p ON a.PictureID = p.PictureID
+                        WHERE a.ResponseID IN (${responseIds.join(',')})
+                          AND a.PictureType IN ('Finding', 'Good', 'Corrective')
+                        ORDER BY a.ResponseID, 
+                            CASE WHEN a.PictureType = 'Finding' THEN 1 
+                                 WHEN a.PictureType = 'Good' THEN 2
+                                 ELSE 3 END,
+                            a.AssignedAt DESC
+                    `);
+                
+                // Add gallery pictures to the response grouping
+                for (const pic of galleryPicsResult.recordset) {
+                    if (!picturesByResponse[pic.ResponseID]) {
+                        picturesByResponse[pic.ResponseID] = [];
+                    }
+                    picturesByResponse[pic.ResponseID].push({
+                        pictureId: pic.PictureID,
+                        fileName: pic.FileName,
+                        filePath: pic.FilePath,  // This is the full path in uploads/audit-gallery/
+                        url: `/api/gallery/${pic.AuditID}/${pic.PictureID}/image`,
+                        contentType: pic.ContentType || 'image/jpeg',
+                        pictureType: pic.PictureType,
+                        source: 'gallery',
+                        auditId: pic.AuditID
                     });
                 }
             }

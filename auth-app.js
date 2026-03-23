@@ -9147,7 +9147,20 @@ app.get('/api/audits/:auditId/department-report/:department/download-word', requ
         // Helper function to get picture buffer from file storage
         async function getPictureBuffer(picture) {
             try {
-                // Try to read from file first
+                // Check if this is a gallery picture
+                if (picture.source === 'gallery') {
+                    // Gallery pictures are stored in uploads/audit-gallery/{auditId}/{filename}
+                    const GALLERY_BASE = pathModule.join(__dirname, 'uploads', 'audit-gallery');
+                    const auditId = picture.auditId || auditData.auditId;
+                    const fullPath = pathModule.join(GALLERY_BASE, String(auditId), picture.fileName);
+                    if (fsSync.existsSync(fullPath)) {
+                        console.log(`📸 Loading gallery picture: ${fullPath}`);
+                        return fsSync.readFileSync(fullPath);
+                    }
+                    console.warn(`⚠️ Gallery picture not found: ${fullPath}`);
+                }
+                
+                // Try to read from traditional storage (storage/pictures)
                 if (picture.filePath) {
                     const STORAGE_BASE = pathModule.join(__dirname, 'storage', 'pictures');
                     const fullPath = pathModule.join(STORAGE_BASE, picture.filePath);
