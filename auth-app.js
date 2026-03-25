@@ -3498,12 +3498,15 @@ app.get('/api/admin/analytics/reviewed-action-plans', requireAuth, requireRole('
                 ai.AuditDate,
                 ai.TotalScore,
                 (
-                    SELECT STRING_AGG(DISTINCT n2.recipient_name, ', ')
-                    FROM Notifications n2
-                    WHERE n2.document_number = n.document_number
-                    AND n2.notification_type = 'ActionPlanSubmitted'
-                    AND n2.status = 'Sent'
-                    AND n2.recipient_role = 'AreaManager'
+                    SELECT STRING_AGG(x.recipient_name, ', ')
+                    FROM (
+                        SELECT DISTINCT n2.recipient_name
+                        FROM Notifications n2
+                        WHERE n2.document_number = n.document_number
+                        AND n2.notification_type = 'ActionPlanSubmitted'
+                        AND n2.status = 'Sent'
+                        AND n2.recipient_role = 'AreaManager'
+                    ) x
                 ) as AreaManagerReviewed
             FROM Notifications n
             LEFT JOIN AuditInstances ai ON n.document_number = ai.DocumentNumber
