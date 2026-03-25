@@ -272,7 +272,7 @@ class AnalyticsPage {
             </div>
             ${canSeeReviewedCard ? `
             <div class="summary-card reviewed clickable" onclick="showReviewedActionPlans()" title="Click to view reviewed action plans">
-                <div class="card-icon">👁️</div>
+                <div class="card-icon">✅</div>
                 <div class="card-content">
                     <h3 id="actionPlansReviewed">-</h3>
                     <p>Action Plans Reviewed</p>
