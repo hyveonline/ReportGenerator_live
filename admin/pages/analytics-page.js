@@ -706,7 +706,7 @@ class AnalyticsPage {
                             <th>Document</th>
                             <th>Submitted By</th>
                             <th>Submitted Date</th>
-                            <th>Sent To (Recipients)</th>
+                            <th>Area Manager Reviewed</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -717,7 +717,7 @@ class AnalyticsPage {
                                 <td><a href="/reports/\${item.DocumentNumber}.html" target="_blank" class="report-link">\${item.DocumentNumber || '-'}</a></td>
                                 <td>\${item.SubmittedBy || '-'}</td>
                                 <td>\${item.SubmittedDate ? new Date(item.SubmittedDate).toLocaleDateString() : '-'}</td>
-                                <td>\${item.ReviewedBy || '-'}</td>
+                                <td>\${item.AreaManagerReviewed || '<span style="color: #94a3b8;">No Area Manager</span>'}</td>
                                 <td><a href="/auditor/action-plan?doc=\${item.DocumentNumber}" target="_blank" class="btn-small">View Action Plan</a></td>
                             </tr>
                         \`).join('')}
