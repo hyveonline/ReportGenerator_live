@@ -1575,6 +1575,7 @@ class TemplateEngine {
     /**
      * Build Audit Summary Table (Data Table)
      * Shows section scores grouped by categories with C1-C6 historical data
+     * Columns always in order C1→C6, using cycle names from definitions, current cycle highlighted in blue
      */
     buildDataTable(data) {
         if (!data.sectionScores || data.sectionScores.length === 0) {
@@ -1594,32 +1595,45 @@ class TemplateEngine {
             ? parseInt(rawCycle.replace(/[^0-9]/g, '')) || 1
             : rawCycle;
         
-        // Determine which cycles to display (C1 through C6, where current cycle is highlighted)
-        // Show cycles 1-6, or adjust based on current cycle
-        const cyclesToShow = [];
-        for (let i = 1; i <= 6; i++) {
-            cyclesToShow.push(i);
-        }
+        // Always show cycles 1-6 in order
+        const cyclesToShow = [1, 2, 3, 4, 5, 6];
 
-        // Helper to get historical score for a section by cycle number
-        // cycleMap keys could be "C1", "C2" or 1, 2 - handle both
+        // Cycle definitions for display names (e.g., C1 -> "January")
+        // Display format: "C1 (January)" or just "C1" if no definition
+        const cycleDefinitions = data.cycleDefinitions || {};
+        const getCycleDisplayName = (cycleNum) => {
+            const cycleName = cycleDefinitions[`C${cycleNum}`];
+            return cycleName ? `C${cycleNum} (${cycleName})` : `C${cycleNum}`;
+        };
+
+        // Helper to get historical audit data by cycle number
         const getCycleData = (cycleNum) => {
             return cycleMap[cycleNum] || cycleMap[`C${cycleNum}`] || cycleMap[String(cycleNum)];
         };
         
-        const getHistoricalScore = (sectionName, cycleNum) => {
-            if (cycleNum === currentCycle) return null; // Current cycle shown in first column
-            const audit = getCycleData(cycleNum);
-            if (!audit || !audit.sectionScores) return '-';
-            const score = audit.sectionScores[sectionName];
-            return score !== undefined ? `${parseFloat(score).toFixed(2)}%` : '-';
+        // Helper to get section score for a specific cycle
+        const getSectionScoreForCycle = (sectionName, sectionId, cycleNum) => {
+            if (cycleNum === currentCycle) {
+                // Current cycle - get from current audit's sectionScores
+                const section = data.sectionScores.find(s => s.sectionId === sectionId || s.sectionName === sectionName);
+                return section ? `${parseFloat(section.percentage).toFixed(2)}%` : '-';
+            } else {
+                // Historical cycle
+                const audit = getCycleData(cycleNum);
+                if (!audit || !audit.sectionScores) return '-';
+                const score = audit.sectionScores[sectionName];
+                return score !== undefined ? `${parseFloat(score).toFixed(2)}%` : '-';
+            }
         };
 
-        // Helper to get historical total score by cycle number
-        const getHistoricalTotal = (cycleNum) => {
-            if (cycleNum === currentCycle) return null; // Current cycle shown in first column
-            const audit = getCycleData(cycleNum);
-            return audit && audit.totalScore !== undefined ? `${parseFloat(audit.totalScore).toFixed(2)}%` : '-';
+        // Helper to get total score for a specific cycle
+        const getTotalScoreForCycle = (cycleNum) => {
+            if (cycleNum === currentCycle) {
+                return data.totalScore !== undefined ? `${parseFloat(data.totalScore).toFixed(2)}%` : '-';
+            } else {
+                const audit = getCycleData(cycleNum);
+                return audit && audit.totalScore !== undefined ? `${parseFloat(audit.totalScore).toFixed(2)}%` : '-';
+            }
         };
 
         // Helper to calculate category score from its sections (weighted: sum of earned / sum of max)
@@ -1630,65 +1644,61 @@ class TemplateEngine {
             
             if (matchedSections.length === 0) return 0;
             
-            // Use weighted calculation: total earned / total max × 100 (2 decimal places)
             const totalEarned = matchedSections.reduce((sum, s) => sum + (s.earnedScore || 0), 0);
             const totalMax = matchedSections.reduce((sum, s) => sum + (s.maxScore || 0), 0);
             return totalMax > 0 ? parseFloat(((totalEarned / totalMax) * 100).toFixed(2)) : 0;
         };
 
-        // Helper to get historical category score by cycle number (weighted: sum of earned / sum of max)
-        const getHistoricalCategoryScore = (categorySections, cycleNum) => {
-            if (cycleNum === currentCycle) return null; // Current cycle shown in first column
-            const audit = getCycleData(cycleNum);
-            if (!audit || !audit.sectionScores) return '-';
+        // Helper to get category score for a specific cycle
+        const getCategoryScoreForCycle = (categorySections, cycleNum) => {
+            if (cycleNum === currentCycle) {
+                return `${getCategoryScore(categorySections, data.sectionScores)}%`;
+            } else {
+                const audit = getCycleData(cycleNum);
+                if (!audit || !audit.sectionScores) return '-';
 
-            // Historical data may only have percentage, so fall back to weighted average of percentages
-            // if earnedScore/maxScore not available
-            const sectionData = categorySections
-                .map(cs => {
-                    const score = audit.sectionScores[cs.sectionName];
-                    const earned = audit.sectionEarned?.[cs.sectionName];
-                    const max = audit.sectionMax?.[cs.sectionName];
-                    return { score, earned, max };
-                })
-                .filter(s => s.score !== undefined);
-            
-            if (sectionData.length === 0) return '-';
-            
-            // If we have earned/max data, use weighted calculation (2 decimal places)
-            const hasWeightedData = sectionData.some(s => s.earned !== undefined && s.max !== undefined);
-            if (hasWeightedData) {
-                const totalEarned = sectionData.reduce((sum, s) => sum + (s.earned || 0), 0);
-                const totalMax = sectionData.reduce((sum, s) => sum + (s.max || 0), 0);
-                return totalMax > 0 ? `${((totalEarned / totalMax) * 100).toFixed(2)}%` : '-';
+                const sectionData = categorySections
+                    .map(cs => {
+                        const score = audit.sectionScores[cs.sectionName];
+                        const earned = audit.sectionEarned?.[cs.sectionName];
+                        const max = audit.sectionMax?.[cs.sectionName];
+                        return { score, earned, max };
+                    })
+                    .filter(s => s.score !== undefined);
+                
+                if (sectionData.length === 0) return '-';
+                
+                const hasWeightedData = sectionData.some(s => s.earned !== undefined && s.max !== undefined);
+                if (hasWeightedData) {
+                    const totalEarned = sectionData.reduce((sum, s) => sum + (s.earned || 0), 0);
+                    const totalMax = sectionData.reduce((sum, s) => sum + (s.max || 0), 0);
+                    return totalMax > 0 ? `${((totalEarned / totalMax) * 100).toFixed(2)}%` : '-';
+                }
+                
+                const avg = sectionData.reduce((sum, s) => sum + s.score, 0) / sectionData.length;
+                return `${avg.toFixed(2)}%`;
             }
-            
-            // Fallback: use simple average of percentages (for legacy historical data, 2 decimal places)
-            const avg = sectionData.reduce((sum, s) => sum + s.score, 0) / sectionData.length;
-            return `${avg.toFixed(2)}%`;
         };
 
+        // Build table rows
         let tableRows = '';
 
         // If we have categories, use them for grouping
         if (categories.length > 0) {
             for (const category of categories) {
-                // Calculate category score (weighted: sum of earned / sum of max × 100)
-                const categoryScore = getCategoryScore(category.sections, data.sectionScores);
-                const catScoreClass = categoryScore >= threshold ? 'score-pass' : 'score-fail';
+                // Build category cells for all cycles C1-C6
+                const categoryCells = cyclesToShow.map(c => {
+                    const score = getCategoryScoreForCycle(category.sections, c);
+                    const isCurrentCycle = c === currentCycle;
+                    const scoreValue = parseFloat(score) || 0;
+                    const scoreClass = scoreValue >= threshold ? 'score-pass' : (score === '-' ? '' : 'score-fail');
+                    return `<td class="category-score ${scoreClass} ${isCurrentCycle ? 'current-cycle-cell' : ''}"><strong>${score}</strong></td>`;
+                }).join('');
 
-                // Build historical category scores for cycles 1-6 (excluding current)
-                const historicalCatCells = cyclesToShow
-                    .filter(c => c !== currentCycle)
-                    .map(c => `<td class="category-score"><strong>${getHistoricalCategoryScore(category.sections, c)}</strong></td>`)
-                    .join('');
-
-                // Category header row
                 tableRows += `
                     <tr class="category-row">
                         <td class="category-name"><strong>${escapeHtml(category.categoryName)}</strong></td>
-                        <td class="category-score ${catScoreClass}"><strong>${categoryScore}%</strong></td>
-                        ${historicalCatCells}
+                        ${categoryCells}
                     </tr>
                 `;
 
@@ -1696,19 +1706,18 @@ class TemplateEngine {
                 for (const catSection of category.sections) {
                     const sectionScore = data.sectionScores.find(s => s.sectionId === catSection.sectionId);
                     if (sectionScore) {
-                        const scoreClass = sectionScore.percentage >= threshold ? 'score-pass' : 'score-fail';
-                        
-                        // Build historical section scores for cycles 1-6 (excluding current)
-                        const historicalSecCells = cyclesToShow
-                            .filter(c => c !== currentCycle)
-                            .map(c => `<td>${getHistoricalScore(sectionScore.sectionName, c)}</td>`)
-                            .join('');
+                        const sectionCells = cyclesToShow.map(c => {
+                            const score = getSectionScoreForCycle(sectionScore.sectionName, sectionScore.sectionId, c);
+                            const isCurrentCycle = c === currentCycle;
+                            const scoreValue = parseFloat(score) || 0;
+                            const scoreClass = scoreValue >= threshold ? 'score-pass' : (score === '-' ? '' : 'score-fail');
+                            return `<td class="${scoreClass} ${isCurrentCycle ? 'current-cycle-cell' : ''}">${score}</td>`;
+                        }).join('');
                         
                         tableRows += `
                             <tr class="section-row">
                                 <td class="section-name" style="padding-left: 24px;">${escapeHtml(sectionScore.sectionName)}</td>
-                                <td class="${scoreClass}">${parseFloat(sectionScore.percentage).toFixed(2)}%</td>
-                                ${historicalSecCells}
+                                ${sectionCells}
                             </tr>
                         `;
                     }
@@ -1730,19 +1739,18 @@ class TemplateEngine {
                 `;
                 
                 for (const section of uncategorizedSections) {
-                    const scoreClass = section.percentage >= threshold ? 'score-pass' : 'score-fail';
-                    
-                    // Build historical section scores for cycles 1-6 (excluding current)
-                    const historicalSecCells = cyclesToShow
-                        .filter(c => c !== currentCycle)
-                        .map(c => `<td>${getHistoricalScore(section.sectionName, c)}</td>`)
-                        .join('');
+                    const sectionCells = cyclesToShow.map(c => {
+                        const score = getSectionScoreForCycle(section.sectionName, section.sectionId, c);
+                        const isCurrentCycle = c === currentCycle;
+                        const scoreValue = parseFloat(score) || 0;
+                        const scoreClass = scoreValue >= threshold ? 'score-pass' : (score === '-' ? '' : 'score-fail');
+                        return `<td class="${scoreClass} ${isCurrentCycle ? 'current-cycle-cell' : ''}">${score}</td>`;
+                    }).join('');
                     
                     tableRows += `
                         <tr class="section-row">
                             <td class="section-name" style="padding-left: 24px;">${escapeHtml(section.sectionName)}</td>
-                            <td class="${scoreClass}">${parseFloat(section.percentage).toFixed(2)}%</td>
-                            ${historicalSecCells}
+                            ${sectionCells}
                         </tr>
                     `;
                 }
@@ -1750,47 +1758,41 @@ class TemplateEngine {
         } else {
             // No categories - just list sections
             for (const section of data.sectionScores) {
-                const scoreClass = section.percentage >= threshold ? 'score-pass' : 'score-fail';
-                
-                // Build historical section scores for cycles 1-6 (excluding current)
-                const historicalSecCells = cyclesToShow
-                    .filter(c => c !== currentCycle)
-                    .map(c => `<td>${getHistoricalScore(section.sectionName, c)}</td>`)
-                    .join('');
+                const sectionCells = cyclesToShow.map(c => {
+                    const score = getSectionScoreForCycle(section.sectionName, section.sectionId, c);
+                    const isCurrentCycle = c === currentCycle;
+                    const scoreValue = parseFloat(score) || 0;
+                    const scoreClass = scoreValue >= threshold ? 'score-pass' : (score === '-' ? '' : 'score-fail');
+                    return `<td class="${scoreClass} ${isCurrentCycle ? 'current-cycle-cell' : ''}">${score}</td>`;
+                }).join('');
                 
                 tableRows += `
                     <tr class="section-row">
                         <td class="section-name">${escapeHtml(section.sectionName)}</td>
-                        <td class="${scoreClass}">${parseFloat(section.percentage).toFixed(2)}%</td>
-                        ${historicalSecCells}
+                        ${sectionCells}
                     </tr>
                 `;
             }
         }
 
-        // Total row (2 decimal places)
+        // Build header columns - all cycles C1-C6 in order, using cycle names
+        const cycleHeaders = cyclesToShow.map(c => {
+            const isCurrentCycle = c === currentCycle;
+            const cycleName = getCycleDisplayName(c);
+            return `<th class="${isCurrentCycle ? 'current-cycle' : ''}">${cycleName}</th>`;
+        }).join('');
+
+        // Build total row cells for all cycles
         const overallScore = data.totalScore || 0;
         const overallClass = overallScore >= threshold ? 'score-pass' : 'score-fail';
-
-        // Build header columns - current cycle first (highlighted), then other cycles
-        // Use cycle definitions for display names if available
-        const cycleDefinitions = data.cycleDefinitions || {};
-        const getCycleDisplayName = (cycleNum) => {
-            const cycleName = cycleDefinitions[`C${cycleNum}`];
-            return cycleName ? `C${cycleNum} (${cycleName})` : `C${cycleNum}`;
-        };
-
-        const currentCycleHeader = `<th class="current-cycle">${getCycleDisplayName(currentCycle)}</th>`;
-        const historicalHeaders = cyclesToShow
-            .filter(c => c !== currentCycle)
-            .map(c => `<th>${getCycleDisplayName(c)}</th>`)
-            .join('');
-
-        // Build total row cells - current cycle first, then historical
-        const historicalTotalCells = cyclesToShow
-            .filter(c => c !== currentCycle)
-            .map(c => `<td><strong>${getHistoricalTotal(c)}</strong></td>`)
-            .join('');
+        
+        const totalCells = cyclesToShow.map(c => {
+            const score = getTotalScoreForCycle(c);
+            const isCurrentCycle = c === currentCycle;
+            const scoreValue = parseFloat(score) || 0;
+            const scoreClass = scoreValue >= threshold ? 'score-pass' : (score === '-' ? '' : 'score-fail');
+            return `<td class="${scoreClass} ${isCurrentCycle ? 'current-cycle-cell' : ''}"><strong>${score}</strong></td>`;
+        }).join('');
 
         return `
             <div class="data-table-section">
@@ -1799,8 +1801,7 @@ class TemplateEngine {
                     <thead>
                         <tr>
                             <th>Description</th>
-                            ${currentCycleHeader}
-                            ${historicalHeaders}
+                            ${cycleHeaders}
                         </tr>
                     </thead>
                     <tbody>
@@ -1809,8 +1810,7 @@ class TemplateEngine {
                     <tfoot>
                         <tr class="data-table-total">
                             <td><strong>Total Score</strong></td>
-                            <td class="${overallClass}"><strong>${parseFloat(overallScore).toFixed(2)}%</strong></td>
-                            ${historicalTotalCells}
+                            ${totalCells}
                         </tr>
                     </tfoot>
                 </table>
