@@ -3498,7 +3498,7 @@ app.get('/api/admin/analytics/reviewed-action-plans', requireAuth, requireRole('
                 ai.AuditDate,
                 ai.TotalScore,
                 (
-                    SELECT STRING_AGG(n2.recipient_name, ', ')
+                    SELECT STRING_AGG(DISTINCT n2.recipient_name, ', ')
                     FROM Notifications n2
                     WHERE n2.document_number = n.document_number
                     AND n2.notification_type = 'ActionPlanSubmitted'
