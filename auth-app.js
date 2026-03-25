@@ -10783,11 +10783,11 @@ app.post('/api/action-plan/submit-compose-data', requireAuth, async (req, res) =
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        // Get the auditor who created this audit from AuditInstances table
+        // Get the auditor who created this audit from AuditInstances table (including StoreID)
         const auditResult = await pool.request()
             .input('DocumentNumber', sql.NVarChar(50), documentNumber)
             .query(`
-                SELECT ai.CreatedBy, ai.StoreName, ai.AuditDate, ai.TotalScore,
+                SELECT ai.CreatedBy, ai.StoreName, ai.AuditDate, ai.TotalScore, ai.StoreID,
                        u.display_name as AuditorName
                 FROM AuditInstances ai
                 LEFT JOIN Users u ON ai.CreatedBy = u.email
@@ -10797,9 +10797,11 @@ app.post('/api/action-plan/submit-compose-data', requireAuth, async (req, res) =
         const toRecipients = [];
         const ccRecipients = [];
         let auditInfo = {};
+        let storeId = null;
         
         if (auditResult.recordset.length > 0) {
             const audit = auditResult.recordset[0];
+            storeId = audit.StoreID;
             auditInfo = {
                 storeName: audit.StoreName,
                 auditDate: audit.AuditDate,
@@ -10836,6 +10838,67 @@ app.post('/api/action-plan/submit-compose-data', requireAuth, async (req, res) =
                     role: row.role,
                     source: 'SuperAuditor'
                 });
+            }
+        }
+        
+        // Get Area Managers assigned to this store as CC recipients
+        if (storeId) {
+            const areaManagerResult = await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .query(`
+                    SELECT u.id, u.email, u.display_name, u.role
+                    FROM UserAreaAssignments uaa
+                    INNER JOIN Users u ON uaa.UserID = u.id
+                    WHERE uaa.StoreID = @StoreID
+                    AND u.role = 'AreaManager'
+                    AND u.is_active = 1
+                    AND u.email IS NOT NULL
+                `);
+            
+            for (const row of areaManagerResult.recordset) {
+                if (!toRecipients.find(r => r.email === row.email) && !ccRecipients.find(r => r.email === row.email)) {
+                    ccRecipients.push({
+                        id: row.id,
+                        email: row.email,
+                        name: row.display_name || row.email,
+                        role: row.role,
+                        source: 'AreaManager'
+                    });
+                }
+            }
+            
+            // Get Head of Operations assigned to this store's BRAND via UserBrandAssignments
+            // First get the store's brand
+            const storeBrandResult = await pool.request()
+                .input('StoreID', sql.Int, storeId)
+                .query(`SELECT Brand FROM Stores WHERE StoreID = @StoreID`);
+            
+            if (storeBrandResult.recordset.length > 0 && storeBrandResult.recordset[0].Brand) {
+                const storeBrand = storeBrandResult.recordset[0].Brand;
+                
+                const hoResult = await pool.request()
+                    .input('Brand', sql.NVarChar(100), storeBrand)
+                    .query(`
+                        SELECT u.id, u.email, u.display_name, u.role
+                        FROM UserBrandAssignments uba
+                        INNER JOIN Users u ON uba.UserID = u.id
+                        WHERE uba.Brand = @Brand
+                        AND u.role = 'HeadOfOperations'
+                        AND u.is_active = 1
+                        AND u.email IS NOT NULL
+                    `);
+                
+                for (const row of hoResult.recordset) {
+                    if (!toRecipients.find(r => r.email === row.email) && !ccRecipients.find(r => r.email === row.email)) {
+                        ccRecipients.push({
+                            id: row.id,
+                            email: row.email,
+                            name: row.display_name || row.email,
+                            role: row.role,
+                            source: 'HeadOfOperations'
+                        });
+                    }
+                }
             }
         }
         
