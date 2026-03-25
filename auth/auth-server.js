@@ -438,7 +438,7 @@ class AuthServer {
         });
         
         // API: Get stores list (active only)
-        this.app.get('/api/admin/stores', requireAuth, requireRole('Admin'), async (req, res) => {
+        this.app.get('/api/admin/stores', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
             try {
                 const stores = await RoleAssignmentService.getStoresList();
                 res.json({ stores });
@@ -449,7 +449,7 @@ class AuthServer {
         });
         
         // API: Get all stores (including inactive) - for management
-        this.app.get('/api/admin/stores/all', requireAuth, requireRole('Admin'), async (req, res) => {
+        this.app.get('/api/admin/stores/all', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
             try {
                 const stores = await RoleAssignmentService.getAllStores();
                 res.json({ stores });
