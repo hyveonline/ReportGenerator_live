@@ -1698,18 +1698,19 @@ app.delete('/api/cycle-definitions/:defId', requireAuth, requireRole('Admin'), a
     }
 });
 
-// Get all cycles for analytics filter (distinct cycle names used in audits)
+// Get all cycles for analytics filter (distinct cycle values used in audits)
 app.get('/api/admin/cycles', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
         const sql = require('mssql');
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        // Get distinct cycles used in audits, plus all defined cycles
+        // Only get cycles that actually exist in AuditInstances (e.g., C1, C2, C3)
+        // These are the actual values stored in the Cycle column
         const result = await pool.request().query(`
-            SELECT DISTINCT CycleName as name FROM CycleDefinitions WHERE CycleName IS NOT NULL
-            UNION
-            SELECT DISTINCT Cycle as name FROM AuditInstances WHERE Cycle IS NOT NULL AND Cycle != ''
+            SELECT DISTINCT Cycle as name 
+            FROM AuditInstances 
+            WHERE Cycle IS NOT NULL AND Cycle != '' AND Status = 'Completed'
             ORDER BY name
         `);
         
@@ -2593,6 +2594,9 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         
         const { countries, brands, storeIds, headOfOpsIds, areaManagerIds, results, years, months, cycles } = req.query;
         
+        // Debug: Log received filters
+        console.log('📊 [Analytics] Filters received:', { countries, brands, storeIds, headOfOpsIds, areaManagerIds, results, years, months, cycles });
+        
         // Get dynamic threshold for passing score from SystemSettings
         let passingThreshold = 87; // default
         try {
@@ -2685,39 +2689,48 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             }
         }
         
+        // Debug: Log WHERE clause
+        console.log('📊 [Analytics] WHERE clause:', whereClause);
+        
         // 1. Summary Statistics (join with Stores for Brand filter)
         const summaryResult = await pool.request().query(`
             SELECT 
                 COUNT(*) as TotalAudits,
                 AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore,
                 SUM(CASE WHEN ai.TotalScore >= ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as PassRate,
-                SUM(CASE WHEN ai.TotalScore < ${passingThreshold} THEN 1 ELSE 0 END) as FailedAudits
+                SUM(CASE WHEN ai.TotalScore < ${passingThreshold} THEN 1 ELSE 0 END) as FailedAudits,
+                COUNT(DISTINCT ai.StoreID) as FilteredStoreCount
             FROM AuditInstances ai
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
             ${whereClause}
         `);
         
-        const storesCount = await pool.request().query(`SELECT COUNT(*) as cnt FROM Stores WHERE IsActive = 1`);
         const auditorsCount = await pool.request().query(`
             SELECT COUNT(DISTINCT id) as cnt FROM Users 
             WHERE role IN ('Admin', 'Auditor', 'SuperAuditor')
             AND is_active = 1
         `);
         
-        // Action Plan Completion Statistics
+        // Action Plan Completion Statistics (filtered by audits matching current filters)
         const actionPlanResult = await pool.request().query(`
             SELECT 
                 COUNT(*) as TotalActionPlans,
-                SUM(CASE WHEN Status = 'Completed' THEN 1 ELSE 0 END) as SolvedActionPlans
-            FROM ActionPlanResponses
+                SUM(CASE WHEN apr.Status = 'Completed' THEN 1 ELSE 0 END) as SolvedActionPlans
+            FROM ActionPlanResponses apr
+            INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
         `);
         
-        // Action Plans Reviewed by Area Managers (count of unique documents with ActionPlanSubmitted notification)
+        // Action Plans Reviewed by Area Managers (filtered by audits matching current filters)
         const actionPlansReviewedResult = await pool.request().query(`
-            SELECT COUNT(DISTINCT document_number) as ReviewedCount
-            FROM Notifications
-            WHERE notification_type = 'ActionPlanSubmitted'
-            AND status = 'Sent'
+            SELECT COUNT(DISTINCT n.document_number) as ReviewedCount
+            FROM Notifications n
+            INNER JOIN AuditInstances ai ON n.document_number = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND n.notification_type = 'ActionPlanSubmitted'
+            AND n.status = 'Sent'
         `);
         
         const totalActionPlans = actionPlanResult.recordset[0]?.TotalActionPlans || 0;
@@ -2732,7 +2745,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             avgScore: summaryResult.recordset[0]?.AvgScore || 0,
             passRate: summaryResult.recordset[0]?.PassRate || 0,
             failedAudits: summaryResult.recordset[0]?.FailedAudits || 0,
-            totalStores: storesCount.recordset[0]?.cnt || 0,
+            totalStores: summaryResult.recordset[0]?.FilteredStoreCount || 0,
             totalAuditors: auditorsCount.recordset[0]?.cnt || 0,
             actionPlansTotal: totalActionPlans,
             actionPlansSolved: solvedActionPlans,
@@ -2740,6 +2753,9 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             actionPlanCompletionRate: actionPlanCompletionRate,
             passingThreshold: passingThreshold
         };
+        
+        // Debug: Log summary results
+        console.log('📊 [Analytics] Summary:', summary);
         
         // 2. Trend Data (by month/cycle)
         const trendsResult = await pool.request().query(`
