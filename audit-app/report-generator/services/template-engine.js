@@ -632,8 +632,11 @@ class TemplateEngine {
             const isFinding = item.selectedChoice === 'No' || item.selectedChoice === 'Partially';
             const commentDisplay = isFinding ? '' : escapeHtml(item.comment || '');
 
+            // Create row ID for scroll-to-ref functionality from galleries
+            const rowId = (item.referenceValue || '').replace(/\./g, '-');
+
             return `
-                <tr class="${rowClass}">
+                <tr id="ref-${rowId}" class="${rowClass}">
                     <td class="ref-col">${escapeHtml(item.referenceValue || '')}</td>
                     <td class="criteria-col">${escapeHtml(item.title || '')}</td>
                     <td class="coeff-col">${coeffDisplay}</td>
@@ -1557,7 +1560,7 @@ class TemplateEngine {
                                         size: 10
                                     },
                                     formatter: function(value) {
-                                        return value.toFixed(1) + '%';
+                                        return value.toFixed(2) + '%';
                                     },
                                     offset: 2
                                 }
