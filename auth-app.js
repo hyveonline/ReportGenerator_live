@@ -8320,13 +8320,13 @@ app.put('/api/audits/response/:responseId', requireAuth, requireRole('Admin', 'S
         const userRole = req.currentUser.role;
         const responseId = parseInt(req.params.responseId);
         
-        // Check if audit is completed - only Admin and SuperAuditor can edit completed audits
+        // Check if audit is completed - only Admin, SuperAuditor, and QualitySuperAuditor can edit completed audits
         const auditStatus = await AuditService.getAuditStatusByResponseId(responseId);
         
-        if (auditStatus === 'Completed' && !['Admin', 'SuperAuditor'].includes(userRole)) {
+        if (auditStatus === 'Completed' && !['Admin', 'SuperAuditor', 'QualitySuperAuditor'].includes(userRole)) {
             return res.status(403).json({ 
                 success: false, 
-                error: 'Only Admin and SuperAuditor can edit completed audits' 
+                error: 'Only Admin, SuperAuditor, and QualitySuperAuditor can edit completed audits' 
             });
         }
         
@@ -8355,14 +8355,14 @@ app.post('/api/audits/pictures', requireAuth, requireRole('Admin', 'SuperAuditor
         const userRole = req.currentUser.role;
         const responseId = req.body.responseId;
         
-        // Check if audit is completed - only Admin and SuperAuditor can edit completed audits
+        // Check if audit is completed - only Admin, SuperAuditor, and QualitySuperAuditor can edit completed audits
         if (responseId) {
             const auditStatus = await AuditService.getAuditStatusByResponseId(responseId);
             
-            if (auditStatus === 'Completed' && !['Admin', 'SuperAuditor'].includes(userRole)) {
+            if (auditStatus === 'Completed' && !['Admin', 'SuperAuditor', 'QualitySuperAuditor'].includes(userRole)) {
                 return res.status(403).json({ 
                     success: false, 
-                    error: 'Only Admin and SuperAuditor can edit completed audits' 
+                    error: 'Only Admin, SuperAuditor, and QualitySuperAuditor can edit completed audits' 
                 });
             }
         }
