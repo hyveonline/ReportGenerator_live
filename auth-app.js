@@ -2585,6 +2585,53 @@ app.get('/api/admin/area-managers', requireAuth, requireRole('Admin', 'SuperAudi
     }
 });
 
+// Shared helper: Build WHERE clause from analytics filter query params
+function buildAnalyticsWhereClause(query, passingThreshold) {
+    const { countries, brands, storeIds, headOfOpsIds, areaManagerIds, results, years, months, cycles } = query;
+    let whereClause = "WHERE ai.Status = 'Completed'";
+    
+    if (countries && countries.trim()) {
+        const countryArray = countries.split(',').filter(c => c.trim()).map(c => `'${c.trim().replace(/'/g, "''")}'`);
+        if (countryArray.length > 0) whereClause += ` AND s.Country IN (${countryArray.join(',')})`;
+    }
+    if (brands && brands.trim()) {
+        const brandArray = brands.split(',').filter(b => b.trim()).map(b => `'${b.trim().replace(/'/g, "''")}'`);
+        if (brandArray.length > 0) whereClause += ` AND s.Brand IN (${brandArray.join(',')})`;
+    }
+    if (storeIds && storeIds.trim()) {
+        const storeIdArray = storeIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
+        if (storeIdArray.length > 0) whereClause += ` AND ai.StoreID IN (${storeIdArray.join(',')})`;
+    }
+    if (headOfOpsIds && headOfOpsIds.trim()) {
+        const hopIdArray = headOfOpsIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
+        if (hopIdArray.length > 0) whereClause += ` AND s.Brand IN (SELECT Brand FROM UserBrandAssignments WHERE UserID IN (${hopIdArray.join(',')}))`;
+    }
+    if (areaManagerIds && areaManagerIds.trim()) {
+        const amIdArray = areaManagerIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
+        if (amIdArray.length > 0) whereClause += ` AND ai.StoreID IN (SELECT StoreID FROM UserAreaAssignments WHERE UserID IN (${amIdArray.join(',')}))`;
+    }
+    if (results && results.trim() && passingThreshold) {
+        const resultArray = results.split(',').filter(r => r.trim());
+        if (resultArray.length === 1) {
+            if (resultArray[0] === 'pass') whereClause += ` AND ai.TotalScore >= ${passingThreshold}`;
+            if (resultArray[0] === 'fail') whereClause += ` AND ai.TotalScore < ${passingThreshold}`;
+        }
+    }
+    if (years && years.trim()) {
+        const yearArray = years.split(',').map(y => parseInt(y)).filter(y => !isNaN(y) && y > 2000);
+        if (yearArray.length > 0) whereClause += ` AND ai.Year IN (${yearArray.join(',')})`;
+    }
+    if (months && months.trim()) {
+        const monthArray = months.split(',').map(m => parseInt(m)).filter(m => !isNaN(m) && m >= 1 && m <= 12);
+        if (monthArray.length > 0) whereClause += ` AND MONTH(ai.AuditDate) IN (${monthArray.join(',')})`;
+    }
+    if (cycles && cycles.trim()) {
+        const cycleArray = cycles.split(',').filter(c => c && c.trim()).map(c => `'${c.trim().replace(/'/g, "''")}'`);
+        if (cycleArray.length > 0) whereClause += ` AND ai.Cycle IN (${cycleArray.join(',')})`;
+    }
+    return whereClause;
+}
+
 // Analytics API - Get all analytics data
 app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
@@ -3433,12 +3480,15 @@ app.get('/api/admin/analytics/section-criteria', requireAuth, requireRole('Admin
     }
 });
 
-// Get unsolved action plan items
+// Get unsolved action plan items (with analytics filter support)
 app.get('/api/admin/analytics/unsolved-action-plans', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
         const sql = require('mssql');
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
+        
+        // Build WHERE clause from filters (reuse shared helper)
+        const whereClause = buildAnalyticsWhereClause(req.query, null);
         
         const result = await pool.request().query(`
             SELECT 
@@ -3457,8 +3507,10 @@ app.get('/api/admin/analytics/unsolved-action-plans', requireAuth, requireRole('
                 ai.StoreName,
                 ai.AuditDate
             FROM ActionPlanResponses apr
-            LEFT JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
-            WHERE apr.Status != 'Completed' OR apr.Status IS NULL
+            INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND (apr.Status != 'Completed' OR apr.Status IS NULL)
             ORDER BY 
                 CASE apr.Priority 
                     WHEN 'High' THEN 1 
@@ -3481,12 +3533,15 @@ app.get('/api/admin/analytics/unsolved-action-plans', requireAuth, requireRole('
     }
 });
 
-// Get reviewed action plans (submitted to area managers)
+// Get reviewed action plans (submitted to area managers) - with analytics filter support
 app.get('/api/admin/analytics/reviewed-action-plans', requireAuth, requireRole('Admin', 'SuperAuditor', 'HeadOfOperations'), async (req, res) => {
     try {
         const sql = require('mssql');
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
+        
+        // Build WHERE clause from filters (reuse shared helper)
+        const whereClause = buildAnalyticsWhereClause(req.query, null);
         
         // Get unique action plan submissions with only the Area Managers who received them
         const result = await pool.request().query(`
@@ -3509,8 +3564,10 @@ app.get('/api/admin/analytics/reviewed-action-plans', requireAuth, requireRole('
                     ) x
                 ) as AreaManagerReviewed
             FROM Notifications n
-            LEFT JOIN AuditInstances ai ON n.document_number = ai.DocumentNumber
-            WHERE n.notification_type = 'ActionPlanSubmitted'
+            INNER JOIN AuditInstances ai ON n.document_number = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND n.notification_type = 'ActionPlanSubmitted'
             AND n.status = 'Sent'
             GROUP BY n.document_number, ai.StoreName, n.sent_by_name, ai.AuditDate, ai.TotalScore
             ORDER BY MIN(n.sent_at) DESC

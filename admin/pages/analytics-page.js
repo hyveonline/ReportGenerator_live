@@ -550,7 +550,9 @@ class AnalyticsPage {
             document.getElementById('unsolvedTableContainer').innerHTML = '<p class="loading-text">Loading unsolved items...</p>';
             
             try {
-                const response = await fetch('/api/admin/analytics/unsolved-action-plans');
+                const filters = getFilters();
+                const queryParams = new URLSearchParams(filters).toString();
+                const response = await fetch('/api/admin/analytics/unsolved-action-plans?' + queryParams);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -655,7 +657,9 @@ class AnalyticsPage {
             document.getElementById('reviewedTableContainer').innerHTML = '<p class="loading-text">Loading reviewed action plans...</p>';
             
             try {
-                const response = await fetch('/api/admin/analytics/reviewed-action-plans');
+                const filters = getFilters();
+                const queryParams = new URLSearchParams(filters).toString();
+                const response = await fetch('/api/admin/analytics/reviewed-action-plans?' + queryParams);
                 const data = await response.json();
                 
                 if (data.success) {
