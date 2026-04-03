@@ -2783,9 +2783,19 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             AND n.status = 'Sent'
         `);
         
+        // Count of unique audits that have action plan responses (Action Plans Submitted)
+        const actionPlansSubmittedResult = await pool.request().query(`
+            SELECT COUNT(DISTINCT apr.DocumentNumber) as SubmittedCount
+            FROM ActionPlanResponses apr
+            INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+        `);
+        
         const totalActionPlans = actionPlanResult.recordset[0]?.TotalActionPlans || 0;
         const solvedActionPlans = actionPlanResult.recordset[0]?.SolvedActionPlans || 0;
         const actionPlansReviewed = actionPlansReviewedResult.recordset[0]?.ReviewedCount || 0;
+        const actionPlansSubmittedCount = actionPlansSubmittedResult.recordset[0]?.SubmittedCount || 0;
         const actionPlanCompletionRate = totalActionPlans > 0 
             ? (solvedActionPlans * 100.0 / totalActionPlans) 
             : 0;
@@ -2800,6 +2810,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             actionPlansTotal: totalActionPlans,
             actionPlansSolved: solvedActionPlans,
             actionPlansReviewed: actionPlansReviewed,
+            actionPlansSubmittedCount: actionPlansSubmittedCount,
             actionPlanCompletionRate: actionPlanCompletionRate,
             passingThreshold: passingThreshold
         };

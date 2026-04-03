@@ -262,6 +262,13 @@ class AnalyticsPage {
                     <p>Fail Rate <span id="failCount" class="rate-count"></span></p>
                 </div>
             </div>
+            <div class="summary-card">
+                <div class="card-icon">📋</div>
+                <div class="card-content">
+                    <h3 id="actionPlansSubmitted">-</h3>
+                    <p>Number of Action Plans Submitted</p>
+                </div>
+            </div>
             <div class="summary-card clickable" onclick="showUnsolvedActionPlans()" title="Click to view unsolved items">
                 <div class="card-icon">📝</div>
                 <div class="card-content">
@@ -1163,6 +1170,10 @@ class AnalyticsPage {
             document.getElementById('failRate').textContent = failRate.toFixed(1) + '%';
             document.getElementById('failCount').textContent = '(' + failedAudits + '/' + totalAudits + ')';
             
+            // Action Plans Submitted (unique audits with action plan responses)
+            const submitted = summary.actionPlansSubmittedCount || 0;
+            document.getElementById('actionPlansSubmitted').textContent = submitted;
+            
             // Action Plan Completion: show as "X/Y (Z%)"
             const solved = summary.actionPlansSolved || 0;
             const total = summary.actionPlansTotal || 0;
@@ -1187,28 +1198,28 @@ class AnalyticsPage {
             
             if (trendChart) trendChart.destroy();
 
-            // Brand colors for bars
+            // Pastel color palette for bars
             const brandColors = {
-                'Spinneys': { bar: '#22c55e', bg: 'rgba(34, 197, 94, 0.8)' },
-                'Happy': { bar: '#f59e0b', bg: 'rgba(245, 158, 11, 0.8)' },
-                'GNG': { bar: '#3b82f6', bg: 'rgba(59, 130, 246, 0.8)' },
-                'Noknok': { bar: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.8)' },
-                'Cold Stone': { bar: '#ec4899', bg: 'rgba(236, 72, 153, 0.8)' },
-                'Thai Express': { bar: '#06b6d4', bg: 'rgba(6, 182, 212, 0.8)' },
-                'Catering - El Estez': { bar: '#f97316', bg: 'rgba(249, 115, 22, 0.8)' },
-                'Catering - Pizzarte': { bar: '#84cc16', bg: 'rgba(132, 204, 22, 0.8)' },
-                'Catering - AUB': { bar: '#14b8a6', bg: 'rgba(20, 184, 166, 0.8)' },
-                'Catering - Pate et Pain': { bar: '#a855f7', bg: 'rgba(168, 85, 247, 0.8)' },
-                'Food Avenue': { bar: '#64748b', bg: 'rgba(100, 116, 139, 0.8)' },
-                'Signature - By the Sea': { bar: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.8)' }
+                'Spinneys': { bar: '#86efac', bg: 'rgba(134, 239, 172, 0.7)', target: '#22c55e' },
+                'Happy': { bar: '#fcd34d', bg: 'rgba(252, 211, 77, 0.7)', target: '#f59e0b' },
+                'GNG': { bar: '#93c5fd', bg: 'rgba(147, 197, 253, 0.7)', target: '#3b82f6' },
+                'Noknok': { bar: '#c4b5fd', bg: 'rgba(196, 181, 253, 0.7)', target: '#8b5cf6' },
+                'Cold Stone': { bar: '#f9a8d4', bg: 'rgba(249, 168, 212, 0.7)', target: '#ec4899' },
+                'Thai Express': { bar: '#67e8f9', bg: 'rgba(103, 232, 249, 0.7)', target: '#06b6d4' },
+                'Catering - El Estez': { bar: '#fdba74', bg: 'rgba(253, 186, 116, 0.7)', target: '#f97316' },
+                'Catering - Pizzarte': { bar: '#bef264', bg: 'rgba(190, 242, 100, 0.7)', target: '#84cc16' },
+                'Catering - AUB': { bar: '#5eead4', bg: 'rgba(94, 234, 212, 0.7)', target: '#14b8a6' },
+                'Catering - Pate et Pain': { bar: '#d8b4fe', bg: 'rgba(216, 180, 254, 0.7)', target: '#a855f7' },
+                'Food Avenue': { bar: '#cbd5e1', bg: 'rgba(203, 213, 225, 0.7)', target: '#64748b' },
+                'Signature - By the Sea': { bar: '#7dd3fc', bg: 'rgba(125, 211, 252, 0.7)', target: '#0ea5e9' }
             };
 
-            // Default colors for brands not in the map
+            // Default pastel colors for brands not in the map
             const defaultColors = [
-                { bar: '#ef4444', bg: 'rgba(239, 68, 68, 0.8)' },
-                { bar: '#10b981', bg: 'rgba(16, 185, 129, 0.8)' },
-                { bar: '#6366f1', bg: 'rgba(99, 102, 241, 0.8)' },
-                { bar: '#f472b6', bg: 'rgba(244, 114, 182, 0.8)' }
+                { bar: '#fca5a5', bg: 'rgba(252, 165, 165, 0.7)', target: '#ef4444' },
+                { bar: '#6ee7b7', bg: 'rgba(110, 231, 183, 0.7)', target: '#10b981' },
+                { bar: '#a5b4fc', bg: 'rgba(165, 180, 252, 0.7)', target: '#6366f1' },
+                { bar: '#f9a8d4', bg: 'rgba(249, 168, 212, 0.7)', target: '#f472b6' }
             ];
 
             // If no brand-specific data, fall back to overall trend
@@ -1226,8 +1237,9 @@ class AnalyticsPage {
                             backgroundColor: 'rgba(59, 130, 246, 0.8)',
                             borderColor: '#3b82f6',
                             borderWidth: 1,
-                            barPercentage: 0.6,
-                            categoryPercentage: 0.8
+                            barPercentage: 0.5,
+                            categoryPercentage: 0.7,
+                            maxBarThickness: 40
                         }]
                     },
                     options: {
@@ -1262,7 +1274,7 @@ class AnalyticsPage {
             const datasets = [];
             let colorIndex = 0;
 
-            // Create bar datasets for each brand
+            // Create BAR datasets for each brand (score values)
             trendsByBrand.forEach(brand => {
                 const color = brandColors[brand.brand] || defaultColors[colorIndex % defaultColors.length];
                 colorIndex++;
@@ -1274,32 +1286,37 @@ class AnalyticsPage {
                 });
                 const dataPoints = sortedPeriods.map(p => dataMap[p] !== undefined ? dataMap[p] : null);
 
+                // Score bars
                 datasets.push({
                     label: brand.brand,
                     data: dataPoints,
                     backgroundColor: color.bg,
                     borderColor: color.bar,
                     borderWidth: 1,
-                    barPercentage: 0.7,
-                    categoryPercentage: 0.85,
-                    passingGrade: brand.passingGrade
+                    barPercentage: 0.5,
+                    categoryPercentage: 0.7,
+                    maxBarThickness: 40,
+                    passingGrade: brand.passingGrade,
+                    order: 2
                 });
             });
 
-            // Add target line datasets (one per brand)
+            // Add target line datasets (dashed horizontal line for each brand)
+            colorIndex = 0;
             trendsByBrand.forEach(brand => {
-                const color = brandColors[brand.brand] || defaultColors[0];
+                const color = brandColors[brand.brand] || defaultColors[colorIndex % defaultColors.length];
+                colorIndex++;
                 datasets.push({
                     label: brand.brand + ' Target (' + brand.passingGrade + '%)',
                     data: sortedPeriods.map(() => brand.passingGrade),
                     type: 'line',
-                    borderColor: color.bar,
-                    borderDash: [6, 4],
+                    borderColor: color.target || color.bar,
+                    borderDash: [8, 4],
                     borderWidth: 2,
                     pointRadius: 0,
                     fill: false,
                     tension: 0,
-                    order: 0
+                    order: 1
                 });
             });
 
@@ -1335,33 +1352,89 @@ class AnalyticsPage {
                     },
                     plugins: {
                         legend: { 
-                            position: 'top',
+                            position: 'bottom',
                             labels: {
-                                filter: function(legendItem) {
-                                    // Hide target lines from legend
-                                    return !legendItem.text.includes('Target');
-                                },
                                 usePointStyle: true,
-                                boxWidth: 12
+                                boxWidth: 20,
+                                padding: 15,
+                                font: {
+                                    size: 11
+                                },
+                                generateLabels: function(chart) {
+                                    const datasets = chart.data.datasets;
+                                    return datasets.map((dataset, i) => {
+                                        const label = dataset.label || '';
+                                        const isTarget = label.includes('Target');
+                                        return {
+                                            text: label,
+                                            fillStyle: isTarget ? 'transparent' : dataset.backgroundColor,
+                                            strokeStyle: isTarget ? dataset.borderColor : dataset.borderColor,
+                                            lineWidth: isTarget ? 2 : 1,
+                                            lineDash: isTarget ? [8, 4] : [],
+                                            hidden: !chart.isDatasetVisible(i),
+                                            index: i,
+                                            pointStyle: isTarget ? 'line' : 'rect'
+                                        };
+                                    });
+                                }
+                            },
+                            onClick: function(e, legendItem, legend) {
+                                const index = legendItem.index;
+                                const chart = legend.chart;
+                                chart.setDatasetVisibility(index, !chart.isDatasetVisible(index));
+                                chart.update();
                             }
                         },
                         tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 12 },
+                            padding: 12,
+                            cornerRadius: 8,
                             callbacks: {
+                                title: function(tooltipItems) {
+                                    if (!tooltipItems || !tooltipItems[0]) return '';
+                                    return 'Cycle: ' + tooltipItems[0].label;
+                                },
                                 label: function(context) {
-                                    if (context.dataset.label.includes('Target')) {
-                                        return context.dataset.label + ': ' + context.parsed.y + '%';
+                                    const label = context.dataset.label || '';
+                                    if (!context.parsed || context.parsed.y === null || context.parsed.y === undefined) {
+                                        return label + ': No data';
+                                    }
+                                    if (label.includes('Target')) {
+                                        return '🎯 ' + label;
                                     }
                                     const passingGrade = context.dataset.passingGrade || 87;
                                     const score = context.parsed.y;
-                                    const status = score >= passingGrade ? '✅' : '❌';
-                                    return context.dataset.label + ': ' + score.toFixed(1) + '% ' + status;
+                                    const status = score >= passingGrade ? '✅ PASS' : '❌ FAIL';
+                                    return label + ': ' + score.toFixed(1) + '% ' + status;
+                                },
+                                afterBody: function(tooltipItems) {
+                                    if (!tooltipItems) return [];
+                                    // Find bars only (not target lines)
+                                    const bars = tooltipItems.filter(item => {
+                                        const label = item.dataset.label || '';
+                                        return !label.includes('Target') && item.parsed && item.parsed.y !== null;
+                                    });
+                                    if (bars.length > 1) {
+                                        const scores = bars.map(b => b.parsed.y);
+                                        const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+                                        return ['', '📊 Average across schemes: ' + avg.toFixed(1) + '%'];
+                                    }
+                                    return [];
                                 }
                             }
                         },
-                        // Data labels plugin - show score above each bar
+                        // Data labels plugin - show score on each bar
                         datalabels: {
                             display: function(context) {
-                                return context.dataset.type !== 'line';
+                                // Only show labels for bars (not target lines)
+                                if (!context.dataset) return false;
+                                if (context.dataset.type === 'line') return false;
+                                const label = context.dataset.label || '';
+                                if (label.includes('Target')) return false;
+                                if (!context.parsed || context.parsed.y === null || context.parsed.y === undefined) return false;
+                                return true;
                             },
                             anchor: 'end',
                             align: 'top',
