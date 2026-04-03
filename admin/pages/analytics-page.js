@@ -29,6 +29,9 @@ class AnalyticsPage {
     <link rel="stylesheet" href="/admin/styles/analytics.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 </head>
 <body>
     <!-- Store user role for JS access -->
@@ -222,6 +225,7 @@ class AnalyticsPage {
                 </div>
                 <button class="btn-refresh" onclick="refreshAnalytics()">🔄 Refresh</button>
                 <button class="btn-clear" onclick="clearAllFilters()">✖ Clear</button>
+                <button class="btn-download-all" onclick="downloadAllAnalytics()">📥 Download All Analytics</button>
             </div>
         </section>
 
@@ -360,8 +364,14 @@ class AnalyticsPage {
         <!-- Charts Grid -->
         <div class="charts-grid">
             <!-- Trend Chart -->
-            <section class="chart-card full-width">
-                <h2>📈 Score Trends Over Time by Scheme</h2>
+            <section class="chart-card full-width" id="scoreTrendsSection">
+                <div class="section-header-row">
+                    <h2>📈 Score Trends Over Time by Scheme</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionChart('trendChart', 'Score_Trends')" title="Download Chart">📊</button>
+                        <button class="btn-export-sm" onclick="exportSectionTable('scoreTrendsSection', 'Score_Trends')" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 <p class="section-description">Average score trends per brand/scheme with target passing grade lines.</p>
                 <div class="chart-container large">
                     <canvas id="trendChart"></canvas>
@@ -385,8 +395,14 @@ class AnalyticsPage {
             </section>
 
             <!-- Category Analysis Report -->
-            <section class="chart-card full-width">
-                <h2>📂 Category Analysis Report</h2>
+            <section class="chart-card full-width" id="categoryAnalysisSection">
+                <div class="section-header-row">
+                    <h2>📂 Category Analysis Report</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionChart('categoryChart', 'Category_Analysis')" title="Download Chart">📊</button>
+                        <button class="btn-export-sm" onclick="exportSectionTable('categoryAnalysisSection', 'Category_Analysis')" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 <p class="section-description">Performance analysis by main categories (e.g., Storage of Food, Employees' Food Handling). Categories vary per audit scheme.</p>
                 <div class="category-analysis-controls">
                     <label>Filter by Scheme:</label>
@@ -401,8 +417,14 @@ class AnalyticsPage {
             </section>
 
             <!-- Section/Subcategory Analysis -->
-            <section class="chart-card full-width">
-                <h2>📊 Section Analysis Report (Subcategories)</h2>
+            <section class="chart-card full-width" id="sectionAnalysisSection">
+                <div class="section-header-row">
+                    <h2>📊 Section Analysis Report (Subcategories)</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionChart('sectionChart', 'Section_Analysis')" title="Download Chart">📊</button>
+                        <button class="btn-export-sm" onclick="exportSectionTable('sectionAnalysisSection', 'Section_Analysis')" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 <p class="section-description">Performance analysis by sections/subcategories within each category.</p>
                 <div class="section-analysis-controls">
                     <label>Filter by Scheme:</label>
@@ -427,8 +449,13 @@ class AnalyticsPage {
             </section>
 
             <!-- Heatmap -->
-            <section class="chart-card full-width">
-                <h2>🗺️ Store Performance by Cycle</h2>
+            <section class="chart-card full-width" id="storePerformanceSection">
+                <div class="section-header-row">
+                    <h2>🗺️ Store Performance by Cycle</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionTable('storePerformanceSection', 'Store_Performance')" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 <p class="section-description">Track store progress across cycles. Compare performance evolution per scheme.</p>
                 <div class="heatmap-controls">
                     <div class="heatmap-view-toggle">
@@ -444,8 +471,13 @@ class AnalyticsPage {
             </section>
 
             <!-- Action Plan Analysis -->
-            <section class="chart-card full-width">
-                <h2>📝 Action Plan Analysis</h2>
+            <section class="chart-card full-width" id="actionPlanSection">
+                <div class="section-header-row">
+                    <h2>📝 Action Plan Analysis</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionTable('actionPlanSection', 'Action_Plan_Analysis')" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 
                 <!-- Summary Stats -->
                 <div id="apSummaryStats" class="nc-summary-stats">
@@ -471,8 +503,13 @@ class AnalyticsPage {
             </section>
 
             <!-- Non-conformities Analysis -->
-            <section class="chart-card full-width">
-                <h2>🚫 Non-conformities Analysis</h2>
+            <section class="chart-card full-width" id="ncAnalysisSection">
+                <div class="section-header-row">
+                    <h2>🚫 Non-conformities Analysis</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionTable('ncAnalysisSection', 'NC_Analysis')" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 
                 <!-- Scheme Filter -->
                 <div class="nc-filter-bar">
@@ -501,8 +538,13 @@ class AnalyticsPage {
             </section>
 
             <!-- Branch Rankings -->
-            <section class="chart-card full-width">
-                <h2>🏆 Branch Rankings</h2>
+            <section class="chart-card full-width" id="branchRankingsSection">
+                <div class="section-header-row">
+                    <h2>🏆 Branch Rankings</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionTable('branchRankingsSection', 'Branch_Rankings')" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 <p class="section-description">Top 3 and Bottom 3 performing branches by scheme and cycle.</p>
                 <div id="branchRankingsTable" class="data-table-container">
                     <p class="loading-text">Loading rankings...</p>
@@ -510,8 +552,14 @@ class AnalyticsPage {
             </section>
 
             <!-- Average Store Scores Chart -->
-            <section class="chart-card full-width">
-                <h2 id="storeScoresChartTitle">📊 Average Food Safety Audits Per Store</h2>
+            <section class="chart-card full-width" id="storeScoresSection">
+                <div class="section-header-row">
+                    <h2 id="storeScoresChartTitle">📊 Average Food Safety Audits Per Store</h2>
+                    <div class="section-export-btns">
+                        <button class="btn-export-sm" onclick="exportSectionChart('storeScoresChart', 'Store_Scores')" title="Download Chart">📊</button>
+                        <button class="btn-export-sm" onclick="exportStoreScoresTable()" title="Download Excel">📥</button>
+                    </div>
+                </div>
                 <p class="section-description">Store performance with target passing grade line.</p>
                 <div class="chart-container store-scores-chart">
                     <canvas id="storeScoresChart"></canvas>
@@ -2944,6 +2992,211 @@ class AnalyticsPage {
             a.download = 'analytics-query-results.csv';
             a.click();
             URL.revokeObjectURL(url);
+        }
+
+        // ===========================================
+        // EXPORT FUNCTIONS - Charts, Tables, All Data
+        // ===========================================
+
+        // Export a chart as PNG image with white background
+        function exportSectionChart(chartId, filename) {
+            const canvas = document.getElementById(chartId);
+            if (!canvas) {
+                alert('Chart not found');
+                return;
+            }
+            
+            // Create a temporary canvas with white background
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const ctx = tempCanvas.getContext('2d');
+            
+            // Fill white background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // Draw the chart on top
+            ctx.drawImage(canvas, 0, 0);
+            
+            // Create a link and trigger download
+            const link = document.createElement('a');
+            link.download = \`\${filename}_\${new Date().toISOString().slice(0,10)}.png\`;
+            link.href = tempCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Export a section's table(s) to Excel
+        function exportSectionTable(sectionId, filename) {
+            const section = document.getElementById(sectionId);
+            if (!section) {
+                alert('Section not found');
+                return;
+            }
+            
+            const tables = section.querySelectorAll('table');
+            if (tables.length === 0) {
+                alert('No tables found in this section');
+                return;
+            }
+            
+            try {
+                const wb = XLSX.utils.book_new();
+                
+                tables.forEach((table, index) => {
+                    // Get the table heading/title
+                    let sheetName = \`Sheet\${index + 1}\`;
+                    const prevH3 = table.closest('.data-table-container, .nc-section, .branches-table-container')?.querySelector('h3');
+                    if (prevH3) {
+                        sheetName = prevH3.textContent.replace(/[\\[\\]\\*\\?\\/\\\\:]/g, '').substring(0, 31);
+                    } else if (index === 0) {
+                        sheetName = filename.replace(/_/g, ' ').substring(0, 31);
+                    }
+                    
+                    const ws = XLSX.utils.table_to_sheet(table);
+                    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                });
+                
+                XLSX.writeFile(wb, \`\${filename}_\${new Date().toISOString().slice(0,10)}.xlsx\`);
+            } catch (err) {
+                console.error('Export error:', err);
+                alert('Error exporting to Excel: ' + err.message);
+            }
+        }
+
+        // Export Store Scores chart data to Excel
+        function exportStoreScoresTable() {
+            if (!analyticsData || !analyticsData.storeScores) {
+                alert('No store scores data available');
+                return;
+            }
+            
+            const data = analyticsData.storeScores.map(s => ({
+                'Store': s.StoreName,
+                'Average Score (%)': s.AvgScore?.toFixed(1) || 'N/A',
+                'Audit Count': s.AuditCount || 0
+            }));
+            
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, 'Store Scores');
+            XLSX.writeFile(wb, \`Store_Scores_\${new Date().toISOString().slice(0,10)}.xlsx\`);
+        }
+
+        // Download ALL analytics as a ZIP file
+        async function downloadAllAnalytics() {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'export-status-overlay';
+            statusDiv.innerHTML = '<div class="export-status-box"><p>Preparing analytics export...</p><div class="export-progress"></div></div>';
+            document.body.appendChild(statusDiv);
+            
+            try {
+                const zip = new JSZip();
+                const dateStr = new Date().toISOString().slice(0,10);
+                
+                // 1. Export Summary Cards
+                updateExportStatus(statusDiv, 'Exporting summary data...');
+                const summaryData = [
+                    { Metric: 'Total Audits', Value: document.getElementById('totalAudits')?.textContent || 'N/A' },
+                    { Metric: 'Number of Selected Stores', Value: document.getElementById('totalStores')?.textContent || 'N/A' },
+                    { Metric: 'Average Score', Value: document.getElementById('avgScore')?.textContent || 'N/A' },
+                    { Metric: 'Pass Rate', Value: document.getElementById('passRate')?.textContent || 'N/A' },
+                    { Metric: 'Fail Rate', Value: document.getElementById('failRate')?.textContent || 'N/A' },
+                    { Metric: 'Action Plans Submitted', Value: document.getElementById('actionPlansSubmitted')?.textContent || 'N/A' },
+                    { Metric: 'Findings Solved', Value: document.getElementById('actionPlanCompletion')?.textContent || 'N/A' }
+                ];
+                const summaryWb = XLSX.utils.book_new();
+                const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+                XLSX.utils.book_append_sheet(summaryWb, summaryWs, 'Summary');
+                zip.file(\`Summary_\${dateStr}.xlsx\`, XLSX.write(summaryWb, { bookType: 'xlsx', type: 'array' }));
+
+                // 2. Export Charts as PNG with white background
+                updateExportStatus(statusDiv, 'Exporting charts...');
+                const charts = [
+                    { id: 'trendChart', name: 'Score_Trends' },
+                    { id: 'categoryChart', name: 'Category_Analysis' },
+                    { id: 'sectionChart', name: 'Section_Analysis' },
+                    { id: 'storeScoresChart', name: 'Store_Scores' }
+                ];
+                
+                for (const chart of charts) {
+                    const canvas = document.getElementById(chart.id);
+                    if (canvas) {
+                        // Create temp canvas with white background
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = canvas.width;
+                        tempCanvas.height = canvas.height;
+                        const ctx = tempCanvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                        ctx.drawImage(canvas, 0, 0);
+                        
+                        const dataUrl = tempCanvas.toDataURL('image/png');
+                        const base64Data = dataUrl.split(',')[1];
+                        zip.file(\`Charts/\${chart.name}_\${dateStr}.png\`, base64Data, { base64: true });
+                    }
+                }
+
+                // 3. Export all tables
+                updateExportStatus(statusDiv, 'Exporting tables...');
+                const sections = [
+                    { id: 'scoreTrendsSection', name: 'Score_Trends' },
+                    { id: 'categoryAnalysisSection', name: 'Category_Analysis' },
+                    { id: 'sectionAnalysisSection', name: 'Section_Analysis' },
+                    { id: 'storePerformanceSection', name: 'Store_Performance' },
+                    { id: 'actionPlanSection', name: 'Action_Plan_Analysis' },
+                    { id: 'ncAnalysisSection', name: 'NC_Analysis' },
+                    { id: 'branchRankingsSection', name: 'Branch_Rankings' }
+                ];
+                
+                for (const sec of sections) {
+                    const section = document.getElementById(sec.id);
+                    if (section) {
+                        const tables = section.querySelectorAll('table');
+                        if (tables.length > 0) {
+                            const wb = XLSX.utils.book_new();
+                            tables.forEach((table, index) => {
+                                let sheetName = \`Sheet\${index + 1}\`;
+                                const prevH3 = table.closest('.data-table-container, .nc-section, .branches-table-container')?.querySelector('h3');
+                                if (prevH3) {
+                                    sheetName = prevH3.textContent.replace(/[\\[\\]\\*\\?\\/\\\\:]/g, '').substring(0, 31);
+                                }
+                                const ws = XLSX.utils.table_to_sheet(table);
+                                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                            });
+                            zip.file(\`Tables/\${sec.name}_\${dateStr}.xlsx\`, XLSX.write(wb, { bookType: 'xlsx', type: 'array' }));
+                        }
+                    }
+                }
+
+                // 4. Export store scores data
+                if (analyticsData && analyticsData.storeScores) {
+                    const storeData = analyticsData.storeScores.map(s => ({
+                        'Store': s.StoreName,
+                        'Average Score (%)': s.AvgScore?.toFixed(1) || 'N/A',
+                        'Audit Count': s.AuditCount || 0
+                    }));
+                    const wb = XLSX.utils.book_new();
+                    const ws = XLSX.utils.json_to_sheet(storeData);
+                    XLSX.utils.book_append_sheet(wb, ws, 'Store Scores');
+                    zip.file(\`Tables/Store_Scores_\${dateStr}.xlsx\`, XLSX.write(wb, { bookType: 'xlsx', type: 'array' }));
+                }
+
+                // Generate and download ZIP
+                updateExportStatus(statusDiv, 'Creating ZIP file...');
+                const content = await zip.generateAsync({ type: 'blob' });
+                saveAs(content, \`Analytics_Export_\${dateStr}.zip\`);
+                
+                statusDiv.remove();
+            } catch (err) {
+                console.error('Download all error:', err);
+                statusDiv.innerHTML = '<div class="export-status-box error"><p>Error: ' + err.message + '</p><button onclick="this.parentElement.parentElement.remove()">Close</button></div>';
+            }
+        }
+
+        function updateExportStatus(div, message) {
+            const p = div.querySelector('p');
+            if (p) p.textContent = message;
         }
     </script>
 </body>
