@@ -746,15 +746,6 @@ class AuditorPerformancePage {
         <!-- Tab: Overview -->
         <div id="tab-overview" class="tab-content active">
             <div class="cards-grid">
-                <!-- Auditor Performance Chart -->
-                <section class="chart-card full-width">
-                    <h2>📊 Auditor Performance Overview</h2>
-                    <div class="chart-container">
-                        <canvas id="auditorChart"></canvas>
-                    </div>
-                    <div id="auditorTable" class="data-table-container"></div>
-                </section>
-
                 <!-- Audits by Auditor -->
                 <section class="chart-card">
                     <h2>📈 Audits by Auditor</h2>
@@ -1185,10 +1176,8 @@ class AuditorPerformancePage {
         // ============================================
         function renderOverviewTab() {
             const auditors = analyticsData.auditorPerformance || [];
-            renderAuditorChart(auditors);
             renderAuditsCountChart(auditors);
             renderScoreDistributionChart(auditors);
-            renderAuditorTable(auditors);
         }
 
         function renderAuditorChart(auditors) {
@@ -1288,30 +1277,6 @@ class AuditorPerformancePage {
                     plugins: { legend: { display: false } }
                 }
             });
-        }
-
-        function renderAuditorTable(auditors) {
-            if (auditors.length === 0) {
-                document.getElementById('auditorTable').innerHTML = '<p class="no-data">No auditor data found</p>';
-                return;
-            }
-
-            const sorted = [...auditors].sort((a, b) => b.avgScore - a.avgScore);
-            document.getElementById('auditorTable').innerHTML = \`
-                <table class="data-table">
-                    <thead><tr><th>#</th><th>Auditor</th><th>Audits</th><th>Avg Score</th><th>Min</th><th>Max</th></tr></thead>
-                    <tbody>\${sorted.map((a, i) => \`
-                        <tr>
-                            <td>\${i + 1}</td>
-                            <td>\${a.auditorName}</td>
-                            <td>\${a.auditCount}</td>
-                            <td class="\${a.avgScore >= passingThreshold ? 'pass' : 'fail'}">\${a.avgScore.toFixed(1)}%</td>
-                            <td>\${a.minScore}%</td>
-                            <td>\${a.maxScore}%</td>
-                        </tr>
-                    \`).join('')}</tbody>
-                </table>
-            \`;
         }
 
         // ============================================
