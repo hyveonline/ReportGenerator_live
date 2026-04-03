@@ -457,6 +457,14 @@ class AnalyticsPage {
             <section class="chart-card full-width">
                 <h2>🚫 Non-conformities Analysis</h2>
                 
+                <!-- Scheme Filter -->
+                <div class="nc-filter-bar">
+                    <label for="ncSchemeFilter">Filter by Scheme:</label>
+                    <select id="ncSchemeFilter" onchange="filterNCByScheme()">
+                        <option value="">All Schemes</option>
+                    </select>
+                </div>
+                
                 <!-- Audits with N/C Summary Table -->
                 <div class="nc-section">
                     <h3>📋 Audits Summary</h3>
@@ -2027,6 +2035,9 @@ class AnalyticsPage {
         // NON-CONFORMITIES ANALYSIS
         // =============================================
         
+        // Store NC data globally for filtering
+        let ncAnalysisData = null;
+        
         function renderNCAnalysis(ncAnalysis) {
             if (!ncAnalysis) {
                 document.getElementById('ncAuditTable').innerHTML = '<p class="no-data">No data available</p>';
@@ -2034,7 +2045,87 @@ class AnalyticsPage {
                 return;
             }
             
-            const { audits, repetitiveFindings, summary } = ncAnalysis;
+            // Store data globally for filtering
+            ncAnalysisData = ncAnalysis;
+            
+            // Populate scheme filter dropdown
+            const schemeFilter = document.getElementById('ncSchemeFilter');
+            if (schemeFilter && ncAnalysis.schemes) {
+                schemeFilter.innerHTML = '<option value="">All Schemes</option>' +
+                    ncAnalysis.schemes.map(s => \`<option value="\${s}">\${s}</option>\`).join('');
+            }
+            
+            // Render with all data initially
+            renderNCTables(ncAnalysis.audits, ncAnalysis.repetitiveFindings);
+        }
+        
+        function filterNCByScheme() {
+            if (!ncAnalysisData) return;
+            
+            const selectedScheme = document.getElementById('ncSchemeFilter').value;
+            
+            let filteredAudits = ncAnalysisData.audits;
+            let filteredFindings = ncAnalysisData.repetitiveFindings;
+            
+            if (selectedScheme) {
+                filteredAudits = ncAnalysisData.audits.filter(a => a.scheme === selectedScheme);
+                filteredFindings = ncAnalysisData.repetitiveFindings.filter(f => f.scheme === selectedScheme);
+            }
+            
+            renderNCTables(filteredAudits, filteredFindings);
+        }
+        
+        // Format cycles to show consecutive streak ending with most recent
+        // e.g., "C1, C2, C3, C4" → "C1-C2-C3-C4" (all consecutive)
+        // e.g., "C1, C3, C4, C5" → "C3-C4-C5" (only consecutive ending with latest)
+        function formatConsecutiveCycles(cyclesStr) {
+            if (!cyclesStr) return '-';
+            
+            // Parse cycles like "C1, C2, C3" into numbers
+            const cycles = cyclesStr.split(', ').map(c => {
+                const match = c.match(/C(\d+)/i);
+                return match ? parseInt(match[1]) : null;
+            }).filter(n => n !== null).sort((a, b) => a - b);
+            
+            if (cycles.length === 0) return cyclesStr;
+            if (cycles.length === 1) return 'C' + cycles[0];
+            
+            // Find consecutive streak ending with the most recent (last) cycle
+            const lastCycle = cycles[cycles.length - 1];
+            let streakStart = lastCycle;
+            
+            // Walk backwards to find where the consecutive streak starts
+            for (let i = cycles.length - 2; i >= 0; i--) {
+                if (cycles[i] === cycles[i + 1] - 1) {
+                    streakStart = cycles[i];
+                } else {
+                    break;
+                }
+            }
+            
+            // Build the streak string
+            if (streakStart === lastCycle) {
+                // No consecutive cycles, just show the last one
+                return 'C' + lastCycle;
+            }
+            
+            // Format as C1-C2-C3-C4
+            const streakCycles = [];
+            for (let c = streakStart; c <= lastCycle; c++) {
+                streakCycles.push('C' + c);
+            }
+            return streakCycles.join('-');
+        }
+        
+        function renderNCTables(audits, repetitiveFindings) {
+            // Calculate summary for filtered data
+            const summary = {
+                totalAudits: audits.length,
+                totalNC: audits.reduce((sum, a) => sum + a.ncCount, 0),
+                avgNCPerAudit: audits.length > 0 ? (audits.reduce((sum, a) => sum + a.ncCount, 0) / audits.length).toFixed(1) : 0,
+                totalRepetitiveFindings: repetitiveFindings.length,
+                storesWithRepetitive: [...new Set(repetitiveFindings.map(r => r.storeName))].length
+            };
             
             // Render Audits Summary Table
             let auditsHtml = \`
@@ -2056,6 +2147,7 @@ class AnalyticsPage {
                     <thead>
                         <tr>
                             <th>Store</th>
+                            <th>Scheme</th>
                             <th>Audit #</th>
                             <th>Report</th>
                             <th>Date</th>
@@ -2069,6 +2161,7 @@ class AnalyticsPage {
                         \${audits.length > 0 ? audits.map(a => \`
                             <tr>
                                 <td>\${a.storeName}</td>
+                                <td class="scheme-cell">\${a.scheme || '-'}</td>
                                 <td>\${a.documentNumber}</td>
                                 <td><a href="/reports/\${a.documentNumber}.html" target="_blank" class="report-link">📄 View</a></td>
                                 <td>\${new Date(a.auditDate).toLocaleDateString()}</td>
@@ -2077,7 +2170,7 @@ class AnalyticsPage {
                                 <td class="\${a.score >= 83 ? 'pass' : 'fail'}">\${a.score ? a.score.toFixed(1) : 0}%</td>
                                 <td class="nc-count \${a.ncCount > 10 ? 'high' : a.ncCount > 5 ? 'medium' : ''}">\${a.ncCount}</td>
                             </tr>
-                        \`).join('') : '<tr><td colspan="8" class="no-data">No audits found</td></tr>'}
+                        \`).join('') : '<tr><td colspan="9" class="no-data">No audits found</td></tr>'}
                     </tbody>
                 </table>
             \`;
@@ -2099,6 +2192,7 @@ class AnalyticsPage {
                     <thead>
                         <tr>
                             <th>Store</th>
+                            <th>Scheme</th>
                             <th>Ref #</th>
                             <th>Section</th>
                             <th>Finding</th>
@@ -2111,20 +2205,21 @@ class AnalyticsPage {
                         \${repetitiveFindings.length > 0 ? repetitiveFindings.map(r => \`
                             <tr class="repetitive-row \${r.occurrenceCount >= 3 ? 'critical' : ''}">
                                 <td>\${r.storeName}</td>
+                                <td class="scheme-cell">\${r.scheme || '-'}</td>
                                 <td class="ref-value">\${r.referenceValue || '-'}</td>
                                 <td>\${r.sectionName}</td>
                                 <td class="finding-title" title="\${r.title}">\${r.title.length > 60 ? r.title.substring(0, 60) + '...' : r.title}</td>
                                 <td class="occurrence-count">
                                     <span class="occurrence-badge \${r.occurrenceCount >= 3 ? 'critical' : 'warning'}">\${r.occurrenceCount}x</span>
                                 </td>
-                                <td>\${r.cycles}</td>
+                                <td class="cycles-cell">\${formatConsecutiveCycles(r.cycles)}</td>
                                 <td class="doc-links">
                                     \${r.documentNumbers.split(', ').map(doc => 
                                         \`<a href="/reports/\${doc}.html" target="_blank" class="doc-link">\${doc}</a>\`
                                     ).join(' ')}
                                 </td>
                             </tr>
-                        \`).join('') : '<tr><td colspan="7" class="no-data">No repetitive findings found - Good job! 🎉</td></tr>'}
+                        \`).join('') : '<tr><td colspan="8" class="no-data">No repetitive findings found - Good job! 🎉</td></tr>'}
                     </tbody>
                 </table>
             \`;

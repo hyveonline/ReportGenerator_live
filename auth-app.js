@@ -3145,12 +3145,14 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
                 ai.AuditDate,
                 ai.Cycle,
                 ai.TotalScore,
+                asch.SchemaName as Scheme,
                 CASE WHEN ai.TotalScore >= ${passingThreshold} THEN 'Pass' ELSE 'Fail' END as Result,
                 (SELECT COUNT(*) FROM AuditResponses ar 
                  WHERE ar.AuditID = ai.AuditID 
                  AND ar.SelectedChoice IN ('No', 'Partially')) as NCCount
             FROM AuditInstances ai
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
             ${whereClause}
             ORDER BY ai.StoreName, ai.AuditDate DESC
         `);
@@ -3163,7 +3165,8 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             cycle: r.Cycle,
             score: r.TotalScore,
             result: r.Result,
-            ncCount: r.NCCount || 0
+            ncCount: r.NCCount || 0,
+            scheme: r.Scheme || 'Unknown'
         }));
         
         // Get repetitive findings (same store, same reference point, multiple audits)
@@ -3173,6 +3176,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
                 ar.ReferenceValue,
                 ar.Title,
                 ar.SectionName,
+                asch.SchemaName as Scheme,
                 COUNT(DISTINCT ai.AuditID) as OccurrenceCount,
                 STRING_AGG(ai.Cycle, ', ') WITHIN GROUP (ORDER BY ai.AuditDate) as Cycles,
                 STRING_AGG(ai.DocumentNumber, ', ') WITHIN GROUP (ORDER BY ai.AuditDate) as DocumentNumbers,
@@ -3181,9 +3185,10 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             FROM AuditResponses ar
             INNER JOIN AuditInstances ai ON ar.AuditID = ai.AuditID
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
             ${whereClause}
             AND ar.SelectedChoice IN ('No', 'Partially')
-            GROUP BY ai.StoreName, ar.ReferenceValue, ar.Title, ar.SectionName
+            GROUP BY ai.StoreName, ar.ReferenceValue, ar.Title, ar.SectionName, asch.SchemaName
             HAVING COUNT(DISTINCT ai.AuditID) > 1
             ORDER BY OccurrenceCount DESC, ai.StoreName, ar.ReferenceValue
         `);
@@ -3197,12 +3202,17 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             cycles: r.Cycles,
             documentNumbers: r.DocumentNumbers,
             firstOccurrence: r.FirstOccurrence,
-            lastOccurrence: r.LastOccurrence
+            lastOccurrence: r.LastOccurrence,
+            scheme: r.Scheme || 'Unknown'
         }));
+        
+        // Get unique schemes from audits
+        const ncSchemes = [...new Set(ncAudits.map(a => a.scheme))].filter(s => s).sort();
         
         const ncAnalysis = {
             audits: ncAudits,
             repetitiveFindings: repetitiveFindings,
+            schemes: ncSchemes,
             summary: {
                 totalAudits: ncAudits.length,
                 totalNC: ncAudits.reduce((sum, a) => sum + a.ncCount, 0),
