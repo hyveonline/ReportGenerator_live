@@ -824,8 +824,51 @@ class AnalyticsPage {
                     \`;
                     yearOptions.appendChild(label);
                 }
+                
+                // Apply default filters based on year
+                // For 2026: Start from C3 (March) - skip C1 and C2
+                // For 2027+: Start from C1 (January) - no filtering needed
+                applyDefaultYearFilters();
+                
             } catch (error) {
                 console.error('Error initializing filters:', error);
+            }
+        }
+        
+        // Apply default year-based filters
+        // 2026: Analytics starts from C3 (March)
+        // 2027+: Analytics starts from C1 (January)
+        function applyDefaultYearFilters() {
+            const currentYear = new Date().getFullYear();
+            
+            // Pre-select current year
+            const yearCheckbox = document.querySelector(\`#yearOptions input[value="\${currentYear}"]\`);
+            if (yearCheckbox) {
+                yearCheckbox.checked = true;
+                updateDropdownText('yearDropdown');
+            }
+            
+            // For 2026, pre-select cycles C3 onwards (skip C1, C2)
+            if (currentYear === 2026) {
+                const cycleCheckboxes = document.querySelectorAll('#cycleOptions input[type="checkbox"]');
+                const selectedCycles = [];
+                cycleCheckboxes.forEach(cb => {
+                    const cycleValue = cb.value;
+                    // Check if cycle is C3 or higher (C3, C4, C5, ... C12)
+                    const cycleMatch = cycleValue.match(/C(\\d+)/i);
+                    if (cycleMatch) {
+                        const cycleNum = parseInt(cycleMatch[1]);
+                        if (cycleNum >= 3) {
+                            cb.checked = true;
+                            selectedCycles.push(cycleValue);
+                        }
+                    }
+                });
+                updateDropdownText('cycleDropdown');
+                console.log('📅 2026 default filters applied: Selected cycles:', selectedCycles);
+            } else {
+                // For 2027+, no cycle filtering - all cycles from January
+                console.log('📅 ' + currentYear + ' default filters: All cycles from January');
             }
         }
 
@@ -1061,12 +1104,18 @@ class AnalyticsPage {
             showLoading(true);
             try {
                 const filters = getFilters();
+                console.log('📊 Loading analytics with filters:', filters);
                 const queryParams = new URLSearchParams(filters).toString();
+                console.log('📊 Query params:', queryParams);
 
                 const response = await fetch('/api/admin/analytics?' + queryParams);
                 if (!response.ok) throw new Error('Failed to load analytics');
                 
                 analyticsData = await response.json();
+                console.log('📊 Action plan data:', {
+                    total: analyticsData.summary.actionPlansTotal,
+                    solved: analyticsData.summary.actionPlansSolved
+                });
                 
                 renderSummaryCards(analyticsData.summary);
                 renderTrendChartByBrand(analyticsData.trendsByBrand, analyticsData.trends);
@@ -1118,6 +1167,7 @@ class AnalyticsPage {
             const solved = summary.actionPlansSolved || 0;
             const total = summary.actionPlansTotal || 0;
             const percentage = summary.actionPlanCompletionRate || 0;
+            console.log('📊 Rendering Action Plan card: solved=' + solved + ', total=' + total);
             if (total > 0) {
                 document.getElementById('actionPlanCompletion').textContent = solved + '/' + total + ' (' + percentage.toFixed(1) + '%)';
             } else {

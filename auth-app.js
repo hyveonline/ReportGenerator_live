@@ -2759,7 +2759,7 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         `);
         
         // Action Plan Completion Statistics (filtered by audits matching current filters)
-        const actionPlanResult = await pool.request().query(`
+        const actionPlanQuery = `
             SELECT 
                 COUNT(*) as TotalActionPlans,
                 SUM(CASE WHEN apr.Status = 'Completed' THEN 1 ELSE 0 END) as SolvedActionPlans
@@ -2767,7 +2767,10 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
             ${whereClause}
-        `);
+        `;
+        console.log('📝 [Action Plan Query]:', actionPlanQuery);
+        const actionPlanResult = await pool.request().query(actionPlanQuery);
+        console.log('📝 [Action Plan Result]:', actionPlanResult.recordset[0]);
         
         // Action Plans Reviewed by Area Managers (filtered by audits matching current filters)
         const actionPlansReviewedResult = await pool.request().query(`
@@ -3487,8 +3490,24 @@ app.get('/api/admin/analytics/unsolved-action-plans', requireAuth, requireRole('
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        // Build WHERE clause from filters (reuse shared helper)
-        const whereClause = buildAnalyticsWhereClause(req.query, null);
+        // Get dynamic threshold for passing score (same as main analytics)
+        let passingThreshold = 87; // default
+        try {
+            const thresholdResult = await pool.request().query(`
+                SELECT TOP 1 ISNULL(PassingGrade, 87) AS PassingGrade
+                FROM SystemSettings 
+                WHERE SettingType = 'Overall'
+                ORDER BY SchemaID
+            `);
+            if (thresholdResult.recordset.length > 0) {
+                passingThreshold = thresholdResult.recordset[0].PassingGrade;
+            }
+        } catch (thresholdErr) {
+            console.warn('⚠️ Could not get dynamic threshold, using default 87:', thresholdErr.message);
+        }
+        
+        // Build WHERE clause from filters (now with proper passingThreshold)
+        const whereClause = buildAnalyticsWhereClause(req.query, passingThreshold);
         
         const result = await pool.request().query(`
             SELECT 
@@ -3540,8 +3559,24 @@ app.get('/api/admin/analytics/reviewed-action-plans', requireAuth, requireRole('
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        // Build WHERE clause from filters (reuse shared helper)
-        const whereClause = buildAnalyticsWhereClause(req.query, null);
+        // Get dynamic threshold for passing score (same as main analytics)
+        let passingThreshold = 87; // default
+        try {
+            const thresholdResult = await pool.request().query(`
+                SELECT TOP 1 ISNULL(PassingGrade, 87) AS PassingGrade
+                FROM SystemSettings 
+                WHERE SettingType = 'Overall'
+                ORDER BY SchemaID
+            `);
+            if (thresholdResult.recordset.length > 0) {
+                passingThreshold = thresholdResult.recordset[0].PassingGrade;
+            }
+        } catch (thresholdErr) {
+            console.warn('⚠️ Could not get dynamic threshold, using default 87:', thresholdErr.message);
+        }
+        
+        // Build WHERE clause from filters (now with proper passingThreshold)
+        const whereClause = buildAnalyticsWhereClause(req.query, passingThreshold);
         
         // Get unique action plan submissions with only the Area Managers who received them
         const result = await pool.request().query(`
