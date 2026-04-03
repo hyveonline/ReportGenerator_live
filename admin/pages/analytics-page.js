@@ -384,13 +384,37 @@ class AnalyticsPage {
                 </div>
             </section>
 
-            <!-- Section Analysis -->
+            <!-- Category Analysis Report -->
             <section class="chart-card full-width">
-                <h2>📊 Section Analysis Report</h2>
-                <p class="section-description">Section performance analysis with category grouping and drill-down details.</p>
+                <h2>📂 Category Analysis Report</h2>
+                <p class="section-description">Performance analysis by main categories (e.g., Storage of Food, Employees' Food Handling). Categories vary per audit scheme.</p>
+                <div class="category-analysis-controls">
+                    <label>Filter by Scheme:</label>
+                    <select id="categorySchemeFilter" onchange="filterCategoryAnalysis()">
+                        <option value="">All Schemes</option>
+                    </select>
+                </div>
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+                <div id="categoryTable" class="data-table-container"></div>
+            </section>
+
+            <!-- Section/Subcategory Analysis -->
+            <section class="chart-card full-width">
+                <h2>📊 Section Analysis Report (Subcategories)</h2>
+                <p class="section-description">Performance analysis by sections/subcategories within each category.</p>
                 <div class="section-analysis-controls">
+                    <label>Filter by Scheme:</label>
+                    <select id="sectionSchemeFilter" onchange="filterSectionAnalysis()">
+                        <option value="">All Schemes</option>
+                    </select>
+                    <label>Filter by Category:</label>
+                    <select id="sectionCategoryFilter" onchange="filterSectionAnalysis()">
+                        <option value="">All Categories</option>
+                    </select>
                     <label>Sort By:</label>
-                    <select id="sectionSortMode" onchange="changeSectionSort()">
+                    <select id="sectionSortMode" onchange="filterSectionAnalysis()">
                         <option value="score">Average Score (Weakest First)</option>
                         <option value="category">Category, then Score</option>
                         <option value="name">Section Name (A-Z)</option>
@@ -1151,7 +1175,8 @@ class AnalyticsPage {
                 renderSummaryCards(analyticsData.summary);
                 renderTrendChartByBrand(analyticsData.trendsByBrand, analyticsData.trends);
                 renderPassingFailingBranches(analyticsData.passingBranches, analyticsData.failingBranches);
-                renderSectionAnalysis(analyticsData.sectionWeakness, analyticsData.sectionDrilldown);
+                renderCategoryAnalysis(analyticsData.categoryAnalysis, analyticsData.categorySchemes);
+                renderSectionAnalysis(analyticsData.sectionWeakness, analyticsData.sectionDrilldown, analyticsData.sectionSchemes, analyticsData.sectionCategories);
                 renderHeatmap(analyticsData.heatmap);
                 renderNCAnalysis(analyticsData.ncAnalysis);
                 renderBranchRankings(analyticsData.branchRankings);
@@ -1548,21 +1573,188 @@ class AnalyticsPage {
             }
         }
 
+        // =============================================
+        // CATEGORY ANALYSIS
+        // =============================================
+        
+        let categoryChart = null;
+        let currentCategoryData = [];
+        let currentCategorySchemes = [];
+        
+        function renderCategoryAnalysis(categories, schemes) {
+            currentCategoryData = categories || [];
+            currentCategorySchemes = schemes || [];
+            
+            // Populate scheme filter dropdown
+            const schemeFilter = document.getElementById('categorySchemeFilter');
+            if (schemeFilter) {
+                schemeFilter.innerHTML = '<option value="">All Schemes</option>' +
+                    currentCategorySchemes.map(s => \`<option value="\${s}">\${s}</option>\`).join('');
+            }
+            
+            renderCategoryTables(currentCategoryData);
+        }
+        
+        function filterCategoryAnalysis() {
+            const selectedScheme = document.getElementById('categorySchemeFilter').value;
+            
+            let filtered = currentCategoryData;
+            if (selectedScheme) {
+                filtered = currentCategoryData.filter(c => c.schemaName === selectedScheme);
+            }
+            
+            renderCategoryTables(filtered);
+        }
+        
+        function renderCategoryTables(categories) {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            
+            if (categoryChart) categoryChart.destroy();
+            
+            if (!categories || categories.length === 0) {
+                document.getElementById('categoryTable').innerHTML = '<p class="no-data">No category data available</p>';
+                return;
+            }
+            
+            // Sort by average score (weakest first)
+            const sorted = [...categories].sort((a, b) => a.avgScore - b.avgScore);
+            
+            const labels = sorted.map(c => c.categoryName + ' (' + c.schemaName + ')');
+            const scores = sorted.map(c => c.avgScore);
+            const colors = scores.map(s => s >= 83 ? '#10b981' : '#ef4444');
+            
+            categoryChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Score (%)',
+                        data: scores,
+                        backgroundColor: colors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            min: 0,
+                            max: 100,
+                            title: { display: true, text: 'Average Score (%)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const cat = sorted[context.dataIndex];
+                                    return [
+                                        'Avg Score: ' + cat.avgScore.toFixed(1) + '%',
+                                        'Pass Rate: ' + (cat.passRate || 0).toFixed(1) + '%',
+                                        'Fail Rate: ' + cat.failRate.toFixed(1) + '%',
+                                        'Audits: ' + cat.timesAudited
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Render category table
+            const tableHtml = \`
+                <table class="data-table category-analysis-table">
+                    <thead>
+                        <tr>
+                            <th>Scheme</th>
+                            <th>Category</th>
+                            <th>Audits</th>
+                            <th>Average Score</th>
+                            <th>Pass Rate</th>
+                            <th>Fail Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${sorted.map(c => {
+                            const passCount = Math.round(c.timesAudited * (c.passRate || 0) / 100);
+                            const failCount = c.timesAudited - passCount;
+                            return \`
+                            <tr>
+                                <td><span class="scheme-badge">\${c.schemaName}</span></td>
+                                <td><strong>\${c.categoryName}</strong></td>
+                                <td>\${c.timesAudited}</td>
+                                <td class="\${c.avgScore >= 83 ? 'pass' : 'fail'}">\${c.avgScore.toFixed(1)}%</td>
+                                <td class="pass">\${(c.passRate || 0).toFixed(1)}% <span class="rate-count">(\${passCount})</span></td>
+                                <td class="fail">\${c.failRate.toFixed(1)}% <span class="rate-count">(\${failCount})</span></td>
+                            </tr>
+                        \`;}).join('')}
+                    </tbody>
+                </table>
+            \`;
+            document.getElementById('categoryTable').innerHTML = tableHtml;
+        }
+
+        // =============================================
+        // SECTION ANALYSIS (SUBCATEGORIES)
+        // =============================================
+        
         // Store drilldown data for section analysis
         let currentSectionDrilldown = {};
         let currentSectionData = [];
+        let currentSectionSchemes = [];
+        let currentSectionCategories = [];
 
-        // Handle section sort mode change
+        // Handle section sort mode change (deprecated - now uses filterSectionAnalysis)
         function changeSectionSort() {
-            if (currentSectionData.length > 0) {
-                renderSectionAnalysis(currentSectionData, currentSectionDrilldown);
+            filterSectionAnalysis();
+        }
+        
+        function filterSectionAnalysis() {
+            if (currentSectionData.length === 0) return;
+            
+            const selectedScheme = document.getElementById('sectionSchemeFilter')?.value || '';
+            const selectedCategory = document.getElementById('sectionCategoryFilter')?.value || '';
+            
+            let filtered = currentSectionData;
+            
+            if (selectedScheme) {
+                filtered = filtered.filter(s => s.schemaName === selectedScheme);
             }
+            if (selectedCategory) {
+                filtered = filtered.filter(s => s.categoryName === selectedCategory);
+            }
+            
+            renderSectionTables(filtered, currentSectionDrilldown);
         }
 
         // Render section analysis report (enhanced version)
-        function renderSectionAnalysis(sections, drilldown) {
+        function renderSectionAnalysis(sections, drilldown, schemes, categories) {
             currentSectionDrilldown = drilldown || {};
             currentSectionData = sections || [];
+            currentSectionSchemes = schemes || [];
+            currentSectionCategories = categories || [];
+            
+            // Populate scheme filter dropdown
+            const schemeFilter = document.getElementById('sectionSchemeFilter');
+            if (schemeFilter) {
+                schemeFilter.innerHTML = '<option value="">All Schemes</option>' +
+                    currentSectionSchemes.map(s => \`<option value="\${s}">\${s}</option>\`).join('');
+            }
+            
+            // Populate category filter dropdown
+            const categoryFilter = document.getElementById('sectionCategoryFilter');
+            if (categoryFilter) {
+                categoryFilter.innerHTML = '<option value="">All Categories</option>' +
+                    currentSectionCategories.map(c => \`<option value="\${c}">\${c}</option>\`).join('');
+            }
+            
+            renderSectionTables(currentSectionData, currentSectionDrilldown);
+        }
+        
+        function renderSectionTables(sections, drilldown) {
             const ctx = document.getElementById('sectionChart').getContext('2d');
             
             if (sectionChart) sectionChart.destroy();
@@ -1640,8 +1832,9 @@ class AnalyticsPage {
                     <thead>
                         <tr>
                             <th style="width: 30px;"></th>
+                            <th>Scheme</th>
                             <th>Category</th>
-                            <th>Section</th>
+                            <th>Section (Subcategory)</th>
                             <th>Audits</th>
                             <th>Average Score</th>
                             <th>Pass Rate</th>
@@ -1657,6 +1850,7 @@ class AnalyticsPage {
                             return \`
                             <tr class="section-row \${hasStores ? 'expandable' : ''}" data-section="\${s.sectionName}" onclick="toggleSectionDrilldown('\${s.sectionName.replace(/'/g, "\\\\'")}')">
                                 <td class="expand-icon">\${hasStores ? '▶' : ''}</td>
+                                <td><span class="scheme-badge">\${s.schemaName || 'Unknown'}</span></td>
                                 <td class="category-cell"><span class="category-badge">\${s.categoryName || 'Uncategorized'}</span></td>
                                 <td><strong>\${s.sectionName}</strong></td>
                                 <td>\${s.timesAudited}</td>
@@ -1665,7 +1859,7 @@ class AnalyticsPage {
                                 <td class="fail">\${s.failRate.toFixed(1)}% <span class="rate-count">(\${failCount})</span></td>
                             </tr>
                             <tr class="drilldown-row" id="drilldown-\${s.sectionName.replace(/[^a-zA-Z0-9]/g, '_')}" style="display: none;">
-                                <td colspan="7" class="drilldown-cell">
+                                <td colspan="8" class="drilldown-cell">
                                     <div class="drilldown-content">
                                         <div class="drilldown-header">
                                             <strong>Store/Audit Breakdown for \${s.sectionName}</strong>

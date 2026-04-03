@@ -2916,23 +2916,67 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             maxScore: r.MaxScore || 0
         }));
         
-        // 4. Section Analysis Report (expanded with per-store breakdown and category info)
+        // 4a. Category Analysis Report (aggregate scores per category)
+        const categoryResult = await pool.request().query(`
+            SELECT 
+                ac.CategoryID,
+                ac.CategoryName,
+                asch.SchemaName,
+                asch.SchemaID,
+                COUNT(DISTINCT ai.AuditID) as TimesAudited,
+                AVG(ss.Percentage) as AvgScore,
+                SUM(ss.EarnedScore) as TotalEarned,
+                SUM(ss.MaxScore) as TotalMax,
+                SUM(CASE WHEN ss.Percentage >= ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as PassRate,
+                SUM(CASE WHEN ss.Percentage < ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as FailRate
+            FROM AuditCategories ac
+            INNER JOIN AuditSchemas asch ON ac.SchemaID = asch.SchemaID
+            INNER JOIN CategorySections cs ON ac.CategoryID = cs.CategoryID
+            INNER JOIN AuditSections asec ON cs.SectionID = asec.SectionID
+            INNER JOIN AuditSectionScores ss ON asec.SectionName = ss.SectionName
+            INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID AND ai.SchemaID = asch.SchemaID
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            AND ac.IsActive = 1
+            GROUP BY ac.CategoryID, ac.CategoryName, asch.SchemaName, asch.SchemaID
+            ORDER BY asch.SchemaName, AvgScore ASC
+        `);
+        
+        const categoryAnalysis = categoryResult.recordset.map(r => ({
+            categoryId: r.CategoryID,
+            categoryName: r.CategoryName,
+            schemaName: r.SchemaName,
+            schemaId: r.SchemaID,
+            timesAudited: r.TimesAudited,
+            avgScore: r.TotalMax > 0 ? (r.TotalEarned / r.TotalMax * 100) : (r.AvgScore || 0),
+            passRate: r.PassRate || 0,
+            failRate: r.FailRate || 0
+        }));
+        
+        // Get unique schemes for filtering
+        const categorySchemes = [...new Set(categoryAnalysis.map(c => c.schemaName))].filter(s => s).sort();
+        
+        // 4b. Section Analysis Report (expanded with per-store breakdown, category and schema info)
         const sectionResult = await pool.request().query(`
             SELECT 
                 ss.SectionName,
+                asch.SchemaName,
+                asch.SchemaID,
                 COUNT(*) as TimesAudited,
                 AVG(ss.Percentage) as AvgScore,
                 SUM(CASE WHEN ss.Percentage >= ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as PassRate,
                 SUM(CASE WHEN ss.Percentage < ${passingThreshold} THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0) as FailRate,
-                MAX(ac.CategoryName) as CategoryName
+                MAX(ac.CategoryName) as CategoryName,
+                MAX(ac.CategoryID) as CategoryID
             FROM AuditSectionScores ss
             INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
-            LEFT JOIN AuditSections asec ON ss.SectionName = asec.SectionName AND asec.SchemaID = s.SchemaID
+            LEFT JOIN AuditSections asec ON ss.SectionName = asec.SectionName AND asec.SchemaID = ai.SchemaID
             LEFT JOIN CategorySections cs ON asec.SectionID = cs.SectionID
-            LEFT JOIN AuditCategories ac ON cs.CategoryID = ac.CategoryID AND ac.SchemaID = s.SchemaID
+            LEFT JOIN AuditCategories ac ON cs.CategoryID = ac.CategoryID AND ac.SchemaID = ai.SchemaID
             ${whereClause}
-            GROUP BY ss.SectionName
+            GROUP BY ss.SectionName, asch.SchemaName, asch.SchemaID
             ORDER BY AvgScore ASC
         `);
         
@@ -2974,11 +3018,18 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         const sectionWeakness = sectionResult.recordset.map(r => ({
             sectionName: r.SectionName,
             categoryName: r.CategoryName || 'Uncategorized',
+            categoryId: r.CategoryID || null,
+            schemaName: r.SchemaName || 'Unknown',
+            schemaId: r.SchemaID || null,
             timesAudited: r.TimesAudited,
             passRate: r.PassRate || 0,
             avgScore: r.AvgScore || 0,
             failRate: r.FailRate || 0
         }));
+        
+        // Get unique schemes and categories for filtering
+        const sectionSchemes = [...new Set(sectionWeakness.map(s => s.schemaName))].filter(s => s && s !== 'Unknown').sort();
+        const sectionCategories = [...new Set(sectionWeakness.map(s => s.categoryName))].filter(c => c).sort();
         
         // 5. Heatmap Data (Store x Section) - Enhanced with per-cycle breakdown
         console.log('📊 [Heatmap] Query WHERE clause:', whereClause);
@@ -3422,7 +3473,11 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             trends,
             trendsByBrand: Object.values(trendsByBrand),
             auditorPerformance,
+            categoryAnalysis,
+            categorySchemes,
             sectionWeakness,
+            sectionSchemes,
+            sectionCategories,
             sectionDrilldown,
             heatmap,
             complianceCalendar,

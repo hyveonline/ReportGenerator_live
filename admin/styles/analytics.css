@@ -1267,32 +1267,78 @@ body {
     font-size: 14px;
 }
 
-/* Section Analysis Report Styles */
-.section-analysis-controls {
+/* Category Analysis Report Styles */
+.category-analysis-controls {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     margin-bottom: 1rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.75rem 1rem;
+    background: #f1f5f9;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.category-analysis-controls label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #475569;
+}
+
+.category-analysis-controls select {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #334155;
+    cursor: pointer;
+    min-width: 180px;
+}
+
+.category-analysis-controls select:hover {
+    border-color: #94a3b8;
+}
+
+.category-analysis-controls select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.category-analysis-table td,
+.category-analysis-table th {
+    padding: 0.75rem 1rem;
+}
+
+/* Section Analysis Report Styles */
+.section-analysis-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
     background: #f8fafc;
     border-radius: 6px;
     border: 1px solid #e2e8f0;
 }
 
 .section-analysis-controls label {
-    font-size: 0.875rem;
+    font-size: 0.85rem;
     font-weight: 500;
     color: #475569;
 }
 
 .section-analysis-controls select {
-    padding: 0.4rem 0.75rem;
+    padding: 0.5rem 0.75rem;
     font-size: 0.85rem;
     border: 1px solid #cbd5e1;
     border-radius: 5px;
     background: #ffffff;
     color: #334155;
     cursor: pointer;
+    min-width: 150px;
 }
 
 .section-analysis-controls select:hover {
