@@ -153,6 +153,7 @@ class AuditorPerformancePage {
             border-radius: 12px;
             margin-bottom: 2rem;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: visible;
         }
 
         .filter-row {
@@ -160,12 +161,14 @@ class AuditorPerformancePage {
             flex-wrap: wrap;
             gap: 1rem;
             align-items: flex-end;
+            overflow: visible;
         }
 
         .filter-group {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            position: relative;
         }
 
         .filter-group label {
@@ -208,6 +211,89 @@ class AuditorPerformancePage {
 
         .btn-clear:hover {
             background: #e2e8f0;
+        }
+
+        /* Multi-select Dropdown Component */
+        .multi-select-dropdown {
+            position: relative;
+            min-width: 140px;
+        }
+
+        .multi-select-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #1e293b;
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            min-width: 120px;
+            white-space: nowrap;
+        }
+
+        .multi-select-header:hover {
+            border-color: #3b82f6;
+        }
+
+        .multi-select-header .selected-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+        }
+
+        .multi-select-header .dropdown-arrow {
+            font-size: 0.7rem;
+            color: #64748b;
+            transition: transform 0.2s;
+        }
+
+        .multi-select-dropdown.open .dropdown-arrow {
+            transform: rotate(180deg);
+        }
+
+        .multi-select-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            min-width: 200px;
+            max-height: 250px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 9999;
+            display: none;
+            margin-top: 4px;
+        }
+
+        .multi-select-dropdown.open .multi-select-options {
+            display: block;
+        }
+
+        .checkbox-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.15s;
+        }
+
+        .checkbox-option:hover {
+            background: #f1f5f9;
+        }
+
+        .checkbox-option input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
         }
 
         /* Cards Grid */
@@ -526,25 +612,96 @@ class AuditorPerformancePage {
         <section class="filter-section">
             <div class="filter-row">
                 <div class="filter-group">
-                    <label>Year:</label>
-                    <select id="yearFilter">
-                        <option value="">All Years</option>
-                    </select>
+                    <label>Country:</label>
+                    <div class="multi-select-dropdown" id="countryDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('countryDropdown', event)">
+                            <span class="selected-text">All Countries</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="countryOptions">
+                            <label class="checkbox-option">
+                                <input type="checkbox" value="Lebanon" onchange="updateDropdownText('countryDropdown')"> Lebanon
+                            </label>
+                            <label class="checkbox-option">
+                                <input type="checkbox" value="Iraq" onchange="updateDropdownText('countryDropdown')"> Iraq
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-group">
-                    <label>Cycle:</label>
-                    <select id="cycleFilter">
-                        <option value="">All Cycles</option>
-                    </select>
+                    <label>Brand:</label>
+                    <div class="multi-select-dropdown" id="brandDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('brandDropdown', event)">
+                            <span class="selected-text">All Brands</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="brandOptions">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-group">
                     <label>Scheme:</label>
-                    <select id="schemeFilter">
-                        <option value="">All Schemes</option>
-                    </select>
+                    <div class="multi-select-dropdown" id="schemeDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('schemeDropdown', event)">
+                            <span class="selected-text">All Schemes</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="schemeOptions">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
                 </div>
-                <button class="btn-apply" onclick="loadAllData()">Apply Filters</button>
-                <button class="btn-clear" onclick="clearFilters()">Clear</button>
+                <div class="filter-group">
+                    <label>Store:</label>
+                    <div class="multi-select-dropdown" id="storeDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('storeDropdown', event)">
+                            <span class="selected-text">All Stores</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="storeOptions">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Auditor:</label>
+                    <div class="multi-select-dropdown" id="auditorDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('auditorDropdown', event)">
+                            <span class="selected-text">All Auditors</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="auditorOptions">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Year:</label>
+                    <div class="multi-select-dropdown" id="yearDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('yearDropdown', event)">
+                            <span class="selected-text">All Years</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="yearOptions">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Cycle:</label>
+                    <div class="multi-select-dropdown" id="cycleDropdown">
+                        <div class="multi-select-header" onclick="toggleDropdown('cycleDropdown', event)">
+                            <span class="selected-text">All Cycles</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-options" id="cycleOptions">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-apply" onclick="loadAllData()">🔄 Apply</button>
+                <button class="btn-clear" onclick="clearFilters()">✖ Clear</button>
             </div>
         </section>
 
@@ -746,7 +903,58 @@ class AuditorPerformancePage {
         document.addEventListener('DOMContentLoaded', async () => {
             await initFilters();
             await loadAllData();
+            
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.multi-select-dropdown')) {
+                    document.querySelectorAll('.multi-select-dropdown.open').forEach(d => d.classList.remove('open'));
+                }
+            });
         });
+
+        // Toggle multi-select dropdown
+        function toggleDropdown(dropdownId, event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById(dropdownId);
+            const wasOpen = dropdown.classList.contains('open');
+            
+            // Close all dropdowns
+            document.querySelectorAll('.multi-select-dropdown.open').forEach(d => d.classList.remove('open'));
+            
+            // Toggle this one
+            if (!wasOpen) dropdown.classList.add('open');
+        }
+
+        // Update dropdown header text based on checked options
+        function updateDropdownText(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
+            const textSpan = dropdown.querySelector('.selected-text');
+            
+            if (checkboxes.length === 0) {
+                const defaultTexts = {
+                    'countryDropdown': 'All Countries',
+                    'brandDropdown': 'All Brands',
+                    'schemeDropdown': 'All Schemes',
+                    'storeDropdown': 'All Stores',
+                    'auditorDropdown': 'All Auditors',
+                    'yearDropdown': 'All Years',
+                    'cycleDropdown': 'All Cycles'
+                };
+                textSpan.textContent = defaultTexts[dropdownId] || 'All';
+            } else if (checkboxes.length === 1) {
+                textSpan.textContent = checkboxes[0].parentElement.textContent.trim();
+            } else {
+                textSpan.textContent = checkboxes.length + ' selected';
+            }
+        }
+
+        // Get selected values from a multi-select dropdown
+        function getMultiSelectValues(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
 
         // Tab switching
         function switchTab(tabId) {
@@ -764,25 +972,37 @@ class AuditorPerformancePage {
             try {
                 // Load years
                 const currentYear = new Date().getFullYear();
-                const yearSelect = document.getElementById('yearFilter');
+                const yearOptions = document.getElementById('yearOptions');
                 for (let y = currentYear; y >= currentYear - 5; y--) {
-                    const option = document.createElement('option');
-                    option.value = y;
-                    option.textContent = y;
-                    yearSelect.appendChild(option);
+                    const label = document.createElement('label');
+                    label.className = 'checkbox-option';
+                    label.innerHTML = \`<input type="checkbox" value="\${y}" onchange="updateDropdownText('yearDropdown')"> \${y}\`;
+                    yearOptions.appendChild(label);
                 }
 
                 // Load cycles
                 const cyclesResponse = await fetch('/api/admin/cycles');
                 if (cyclesResponse.ok) {
                     const cyclesData = await cyclesResponse.json();
-                    const cycleSelect = document.getElementById('cycleFilter');
-                    // API returns array of strings directly
+                    const cycleOptions = document.getElementById('cycleOptions');
                     (Array.isArray(cyclesData) ? cyclesData : []).forEach(c => {
-                        const option = document.createElement('option');
-                        option.value = c;
-                        option.textContent = c;
-                        cycleSelect.appendChild(option);
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-option';
+                        label.innerHTML = \`<input type="checkbox" value="\${c}" onchange="updateDropdownText('cycleDropdown')"> \${c}\`;
+                        cycleOptions.appendChild(label);
+                    });
+                }
+
+                // Load brands
+                const brandsResponse = await fetch('/api/admin/brands');
+                if (brandsResponse.ok) {
+                    const brandsData = await brandsResponse.json();
+                    const brandOptions = document.getElementById('brandOptions');
+                    (Array.isArray(brandsData) ? brandsData : []).forEach(b => {
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-option';
+                        label.innerHTML = \`<input type="checkbox" value="\${b}" onchange="updateDropdownText('brandDropdown')"> \${b}\`;
+                        brandOptions.appendChild(label);
                     });
                 }
 
@@ -790,13 +1010,45 @@ class AuditorPerformancePage {
                 const schemesResponse = await fetch('/api/admin/schemes');
                 if (schemesResponse.ok) {
                     const schemesData = await schemesResponse.json();
-                    const schemeSelect = document.getElementById('schemeFilter');
-                    // API returns array of {schemaId, schemaName}
+                    const schemeOptions = document.getElementById('schemeOptions');
                     (Array.isArray(schemesData) ? schemesData : []).forEach(s => {
-                        const option = document.createElement('option');
-                        option.value = s.schemaName || s.SchemaName;
-                        option.textContent = s.schemaName || s.SchemaName;
-                        schemeSelect.appendChild(option);
+                        const name = s.schemaName || s.SchemaName;
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-option';
+                        label.innerHTML = \`<input type="checkbox" value="\${name}" onchange="updateDropdownText('schemeDropdown')"> \${name}\`;
+                        schemeOptions.appendChild(label);
+                    });
+                }
+
+                // Load stores
+                const storesResponse = await fetch('/api/admin/stores');
+                if (storesResponse.ok) {
+                    const storesData = await storesResponse.json();
+                    const storeOptions = document.getElementById('storeOptions');
+                    // Handle both {stores: [...]} and direct array format
+                    const storesArray = storesData.stores || (Array.isArray(storesData) ? storesData : []);
+                    console.log('📊 First store object:', storesArray[0]);
+                    storesArray.forEach(s => {
+                        const storeId = s.storeId || s.StoreID || s.store_id || s.id;
+                        const storeName = s.storeName || s.StoreName || s.store_name || s.name;
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-option';
+                        label.innerHTML = \`<input type="checkbox" value="\${storeId}" onchange="updateDropdownText('storeDropdown')"> \${storeName}\`;
+                        storeOptions.appendChild(label);
+                    });
+                }
+
+                // Load auditors
+                const auditorsResponse = await fetch('/api/admin/auditors');
+                if (auditorsResponse.ok) {
+                    const auditorsData = await auditorsResponse.json();
+                    const auditorOptions = document.getElementById('auditorOptions');
+                    (Array.isArray(auditorsData) ? auditorsData : []).forEach(a => {
+                        // a is a string (auditor name from AuditInstances)
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-option';
+                        label.innerHTML = \`<input type="checkbox" value="\${a}" onchange="updateDropdownText('auditorDropdown')"> \${a}\`;
+                        auditorOptions.appendChild(label);
                     });
                 }
             } catch (error) {
@@ -806,9 +1058,14 @@ class AuditorPerformancePage {
 
         // Clear filters
         function clearFilters() {
-            document.getElementById('yearFilter').value = '';
-            document.getElementById('cycleFilter').value = '';
-            document.getElementById('schemeFilter').value = '';
+            // Uncheck all checkboxes in all dropdowns
+            document.querySelectorAll('.multi-select-options input[type="checkbox"]').forEach(cb => cb.checked = false);
+            
+            // Reset all dropdown texts
+            ['countryDropdown', 'brandDropdown', 'schemeDropdown', 'storeDropdown', 'auditorDropdown', 'yearDropdown', 'cycleDropdown'].forEach(id => {
+                updateDropdownText(id);
+            });
+            
             loadAllData();
         }
 
@@ -817,15 +1074,24 @@ class AuditorPerformancePage {
             document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
         }
 
-        // Build query params
+        // Build query params from multi-select dropdowns
         function getFilterParams() {
-            const year = document.getElementById('yearFilter').value;
-            const cycle = document.getElementById('cycleFilter').value;
-            const scheme = document.getElementById('schemeFilter').value;
             const params = new URLSearchParams();
-            if (year) params.append('years', year);
-            if (cycle) params.append('cycles', cycle);
-            if (scheme) params.append('brands', scheme);
+            
+            const countries = getMultiSelectValues('countryDropdown');
+            const brands = getMultiSelectValues('brandDropdown');
+            const storeIds = getMultiSelectValues('storeDropdown');
+            const auditors = getMultiSelectValues('auditorDropdown');
+            const years = getMultiSelectValues('yearDropdown');
+            const cycles = getMultiSelectValues('cycleDropdown');
+            
+            if (countries.length > 0) params.append('countries', countries.join(','));
+            if (brands.length > 0) params.append('brands', brands.join(','));
+            if (storeIds.length > 0) params.append('storeIds', storeIds.join(','));
+            if (auditors.length > 0) params.append('auditors', auditors.join(','));
+            if (years.length > 0) params.append('years', years.join(','));
+            if (cycles.length > 0) params.append('cycles', cycles.join(','));
+            
             return params;
         }
 

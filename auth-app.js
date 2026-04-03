@@ -2276,7 +2276,7 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        const { years, cycles, brands } = req.query;
+        const { countries, brands, storeIds, auditors, years, cycles } = req.query;
         
         // Get dynamic threshold
         let passingThreshold = 87;
@@ -2290,19 +2290,31 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
             }
         } catch (e) { /* use default */ }
         
-        // Build WHERE clause
+        // Build WHERE clause with all filters
         let whereClause = "WHERE ai.Status = 'Completed'";
+        if (countries && countries.trim()) {
+            const countryArray = countries.split(',').filter(c => c.trim()).map(c => `'${c.trim().replace(/'/g, "''")}'`);
+            if (countryArray.length > 0) whereClause += ` AND s.Country IN (${countryArray.join(',')})`;
+        }
+        if (brands && brands.trim()) {
+            const brandArray = brands.split(',').filter(b => b.trim()).map(b => `'${b.trim().replace(/'/g, "''")}'`);
+            if (brandArray.length > 0) whereClause += ` AND s.Brand IN (${brandArray.join(',')})`;
+        }
+        if (storeIds && storeIds.trim()) {
+            const storeIdArray = storeIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
+            if (storeIdArray.length > 0) whereClause += ` AND ai.StoreID IN (${storeIdArray.join(',')})`;
+        }
+        if (auditors && auditors.trim()) {
+            const auditorArray = auditors.split(',').filter(a => a.trim()).map(a => `'${a.trim().replace(/'/g, "''")}'`);
+            if (auditorArray.length > 0) whereClause += ` AND ai.Auditors IN (${auditorArray.join(',')})`;
+        }
         if (years && years.trim()) {
             const yearArray = years.split(',').map(y => parseInt(y)).filter(y => !isNaN(y));
             if (yearArray.length > 0) whereClause += ` AND ai.Year IN (${yearArray.join(',')})`;
         }
         if (cycles && cycles.trim()) {
-            const cycleArray = cycles.split(',').filter(c => c.trim()).map(c => "'" + c.trim().replace(/'/g, "''") + "'");
+            const cycleArray = cycles.split(',').filter(c => c.trim()).map(c => `'${c.trim().replace(/'/g, "''")}'`);
             if (cycleArray.length > 0) whereClause += ` AND ai.Cycle IN (${cycleArray.join(',')})`;
-        }
-        if (brands && brands.trim()) {
-            const brandArray = brands.split(',').filter(b => b.trim()).map(b => "'" + b.trim().replace(/'/g, "''") + "'");
-            if (brandArray.length > 0) whereClause += ` AND s.Brand IN (${brandArray.join(',')})`;
         }
         
         // 1. Audit Duration Analysis (Time In/Out)
@@ -2585,9 +2597,31 @@ app.get('/api/admin/area-managers', requireAuth, requireRole('Admin', 'SuperAudi
     }
 });
 
+// Get auditors for filter dropdown (only Auditor role, not SuperAuditor)
+app.get('/api/admin/auditors', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request().query(`
+            SELECT display_name 
+            FROM Users 
+            WHERE role = 'Auditor' AND is_active = 1
+            ORDER BY display_name
+        `);
+        
+        // Return array of auditor names (strings)
+        res.json(result.recordset.map(r => r.display_name));
+    } catch (error) {
+        console.error('Error getting auditors:', error);
+        res.status(500).json([]);
+    }
+});
+
 // Shared helper: Build WHERE clause from analytics filter query params
 function buildAnalyticsWhereClause(query, passingThreshold) {
-    const { countries, brands, storeIds, headOfOpsIds, areaManagerIds, results, years, months, cycles } = query;
+    const { countries, brands, storeIds, headOfOpsIds, areaManagerIds, auditors, results, years, months, cycles } = query;
     let whereClause = "WHERE ai.Status = 'Completed'";
     
     if (countries && countries.trim()) {
@@ -2609,6 +2643,10 @@ function buildAnalyticsWhereClause(query, passingThreshold) {
     if (areaManagerIds && areaManagerIds.trim()) {
         const amIdArray = areaManagerIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
         if (amIdArray.length > 0) whereClause += ` AND ai.StoreID IN (SELECT StoreID FROM UserAreaAssignments WHERE UserID IN (${amIdArray.join(',')}))`;
+    }
+    if (auditors && auditors.trim()) {
+        const auditorArray = auditors.split(',').filter(a => a.trim()).map(a => `'${a.trim().replace(/'/g, "''")}'`);
+        if (auditorArray.length > 0) whereClause += ` AND ai.Auditors IN (${auditorArray.join(',')})`;
     }
     if (results && results.trim() && passingThreshold) {
         const resultArray = results.split(',').filter(r => r.trim());
