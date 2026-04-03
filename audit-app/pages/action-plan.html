@@ -603,6 +603,298 @@
             justify-content: center;
         }
 
+        /* Maintenance WR Integration */
+        .maintenance-col {
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .maintenance-wr-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-radius: 16px;
+            font-size: 10px;
+            font-weight: 500;
+            text-decoration: none;
+            font-family: monospace;
+            transition: all 0.2s;
+        }
+
+        .maintenance-wr-badge:hover {
+            background: linear-gradient(135deg, #059669, #047857);
+            transform: scale(1.05);
+        }
+
+        .create-wr-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.2s;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+
+        .create-wr-btn:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            transform: scale(1.05);
+        }
+
+        .no-maintenance {
+            color: #9ca3af;
+            font-size: 11px;
+        }
+
+        /* Maintenance Modal */
+        .wr-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1001;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .wr-modal-overlay.show {
+            display: flex;
+        }
+
+        .wr-modal {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 480px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .wr-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .wr-modal-header h3 {
+            margin: 0;
+            color: #111827;
+            font-size: 16px;
+        }
+
+        .wr-modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #6b7280;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .finding-preview {
+            background: #f9fafb;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .finding-preview h4 {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            color: #374151;
+        }
+
+        .finding-preview p {
+            margin: 6px 0;
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .finding-preview strong {
+            color: #111827;
+        }
+
+        .wr-tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .wr-tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            font-size: 13px;
+            font-weight: 500;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .wr-tab-btn:hover {
+            color: #374151;
+            background: #f9fafb;
+        }
+
+        .wr-tab-btn.active {
+            color: #1d4ed8;
+            border-bottom-color: #1d4ed8;
+        }
+
+        .wr-tab-content {
+            padding: 16px 20px;
+        }
+
+        .wr-info-text {
+            font-size: 13px;
+            color: #6b7280;
+            margin: 0 0 12px 0;
+        }
+
+        .wr-preview-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .wr-preview-box p {
+            margin: 4px 0;
+            font-size: 13px;
+        }
+
+        .wr-create-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .wr-create-btn:hover {
+            background: linear-gradient(135deg, #059669, #047857);
+            transform: translateY(-1px);
+        }
+
+        .wr-recent-list {
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .wr-recent-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .wr-recent-item:last-child {
+            border-bottom: none;
+        }
+
+        .wr-recent-item:hover {
+            background: #f9fafb;
+        }
+
+        .wr-recent-item.selected {
+            background: #dbeafe;
+        }
+
+        .wr-recent-number {
+            font-family: monospace;
+            font-weight: 500;
+            color: #1d4ed8;
+        }
+
+        .wr-recent-desc {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        .wr-manual-link {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .wr-manual-link label {
+            font-size: 12px;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+
+        .wr-manual-link input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .wr-link-btn {
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .wr-link-btn:hover {
+            background: #2563eb;
+        }
+
+        .wr-modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding: 16px 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .wr-modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .wr-modal-btn.secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .wr-modal-btn.secondary:hover {
+            background: #e5e7eb;
+        }
+
         /* Lightbox */
         .lightbox-overlay {
             display: none;
@@ -950,6 +1242,68 @@
         </div>
     </div>
 
+    <!-- Maintenance WR Modal (Combined Create/Link) -->
+    <div class="wr-modal-overlay" id="maintenanceWRModal" onclick="closeWRModal('maintenanceWRModal')">
+        <div class="wr-modal" onclick="event.stopPropagation()">
+            <div class="wr-modal-header">
+                <h3>🔧 Maintenance Work Request</h3>
+                <button class="wr-modal-close" onclick="closeWRModal('maintenanceWRModal')">×</button>
+            </div>
+            <input type="hidden" id="wr-itemIndex">
+            
+            <!-- Finding Preview -->
+            <div class="finding-preview">
+                <h4>Finding Details</h4>
+                <p><strong>Reference:</strong> <span id="wr-ref"></span></p>
+                <p><strong>Section:</strong> <span id="wr-section"></span></p>
+                <p><strong>Finding:</strong> <span id="wr-finding"></span></p>
+                <p><strong>Priority:</strong> <span id="wr-priority-display"></span></p>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="wr-tabs">
+                <button class="wr-tab-btn active" onclick="switchWRTab('create')">Create New WR</button>
+                <button class="wr-tab-btn" onclick="switchWRTab('link')">Link to Existing</button>
+            </div>
+            
+            <!-- Create Tab -->
+            <div id="createTab" class="wr-tab-content active">
+                <p class="wr-info-text">A Work Request will be created with the above finding details.</p>
+                <div class="wr-preview-box">
+                    <p><strong>Store:</strong> <span id="wr-store"></span></p>
+                    <p><strong>Priority:</strong> <span id="wr-priority-mapped"></span></p>
+                </div>
+                <button class="wr-create-btn" onclick="submitCreateWR()">🔧 Create Work Request</button>
+            </div>
+            
+            <!-- Link Tab -->
+            <div id="linkTab" class="wr-tab-content" style="display:none;">
+                <p class="wr-info-text">Link this finding to an existing Work Request:</p>
+                <div class="wr-recent-list" id="recentWRList">
+                    <div style="padding: 10px; text-align: center; color: #6b7280;">Loading recent WRs...</div>
+                </div>
+                <div class="wr-manual-link">
+                    <label>Or enter WR number:</label>
+                    <input type="text" id="linkWR-number" placeholder="WR-XXX-2025-#####">
+                    <button class="wr-link-btn" onclick="submitLinkWR()">Link</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WR Status Modal -->
+    <div class="wr-modal-overlay" id="wrStatusModal" onclick="closeWRModal('wrStatusModal')">
+        <div class="wr-modal" onclick="event.stopPropagation()">
+            <h3>📋 Work Request Status</h3>
+            <div id="wrStatusContent">
+                <p style="text-align: center; color: #6b7280;">Loading...</p>
+            </div>
+            <div class="wr-modal-actions">
+                <button class="wr-modal-btn secondary" onclick="closeWRModal('wrStatusModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Impersonation Panel Script -->
     <script src="/auth/scripts/impersonation-panel.js?v=9"></script>
 
@@ -1134,7 +1488,12 @@
                             pictures: pictures,
                             hasPictures: hasPictures,
                             pictureCount: pictureCount,
-                            picturesLoaded: picturesLoaded
+                            picturesLoaded: picturesLoaded,
+                            // Maintenance WR integration
+                            maintenanceWRNumber: saved.MaintenanceWRNumber || '',
+                            sentToMaintenance: saved.SentToMaintenance || false,
+                            sentToMaintenanceAt: saved.SentToMaintenanceAt || null,
+                            sentToMaintenanceBy: saved.SentToMaintenanceBy || ''
                         });
                     }
                 }
@@ -1271,6 +1630,7 @@
                             <th>Person in Charge</th>
                             <th>Status</th>
                             <th>Pictures</th>
+                            <th>Maintenance</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1369,6 +1729,16 @@
                                 `).join('') : ''}
                             </div>
                         </div>
+                    </td>
+                    <td class="maintenance-col">
+                        ${item.maintenanceWRNumber ? `
+                            <a href="https://fsm.gmrlapps.com/work-requests/${item.maintenanceWRNumber}" 
+                               target="_blank" class="maintenance-wr-badge" title="View in Maintenance App">
+                                🔧 ${item.maintenanceWRNumber}
+                            </a>
+                        ` : canEdit && item.department === 'Maintenance' ? `
+                            <button class="create-wr-btn" onclick="openMaintenanceModal(${index})" title="Create/Link Work Request">🔧 WR</button>
+                        ` : `<span class="no-maintenance">-</span>`}
                     </td>
                 </tr>
             `;
@@ -1493,6 +1863,222 @@
         function closeLightbox() {
             document.getElementById('lightbox').classList.remove('show');
         }
+
+        /* ===========================================
+           Maintenance WR Integration Functions
+        =========================================== */
+        
+        let maintenanceLocations = [];
+        let recentWorkRequests = [];
+
+        async function loadMaintenanceLocations() {
+            try {
+                const response = await fetch('/api/maintenance/locations');
+                if (response.ok) {
+                    const data = await response.json();
+                    maintenanceLocations = data.data || [];
+                }
+            } catch (error) {
+                console.warn('Could not load maintenance locations:', error);
+            }
+        }
+
+        async function loadRecentWorkRequests() {
+            try {
+                // Load recent WRs for this store
+                const storeCode = auditData?.storeCode || '';
+                const response = await fetch(`/api/maintenance/recent-wrs?storeCode=${encodeURIComponent(storeCode)}&limit=10`);
+                if (response.ok) {
+                    const data = await response.json();
+                    recentWorkRequests = data.data || [];
+                }
+            } catch (error) {
+                console.warn('Could not load recent WRs:', error);
+            }
+        }
+
+        let currentMaintenanceItem = null;
+
+        function openMaintenanceModal(itemIndex) {
+            const item = filteredItems[itemIndex];
+            if (!item) return;
+
+            currentMaintenanceItem = item;
+            document.getElementById('wr-itemIndex').value = itemIndex;
+            
+            // Fill the preview
+            document.getElementById('wr-ref').textContent = item.referenceValue || '-';
+            document.getElementById('wr-section').textContent = item.sectionName || '-';
+            document.getElementById('wr-finding').textContent = item.finding || item.title || '-';
+            document.getElementById('wr-priority-display').textContent = item.priority || 'Normal';
+            
+            // Fill create preview
+            document.getElementById('wr-store').textContent = `${auditData.storeCode} - ${auditData.storeName}`;
+            document.getElementById('wr-priority-mapped').textContent = mapPriorityToMaintenance(item.priority);
+            
+            // Load recent WRs for link tab
+            populateRecentWRList(document.getElementById('recentWRList'));
+            
+            // Reset to create tab
+            switchWRTab('create');
+            
+            document.getElementById('maintenanceWRModal').classList.add('show');
+        }
+
+        function mapPriorityToMaintenance(priority) {
+            const map = { 'High': 'High', 'Critical': 'Critical', 'Medium': 'Medium', 'Low': 'Low' };
+            return map[priority] || 'Normal';
+        }
+
+        function switchWRTab(tab) {
+            document.querySelectorAll('.wr-tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.wr-tab-content').forEach(content => content.style.display = 'none');
+            
+            if (tab === 'create') {
+                document.querySelector('.wr-tab-btn:first-child').classList.add('active');
+                document.getElementById('createTab').style.display = 'block';
+            } else {
+                document.querySelector('.wr-tab-btn:last-child').classList.add('active');
+                document.getElementById('linkTab').style.display = 'block';
+            }
+        }
+
+        function populateRecentWRList(container) {
+            if (recentWorkRequests.length === 0) {
+                container.innerHTML = '<div style="padding: 10px; text-align: center; color: #6b7280;">No recent WRs found for this store</div>';
+                return;
+            }
+
+            container.innerHTML = recentWorkRequests.map(wr => `
+                <div class="wr-recent-item" onclick="linkToWR('${wr.wrNumber}')">
+                    <div>
+                        <div class="wr-recent-number">${wr.wrNumber}</div>
+                        <div class="wr-recent-desc">${(wr.description || 'No description').substring(0, 40)}...</div>
+                    </div>
+                    <span style="font-size: 11px; color: #6b7280;">${wr.status || 'Open'}</span>
+                </div>
+            `).join('');
+        }
+
+        function closeWRModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+            currentMaintenanceItem = null;
+        }
+
+        async function submitCreateWR() {
+            if (!currentMaintenanceItem) {
+                showToast('Error: No item selected', 'error');
+                return;
+            }
+
+            const item = currentMaintenanceItem;
+            const storeCode = auditData.storeCode;
+            const storeName = auditData.storeName;
+
+            showToast('Creating work request...', 'info');
+
+            try {
+                const response = await fetch('/api/maintenance/create-wr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        documentNumber: auditData.documentNumber,
+                        responseId: item.responseId,
+                        referenceValue: item.referenceValue,
+                        storeCode: storeCode,
+                        storeName: storeName,
+                        sectionName: item.sectionName,
+                        finding: item.finding || item.title,
+                        suggestedAction: item.finding || item.title,
+                        priority: mapPriorityToMaintenance(item.priority)
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success && result.data?.wrNumber) {
+                    // Update local item
+                    item.maintenanceWRNumber = result.data.wrNumber;
+                    item.sentToMaintenance = true;
+                    
+                    // Update main array
+                    const mainIndex = actionItems.findIndex(i => i.responseId === item.responseId);
+                    if (mainIndex !== -1) {
+                        actionItems[mainIndex].maintenanceWRNumber = result.data.wrNumber;
+                        actionItems[mainIndex].sentToMaintenance = true;
+                    }
+
+                    closeWRModal('maintenanceWRModal');
+                    renderTable();
+                    showToast(`Created ${result.data.wrNumber}`, 'success');
+                } else {
+                    showToast(result.message || 'Failed to create work request', 'error');
+                }
+            } catch (error) {
+                console.error('Error creating WR:', error);
+                showToast('Error creating work request', 'error');
+            }
+        }
+
+        async function linkToWR(wrNumber) {
+            if (!currentMaintenanceItem) {
+                showToast('Error: No item selected', 'error');
+                return;
+            }
+
+            const item = currentMaintenanceItem;
+            showToast('Linking...', 'info');
+
+            try {
+                const response = await fetch('/api/maintenance/link-wr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        documentNumber: auditData.documentNumber,
+                        responseId: item.responseId,
+                        referenceValue: item.referenceValue,
+                        wrNumber: wrNumber
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    item.maintenanceWRNumber = wrNumber;
+                    item.sentToMaintenance = true;
+                    
+                    const mainIndex = actionItems.findIndex(i => i.responseId === item.responseId);
+                    if (mainIndex !== -1) {
+                        actionItems[mainIndex].maintenanceWRNumber = wrNumber;
+                        actionItems[mainIndex].sentToMaintenance = true;
+                    }
+
+                    closeWRModal('maintenanceWRModal');
+                    renderTable();
+                    showToast(`Linked to ${wrNumber}`, 'success');
+                } else {
+                    showToast(result.message || 'Failed to link', 'error');
+                }
+            } catch (error) {
+                console.error('Error linking WR:', error);
+                showToast('Error linking work request', 'error');
+            }
+        }
+
+        async function submitLinkWR() {
+            const wrNumber = document.getElementById('linkWR-number').value.trim();
+            if (!wrNumber) {
+                showToast('Please enter a WR number', 'error');
+                return;
+            }
+            await linkToWR(wrNumber);
+        }
+
+        // Preload maintenance data when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMaintenanceLocations();
+            loadRecentWorkRequests();
+        });
 
         async function saveActionPlan() {
             try {

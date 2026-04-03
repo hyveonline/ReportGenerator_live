@@ -11409,6 +11409,12 @@ app.get('/api/action-plan/:documentNumber/summary', requireAuth, async (req, res
     }
 });
 
+// ==========================================
+// Maintenance WR Integration Routes
+// ==========================================
+const maintenanceRoutes = require('./routes/maintenance.routes');
+app.use('/api/maintenance', requireAuth, maintenanceRoutes);
+
 // NOTE: Legacy /api/generate-department-followup endpoint removed
 // Department reports now use /api/audits/:auditId/department-report/:department (SQL-based)
 
