@@ -426,28 +426,6 @@ class AnalyticsPage {
                 </div>
             </section>
 
-            <!-- Non-conformities Analysis -->
-            <section class="chart-card full-width">
-                <h2>🚫 Non-conformities Analysis</h2>
-                
-                <!-- Audits with N/C Summary Table -->
-                <div class="nc-section">
-                    <h3>📋 Audits Summary</h3>
-                    <div id="ncAuditTable" class="data-table-container">
-                        <p class="loading-text">Loading audit data...</p>
-                    </div>
-                </div>
-                
-                <!-- Repetitive Findings -->
-                <div class="nc-section">
-                    <h3>🔄 Repetitive Findings (Across All Cycles)</h3>
-                    <p class="nc-description">Findings that appear in multiple audits for the same store at the same reference point.</p>
-                    <div id="repetitiveFindingsTable" class="data-table-container">
-                        <p class="loading-text">Loading repetitive findings...</p>
-                    </div>
-                </div>
-            </section>
-
             <!-- Action Plan Analysis -->
             <section class="chart-card full-width">
                 <h2>📝 Action Plan Analysis</h2>
@@ -471,6 +449,28 @@ class AnalyticsPage {
                     <p class="nc-description">Open findings with days since creation.</p>
                     <div id="openNCByLocationTable" class="data-table-container">
                         <p class="loading-text">Loading data...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Non-conformities Analysis -->
+            <section class="chart-card full-width">
+                <h2>🚫 Non-conformities Analysis</h2>
+                
+                <!-- Audits with N/C Summary Table -->
+                <div class="nc-section">
+                    <h3>📋 Audits Summary</h3>
+                    <div id="ncAuditTable" class="data-table-container">
+                        <p class="loading-text">Loading audit data...</p>
+                    </div>
+                </div>
+                
+                <!-- Repetitive Findings -->
+                <div class="nc-section">
+                    <h3>🔄 Repetitive Findings (Across All Cycles)</h3>
+                    <p class="nc-description">Findings that appear in multiple audits for the same store at the same reference point.</p>
+                    <div id="repetitiveFindingsTable" class="data-table-container">
+                        <p class="loading-text">Loading repetitive findings...</p>
                     </div>
                 </div>
             </section>

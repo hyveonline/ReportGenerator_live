@@ -3259,9 +3259,11 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
                 apr.ReferenceValue,
                 ai.DocumentNumber,
                 DATEDIFF(day, ai.AuditDate, GETDATE()) as DaysOpen,
-                apr.Status
+                apr.Status,
+                ar.Title as CriteriaTitle
             FROM ActionPlanResponses apr
             INNER JOIN AuditInstances ai ON apr.DocumentNumber = ai.DocumentNumber
+            LEFT JOIN AuditResponses ar ON ar.AuditID = ai.AuditID AND ar.ReferenceValue = apr.ReferenceValue
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
             ${whereClause}
             AND (apr.Status != 'Completed' OR apr.Status IS NULL)
@@ -3274,10 +3276,10 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             if (!openNCDetailsByStore[row.StoreName]) {
                 openNCDetailsByStore[row.StoreName] = [];
             }
-            // Use Finding if available, otherwise use ReferenceValue as description
-            const findingText = row.Finding && row.Finding.trim() 
-                ? row.Finding 
-                : (row.ReferenceValue ? `Issue at Ref ${row.ReferenceValue}` : 'Non-conformity detected');
+            // Use CriteriaTitle (from AuditResponses) as primary display, fallback to Finding
+            const findingText = row.CriteriaTitle && row.CriteriaTitle.trim() 
+                ? row.CriteriaTitle 
+                : (row.Finding && row.Finding.trim() ? row.Finding : (row.ReferenceValue ? `Issue at Ref ${row.ReferenceValue}` : 'Non-conformity detected'));
             openNCDetailsByStore[row.StoreName].push({
                 finding: findingText,
                 reference: row.ReferenceValue || '',
