@@ -404,7 +404,7 @@ class AnalyticsPage {
 
             <!-- Heatmap -->
             <section class="chart-card full-width">
-                <h2>🗺️ Store vs Section Heatmap</h2>
+                <h2>🗺️ Section Average per Store</h2>
                 <div class="heatmap-controls">
                     <div class="heatmap-view-toggle">
                         <label>View Mode:</label>
