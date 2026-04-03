@@ -723,6 +723,14 @@ class AuditorPerformancePage {
                 <div class="value" id="failedAudits">-</div>
                 <div class="label">Failed Audits</div>
             </div>
+            <div class="summary-card green">
+                <div class="value" id="passingRate">-</div>
+                <div class="label">Passing Rate (%)</div>
+            </div>
+            <div class="summary-card red">
+                <div class="value" id="failingRate">-</div>
+                <div class="label">Failing Rate (%)</div>
+            </div>
             <div class="summary-card orange">
                 <div class="value" id="avgDuration">-</div>
                 <div class="label">Avg Audit Duration</div>
@@ -1146,7 +1154,8 @@ class AuditorPerformancePage {
             const durationData = perfData.auditDurations || [];
             const sendTimeData = perfData.submissionTimes || [];
 
-            const totalAuditors = passFailData.length;
+            // Use actual auditor count from Users table (role = 'Auditor')
+            const totalAuditors = perfData.actualAuditorCount || passFailData.length;
             const totalAudits = passFailData.reduce((sum, a) => sum + a.TotalAudits, 0);
             const passedAudits = passFailData.reduce((sum, a) => sum + a.PassedAudits, 0);
             const failedAudits = passFailData.reduce((sum, a) => sum + a.FailedAudits, 0);
@@ -1163,10 +1172,16 @@ class AuditorPerformancePage {
                 ? sendTimesWithData.reduce((sum, s) => sum + s.HoursToSend, 0) / sendTimesWithData.length
                 : null;
 
+            // Calculate passing/failing rates
+            const passingRate = totalAudits > 0 ? ((passedAudits / totalAudits) * 100).toFixed(1) : 0;
+            const failingRate = totalAudits > 0 ? ((failedAudits / totalAudits) * 100).toFixed(1) : 0;
+
             document.getElementById('totalAuditors').textContent = totalAuditors;
             document.getElementById('totalAudits').textContent = totalAudits;
             document.getElementById('passedAudits').textContent = passedAudits;
             document.getElementById('failedAudits').textContent = failedAudits;
+            document.getElementById('passingRate').textContent = passingRate + '%';
+            document.getElementById('failingRate').textContent = failingRate + '%';
             document.getElementById('avgDuration').textContent = formatDuration(avgDuration);
             document.getElementById('avgSendTime').textContent = avgSendTime != null ? Math.round(avgSendTime) : '-';
         }

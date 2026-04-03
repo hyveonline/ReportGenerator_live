@@ -2437,9 +2437,18 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
             ORDER BY StoreName
         `);
         
+        // 8. Get actual auditor count from Users table
+        const auditorCountResult = await pool.request().query(`
+            SELECT COUNT(*) as AuditorCount 
+            FROM Users 
+            WHERE role = 'Auditor' AND is_active = 1
+        `);
+        const actualAuditorCount = auditorCountResult.recordset[0]?.AuditorCount || 0;
+        
         res.json({
             success: true,
             passingThreshold,
+            actualAuditorCount,
             auditDurations: durationResult.recordset,
             submissionTimes: submissionResult.recordset,
             findingsPerStore: findingsResult.recordset,
