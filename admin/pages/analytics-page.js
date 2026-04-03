@@ -2179,7 +2179,8 @@ class AnalyticsPage {
                         \`<span class="rank-item top">\${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} \${b.storeName} <span class="rank-score">(\${b.avgScore}%)</span></span>\`
                     ).join('');
                     
-                    const bottom3Html = r.bottom3.map((b, i) => 
+                    // Show bottom 3 in descending order (highest to lowest)
+                    const bottom3Html = [...r.bottom3].reverse().map((b, i) => 
                         \`<span class="rank-item bottom">\${b.storeName} <span class="rank-score">(\${b.avgScore}%)</span></span>\`
                     ).join('');
                     
