@@ -535,6 +535,18 @@ body {
     font-weight: 700;
 }
 
+.heatmap-table .trend-header {
+    background: rgba(168, 85, 247, 0.2);
+    font-weight: 700;
+    min-width: 90px;
+}
+
+.heatmap-table .scheme-header {
+    background: rgba(99, 102, 241, 0.2);
+    font-weight: 700;
+    min-width: 120px;
+}
+
 .heatmap-table .store-name {
     background: #ffffff;
     font-weight: 600;
@@ -543,6 +555,29 @@ body {
     left: 0;
     z-index: 1;
     color: #1e293b;
+}
+
+.heatmap-table .scheme-cell {
+    background: #f8fafc;
+    text-align: left;
+}
+
+.heatmap-table .trend-cell {
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.heatmap-table .trend-cell.trend-up {
+    color: #10b981;
+}
+
+.heatmap-table .trend-cell.trend-down {
+    color: #ef4444;
+}
+
+.heatmap-table .trend-cell.trend-stable {
+    color: #f59e0b;
 }
 
 .heatmap-cell {
@@ -572,7 +607,8 @@ body {
 .heatmap-legend,
 .calendar-legend {
     display: flex;
-    gap: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
     margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid #e2e8f0;
@@ -585,6 +621,21 @@ body {
     gap: 0.5rem;
     font-size: 0.85rem;
     color: #475569;
+}
+
+.legend-item.trend-up {
+    color: #10b981;
+    font-weight: 500;
+}
+
+.legend-item.trend-down {
+    color: #ef4444;
+    font-weight: 500;
+}
+
+.legend-item.trend-stable {
+    color: #f59e0b;
+    font-weight: 500;
 }
 
 .legend-color {

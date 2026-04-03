@@ -3031,80 +3031,24 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         const sectionSchemes = [...new Set(sectionWeakness.map(s => s.schemaName))].filter(s => s && s !== 'Unknown').sort();
         const sectionCategories = [...new Set(sectionWeakness.map(s => s.categoryName))].filter(c => c).sort();
         
-        // 5. Heatmap Data (Store x Section) - Enhanced with per-cycle breakdown
+        // 5. Heatmap Data - Store performance by cycle with scheme
         console.log('📊 [Heatmap] Query WHERE clause:', whereClause);
         
-        // Get section scores with cycle information for per-cycle view
-        const heatmapWithCycleResult = await pool.request().query(`
-            SELECT 
-                ai.StoreName,
-                ss.SectionName,
-                ai.Cycle,
-                AVG(ss.Percentage) as AvgScore,
-                COUNT(*) as AuditCount
-            FROM AuditSectionScores ss
-            INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID
-            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
-            ${whereClause}
-            GROUP BY ai.StoreName, ss.SectionName, ai.Cycle
-            ORDER BY ai.StoreName, ss.SectionName, ai.Cycle
-        `);
-        
-        // Get overall scores per store per cycle
-        const storeOverallByCycleResult = await pool.request().query(`
+        // Get overall scores per store per cycle with scheme
+        const storePerformanceByCycleResult = await pool.request().query(`
             SELECT 
                 ai.StoreName,
                 ai.Cycle,
+                asch.SchemaName,
                 AVG(CAST(ai.TotalScore as FLOAT)) as OverallScore,
                 COUNT(*) as AuditCount
             FROM AuditInstances ai
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
             ${whereClause}
-            GROUP BY ai.StoreName, ai.Cycle
-            ORDER BY ai.StoreName, ai.Cycle
+            GROUP BY ai.StoreName, ai.Cycle, asch.SchemaName
+            ORDER BY asch.SchemaName, ai.StoreName, ai.Cycle
         `);
-        
-        // Get average section scores (original heatmap data)
-        const heatmapResult = await pool.request().query(`
-            SELECT 
-                ai.StoreName,
-                ss.SectionName,
-                AVG(ss.Percentage) as AvgScore
-            FROM AuditSectionScores ss
-            INNER JOIN AuditInstances ai ON ss.AuditID = ai.AuditID
-            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
-            ${whereClause}
-            GROUP BY ai.StoreName, ss.SectionName
-        `);
-        console.log('📊 [Heatmap] Section scores found:', heatmapResult.recordset.length, 'rows');
-        
-        // Also get overall scores per store (average)
-        const storeOverallResult = await pool.request().query(`
-            SELECT 
-                ai.StoreName,
-                AVG(CAST(ai.TotalScore as FLOAT)) as OverallScore
-            FROM AuditInstances ai
-            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
-            ${whereClause}
-            GROUP BY ai.StoreName
-        `);
-        console.log('📊 [Heatmap] Stores with overall scores:', storeOverallResult.recordset.map(r => r.StoreName));
-        
-        // Build heatmap data structure (average view)
-        const stores = [...new Set(heatmapResult.recordset.map(r => r.StoreName))];
-        const sections = [...new Set(heatmapResult.recordset.map(r => r.SectionName))];
-        const heatmapData = {};
-        
-        for (const row of heatmapResult.recordset) {
-            if (!heatmapData[row.StoreName]) heatmapData[row.StoreName] = {};
-            heatmapData[row.StoreName][row.SectionName] = row.AvgScore;
-        }
-        
-        // Add overall scores
-        for (const row of storeOverallResult.recordset) {
-            if (!heatmapData[row.StoreName]) heatmapData[row.StoreName] = {};
-            heatmapData[row.StoreName]._overall = row.OverallScore;
-        }
         
         // Get all defined cycles from CycleDefinitions (from Cycle Management)
         const allCyclesResult = await pool.request().query(`
@@ -3115,30 +3059,42 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         `);
         const heatmapCycles = allCyclesResult.recordset.map(r => r.CycleName);
         
-        // Build per-cycle heatmap data
-        const heatmapByCycle = {};
+        // Build store performance data structure with scheme
+        const storePerformanceData = [];
+        const storeSchemeMap = {}; // Key: "StoreName|SchemaName"
         
-        for (const row of heatmapWithCycleResult.recordset) {
-            if (!row.Cycle) continue;
-            if (!heatmapByCycle[row.StoreName]) heatmapByCycle[row.StoreName] = {};
-            if (!heatmapByCycle[row.StoreName][row.Cycle]) heatmapByCycle[row.StoreName][row.Cycle] = {};
-            heatmapByCycle[row.StoreName][row.Cycle][row.SectionName] = row.AvgScore;
+        for (const row of storePerformanceByCycleResult.recordset) {
+            const key = `${row.StoreName}|${row.SchemaName || 'Unknown'}`;
+            if (!storeSchemeMap[key]) {
+                storeSchemeMap[key] = {
+                    storeName: row.StoreName,
+                    schemaName: row.SchemaName || 'Unknown',
+                    cycles: {},
+                    totalScore: 0,
+                    totalCount: 0
+                };
+            }
+            if (row.Cycle) {
+                storeSchemeMap[key].cycles[row.Cycle] = row.OverallScore;
+                storeSchemeMap[key].totalScore += row.OverallScore * row.AuditCount;
+                storeSchemeMap[key].totalCount += row.AuditCount;
+            }
         }
         
-        // Add per-cycle overall scores
-        for (const row of storeOverallByCycleResult.recordset) {
-            if (!row.Cycle) continue;
-            if (!heatmapByCycle[row.StoreName]) heatmapByCycle[row.StoreName] = {};
-            if (!heatmapByCycle[row.StoreName][row.Cycle]) heatmapByCycle[row.StoreName][row.Cycle] = {};
-            heatmapByCycle[row.StoreName][row.Cycle]._overall = row.OverallScore;
+        // Calculate averages and convert to array
+        for (const key of Object.keys(storeSchemeMap)) {
+            const data = storeSchemeMap[key];
+            data.avgScore = data.totalCount > 0 ? data.totalScore / data.totalCount : 0;
+            storePerformanceData.push(data);
         }
+        
+        // Get unique schemes for filtering
+        const heatmapSchemes = [...new Set(storePerformanceData.map(s => s.schemaName))].filter(s => s && s !== 'Unknown').sort();
         
         const heatmap = { 
-            stores, 
-            sections, 
+            stores: storePerformanceData,
             cycles: heatmapCycles,
-            data: heatmapData,
-            dataByCycle: heatmapByCycle
+            schemes: heatmapSchemes
         };
         
         // 6. Compliance Calendar - Build separate WHERE for calendar (country and brand filters apply to stores)
