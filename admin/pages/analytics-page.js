@@ -2544,12 +2544,12 @@ class AnalyticsPage {
                             if (r.findings && r.findings.length > 0) {
                                 return r.findings.map((f, idx) => \`
                                     <tr class="\${f.daysOpen > 30 ? 'overdue' : f.daysOpen > 14 ? 'warning' : ''}">
-                                        \${idx === 0 ? \`<td rowspan="\${r.findings.length}" class="store-cell">\${r.storeName}</td>\` : ''}
+                                        <td class="store-cell">\${r.storeName}</td>
                                         <td class="finding-cell">
                                             <div class="finding-text">\${f.finding}</div>
                                             <div class="finding-meta">\${f.reference ? \`Ref: \${f.reference}\` : ''} \${f.documentNumber ? \`| \${f.documentNumber}\` : ''}</div>
                                         </td>
-                                        \${idx === 0 ? \`<td rowspan="\${r.findings.length}" class="open-count has-open">\${r.openCount}</td>\` : ''}
+                                        <td class="open-count has-open">\${r.openCount}</td>
                                         <td class="days-open \${f.daysOpen > 30 ? 'critical' : f.daysOpen > 14 ? 'warning' : ''}">\${f.daysOpen}</td>
                                     </tr>
                                 \`).join('');
