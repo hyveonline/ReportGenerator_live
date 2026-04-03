@@ -3368,6 +3368,42 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             branchRankings[key].bottom3.sort((a, b) => a.avgScore - b.avgScore);
         }
         
+        // 10. Passing and Failing Branches (based on average score vs threshold)
+        const passingFailingResult = await pool.request().query(`
+            SELECT 
+                ai.StoreName,
+                s.Brand,
+                AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore,
+                COUNT(*) as AuditCount
+            FROM AuditInstances ai
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            ${whereClause}
+            GROUP BY ai.StoreName, s.Brand
+            ORDER BY AvgScore DESC
+        `);
+        
+        const passingBranches = [];
+        const failingBranches = [];
+        
+        for (const row of passingFailingResult.recordset) {
+            const branch = {
+                storeName: row.StoreName,
+                brand: row.Brand,
+                avgScore: row.AvgScore || 0,
+                auditCount: row.AuditCount
+            };
+            
+            if (branch.avgScore >= passingThreshold) {
+                passingBranches.push(branch);
+            } else {
+                failingBranches.push(branch);
+            }
+        }
+        
+        // Sort: passing by score desc, failing by score asc
+        passingBranches.sort((a, b) => b.avgScore - a.avgScore);
+        failingBranches.sort((a, b) => a.avgScore - b.avgScore);
+        
         res.json({
             success: true,
             summary,
@@ -3380,7 +3416,9 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             complianceCalendar,
             ncAnalysis,
             actionPlanAnalysis,
-            branchRankings: Object.values(branchRankings)
+            branchRankings: Object.values(branchRankings),
+            passingBranches,
+            failingBranches
         });
         
     } catch (error) {

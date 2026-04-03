@@ -366,6 +366,22 @@ class AnalyticsPage {
                 <div class="chart-container large">
                     <canvas id="trendChart"></canvas>
                 </div>
+                
+                <!-- Passing and Failing Branches Tables -->
+                <div class="branches-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                    <div class="branches-table-container">
+                        <h3 style="color: #16a34a; margin-bottom: 10px;">✅ Passing Branches</h3>
+                        <div id="passingBranchesTable" class="data-table-container">
+                            <p class="loading-text">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="branches-table-container">
+                        <h3 style="color: #dc2626; margin-bottom: 10px;">❌ Failing Branches</h3>
+                        <div id="failingBranchesTable" class="data-table-container">
+                            <p class="loading-text">Loading...</p>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Section Analysis -->
@@ -1126,6 +1142,7 @@ class AnalyticsPage {
                 
                 renderSummaryCards(analyticsData.summary);
                 renderTrendChartByBrand(analyticsData.trendsByBrand, analyticsData.trends);
+                renderPassingFailingBranches(analyticsData.passingBranches, analyticsData.failingBranches);
                 renderSectionAnalysis(analyticsData.sectionWeakness, analyticsData.sectionDrilldown);
                 renderHeatmap(analyticsData.heatmap);
                 renderNCAnalysis(analyticsData.ncAnalysis);
@@ -1457,6 +1474,70 @@ class AnalyticsPage {
         // Legacy render function (kept for compatibility)
         function renderTrendChart(trends) {
             renderTrendChartByBrand(null, trends);
+        }
+
+        // Render Passing and Failing Branches tables
+        function renderPassingFailingBranches(passingBranches, failingBranches) {
+            const passingContainer = document.getElementById('passingBranchesTable');
+            const failingContainer = document.getElementById('failingBranchesTable');
+            
+            // Render Passing Branches
+            if (!passingBranches || passingBranches.length === 0) {
+                passingContainer.innerHTML = '<p class="no-data">No passing branches found</p>';
+            } else {
+                passingContainer.innerHTML = \`
+                    <table class="data-table compact">
+                        <thead>
+                            <tr>
+                                <th>Branch</th>
+                                <th>Scheme</th>
+                                <th>Score</th>
+                                <th>Audits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            \${passingBranches.map(b => \`
+                                <tr>
+                                    <td>\${b.storeName}</td>
+                                    <td><span class="scheme-badge">\${b.brand || '-'}</span></td>
+                                    <td class="pass"><strong>\${b.avgScore.toFixed(1)}%</strong></td>
+                                    <td>\${b.auditCount}</td>
+                                </tr>
+                            \`).join('')}
+                        </tbody>
+                    </table>
+                    <p class="table-summary">Total: \${passingBranches.length} passing branches</p>
+                \`;
+            }
+            
+            // Render Failing Branches
+            if (!failingBranches || failingBranches.length === 0) {
+                failingContainer.innerHTML = '<p class="no-data">No failing branches found 🎉</p>';
+            } else {
+                failingContainer.innerHTML = \`
+                    <table class="data-table compact">
+                        <thead>
+                            <tr>
+                                <th>Branch</th>
+                                <th>Scheme</th>
+                                <th>Score</th>
+                                <th>Audits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            \${failingBranches.map(b => \`
+                                <tr>
+                                    <td>\${b.storeName}</td>
+                                    <td><span class="scheme-badge">\${b.brand || '-'}</span></td>
+                                    <td class="fail"><strong>\${b.avgScore.toFixed(1)}%</strong></td>
+                                    <td>\${b.auditCount}</td>
+                                </tr>
+                            \`).join('')}
+                        </tbody>
+                    </table>
+                    <p class="table-summary" style="color: #dc2626;">Total: \${failingBranches.length} failing branches</p>
+                \`;
+            }
         }
 
         // Store drilldown data for section analysis
