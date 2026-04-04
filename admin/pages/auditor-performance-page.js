@@ -762,12 +762,23 @@ class AuditorPerformancePage {
                     </div>
                 </section>
 
-                <!-- Score Distribution -->
-                <section class="chart-card">
-                    <h2>🎯 Score Distribution</h2>
-                    <div class="chart-container small">
+                <!-- Score Distribution by Branch/Auditor/Year -->
+                <section class="chart-card full-width">
+                    <h2>🎯 Score Distribution by Branch / Auditor / Year</h2>
+                    <p id="scoreDistributionDesc" style="color: #64748b; margin-bottom: 1rem; font-size: 0.875rem;">
+                        Average scores per branch and auditor. The dashed line shows the passing threshold.
+                        <span class="pass">Green</span> = Pass, <span class="fail">Red</span> = Fail
+                    </p>
+                    <div class="chart-container" style="height: 400px;">
                         <canvas id="scoreDistributionChart"></canvas>
                     </div>
+                    <div id="scoreDistributionTable" class="data-table-container" style="margin-top: 1rem;"></div>
+                </section>
+
+                <!-- Auditor Performance Overview Table -->
+                <section class="chart-card full-width">
+                    <h2>📋 Auditor Performance Overview</h2>
+                    <div id="auditorOverviewTable" class="data-table-container"></div>
                 </section>
             </div>
         </div>
@@ -776,17 +787,28 @@ class AuditorPerformancePage {
         <div id="tab-passFail" class="tab-content">
             <div class="cards-grid">
                 <!-- Pass/Fail by Auditor -->
-                <section class="chart-card">
+                <section class="chart-card full-width">
                     <h2>✅ Pass/Fail by Auditor</h2>
-                    <div class="chart-container small">
-                        <canvas id="passFailAuditorChart"></canvas>
-                    </div>
                     <div id="passFailAuditorTable" class="data-table-container"></div>
                 </section>
 
                 <!-- Pass/Fail by Branch -->
-                <section class="chart-card">
+                <section class="chart-card full-width">
                     <h2>🏪 Pass/Fail by Branch</h2>
+                    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
+                        <label style="font-size: 0.875rem; color: #64748b;">Sort by:</label>
+                        <select id="branchSortField" onchange="renderPassFailByBranchTable()" style="padding: 0.4rem 0.8rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.875rem;">
+                            <option value="storeName">Store Name</option>
+                            <option value="total">Total Audits</option>
+                            <option value="passRate">Passing Rate</option>
+                            <option value="failRate">Failing Rate</option>
+                            <option value="avgScore">Average Score</option>
+                        </select>
+                        <select id="branchSortOrder" onchange="renderPassFailByBranchTable()" style="padding: 0.4rem 0.8rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.875rem;">
+                            <option value="asc">Ascending ↑</option>
+                            <option value="desc">Descending ↓</option>
+                        </select>
+                    </div>
                     <div id="passFailBranchTable" class="data-table-container"></div>
                 </section>
             </div>
@@ -814,10 +836,14 @@ class AuditorPerformancePage {
                     <div id="durationVarianceTable" class="data-table-container"></div>
                 </section>
 
-                <!-- Detailed Duration Table -->
+                <!-- Deviation Summary Table -->
                 <section class="chart-card full-width">
-                    <h2>📝 Detailed Audit Durations</h2>
-                    <div id="durationDetailTable" class="data-table-container"></div>
+                    <h2>⚠️ Deviation Summary (Branches & Auditors with Variance)</h2>
+                    <p style="color: #64748b; margin-bottom: 1rem; font-size: 0.875rem;">
+                        Summary of audits with significant deviations from standard time (±10 minutes).
+                        <span class="variance-fast">Green</span> = faster, <span class="variance-slow">Red</span> = slower.
+                    </p>
+                    <div id="deviationSummaryTable" class="data-table-container"></div>
                 </section>
             </div>
         </div>
@@ -887,7 +913,6 @@ class AuditorPerformancePage {
         let auditorChart = null;
         let auditsCountChart = null;
         let scoreDistributionChart = null;
-        let passFailAuditorChart = null;
         let durationChart = null;
         let sendTimeChart = null;
         let findingsAuditorChart = null;
@@ -1111,7 +1136,11 @@ class AuditorPerformancePage {
 
                 perfData = await perfResponse.json();
                 analyticsData = await analyticsResponse.json();
-                passingThreshold = perfData.passingThreshold || 87;
+                
+                // Get default passing threshold (first schema's threshold or 87)
+                const thresholds = perfData.schemaThresholds || {};
+                const firstSchemaKey = Object.keys(thresholds)[0];
+                passingThreshold = firstSchemaKey ? thresholds[firstSchemaKey].passingGrade : 87;
 
                 // Render all components
                 renderSummaryCards();
@@ -1192,7 +1221,94 @@ class AuditorPerformancePage {
         function renderOverviewTab() {
             const auditors = analyticsData.auditorPerformance || [];
             renderAuditsCountChart(auditors);
-            renderScoreDistributionChart(auditors);
+            renderScoreDistributionChart();
+            renderAuditorOverviewTable();
+        }
+
+        function renderAuditorOverviewTable() {
+            // Combine data from analyticsData.auditorPerformance (has min/max) and perfData.passFailByAuditor (has pass/fail)
+            const auditorStats = analyticsData.auditorPerformance || [];
+            const passFailData = perfData.passFailByAuditor || [];
+            
+            if (auditorStats.length === 0) {
+                document.getElementById('auditorOverviewTable').innerHTML = '<p class="no-data">No auditor data available</p>';
+                return;
+            }
+
+            // Create a map of pass/fail data by auditor name for quick lookup
+            const passFailMap = {};
+            passFailData.forEach(pf => {
+                const name = (pf.Auditors || 'Unknown').trim().toLowerCase();
+                passFailMap[name] = pf;
+            });
+
+            // Merge the data
+            const merged = auditorStats.map(a => {
+                const name = (a.auditorName || 'Unknown').trim().toLowerCase();
+                const pf = passFailMap[name] || {};
+                const totalAudits = pf.TotalAudits || a.auditCount || 0;
+                const passedAudits = pf.PassedAudits || 0;
+                const failedAudits = pf.FailedAudits || 0;
+                const passingRate = totalAudits > 0 ? ((passedAudits / totalAudits) * 100) : 0;
+                const failingRate = totalAudits > 0 ? ((failedAudits / totalAudits) * 100) : 0;
+                
+                return {
+                    auditorName: a.auditorName || 'Unknown',
+                    auditCount: totalAudits,
+                    avgScore: a.avgScore || 0,
+                    minScore: a.minScore || 0,
+                    maxScore: a.maxScore || 0,
+                    passedAudits,
+                    failedAudits,
+                    passingRate,
+                    failingRate
+                };
+            });
+
+            // Sort by number of audits descending
+            merged.sort((a, b) => b.auditCount - a.auditCount);
+
+            document.getElementById('auditorOverviewTable').innerHTML = \`
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Auditor</th>
+                            <th>No. of Audits</th>
+                            <th>Avg Score</th>
+                            <th>Min Score</th>
+                            <th>Max Score</th>
+                            <th>Passed</th>
+                            <th>Pass Rate</th>
+                            <th>Failed</th>
+                            <th>Fail Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${merged.map((a, idx) => {
+                            const avgClass = a.avgScore >= passingThreshold ? 'pass' : 'fail';
+                            const minClass = a.minScore >= passingThreshold ? 'pass' : 'fail';
+                            const maxClass = a.maxScore >= passingThreshold ? 'pass' : 'fail';
+                            const passRateClass = a.passingRate >= 80 ? 'pass' : a.passingRate >= 60 ? 'warn' : 'fail';
+                            const failRateClass = a.failingRate <= 20 ? 'pass' : a.failingRate <= 40 ? 'warn' : 'fail';
+                            return \`
+                                <tr>
+                                    <td>\${idx + 1}</td>
+                                    <td>\${a.auditorName}</td>
+                                    <td>\${a.auditCount}</td>
+                                    <td class="\${avgClass}">\${a.avgScore.toFixed(1)}%</td>
+                                    <td class="\${minClass}">\${a.minScore.toFixed(1)}%</td>
+                                    <td class="\${maxClass}">\${a.maxScore.toFixed(1)}%</td>
+                                    <td class="pass">\${a.passedAudits}</td>
+                                    <td class="\${passRateClass}">\${a.passingRate.toFixed(1)}%</td>
+                                    <td class="fail">\${a.failedAudits}</td>
+                                    <td class="\${failRateClass}">\${a.failingRate.toFixed(1)}%</td>
+                                </tr>
+                            \`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            \`;
         }
 
         function renderAuditorChart(auditors) {
@@ -1258,74 +1374,182 @@ class AuditorPerformancePage {
             });
         }
 
-        function renderScoreDistributionChart(auditors) {
+        function renderScoreDistributionChart() {
             const ctx = document.getElementById('scoreDistributionChart').getContext('2d');
             if (scoreDistributionChart) scoreDistributionChart.destroy();
 
-            const ranges = { '90-100': 0, '80-89': 0, '70-79': 0, '60-69': 0, '<60': 0 };
-            auditors.forEach(a => {
-                const score = a.avgScore;
-                if (score >= 90) ranges['90-100']++;
-                else if (score >= 80) ranges['80-89']++;
-                else if (score >= 70) ranges['70-79']++;
-                else if (score >= 60) ranges['60-69']++;
-                else ranges['<60']++;
+            const data = perfData.scoreByBranchAuditorYear || [];
+            
+            if (data.length === 0) {
+                document.getElementById('scoreDistributionChart').parentElement.innerHTML = '<p class="no-data">No score distribution data available</p>';
+                document.getElementById('scoreDistributionTable').innerHTML = '';
+                return;
+            }
+
+            // Update description - thresholds are now per schema
+            const descEl = document.getElementById('scoreDistributionDesc');
+            if (descEl) {
+                descEl.innerHTML = \`Average scores per branch, auditor, and schema. The dashed line shows each schema's passing threshold. <span class="pass">Green</span> = Pass, <span class="fail">Red</span> = Fail\`;
+            }
+
+            // Create labels: "Branch - Auditor (Year) [Schema]"
+            const labels = data.map(d => \`\${d.StoreName} - \${d.Auditors || 'Unknown'} (\${d.Year}) [\${d.SchemaName || 'N/A'}]\`);
+            const scores = data.map(d => d.AvgScore || 0);
+            // Use per-record PassingGrade for colors
+            const colors = data.map(d => {
+                const threshold = d.PassingGrade || 87;
+                return (d.AvgScore || 0) >= threshold ? '#10b981' : '#ef4444';
             });
+
+            // Create threshold line data using each record's PassingGrade
+            const thresholdLine = data.map(d => d.PassingGrade || 87);
 
             scoreDistributionChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: Object.keys(ranges),
-                    datasets: [{
-                        label: 'Auditors',
-                        data: Object.values(ranges),
-                        backgroundColor: ['#10b981', '#84cc16', '#f59e0b', '#f97316', '#ef4444']
-                    }]
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Average Score (%)',
+                            data: scores,
+                            backgroundColor: colors,
+                            borderRadius: 4,
+                            order: 2
+                        },
+                        {
+                            label: 'Passing Grade (per schema)',
+                            data: thresholdLine,
+                            type: 'line',
+                            borderColor: '#64748b',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 3,
+                            pointBackgroundColor: '#64748b',
+                            fill: false,
+                            order: 1
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Number of Auditors' } },
-                        x: { title: { display: true, text: 'Score Range (%)' } }
+                        y: { 
+                            min: 0, 
+                            max: 100, 
+                            title: { display: true, text: 'Score (%)' }
+                        },
+                        x: { 
+                            title: { display: true, text: 'Branch - Auditor (Year) [Schema]' },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: { size: 10 }
+                            }
+                        }
                     },
-                    plugins: { legend: { display: false } }
+                    plugins: {
+                        legend: { 
+                            display: true, 
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        const d = data[context.dataIndex];
+                                        const threshold = d.PassingGrade || 87;
+                                        const status = d.AvgScore >= threshold ? '✅ PASS' : '❌ FAIL';
+                                        return [
+                                            \`Avg Score: \${d.AvgScore.toFixed(1)}% \${status}\`,
+                                            \`Passing Grade: \${threshold}%\`,
+                                            \`Schema: \${d.SchemaName || 'N/A'}\`,
+                                            \`Min: \${d.MinScore?.toFixed(1) || 0}% | Max: \${d.MaxScore?.toFixed(1) || 0}%\`,
+                                            \`Audits: \${d.AuditCount} (Pass: \${d.PassedAudits}, Fail: \${d.FailedAudits})\`
+                                        ];
+                                    }
+                                    const d = data[context.dataIndex];
+                                    return \`Passing Grade: \${d.PassingGrade || 87}%\`;
+                                }
+                            }
+                        }
+                    }
                 }
             });
+
+            // Render the table below the chart
+            renderScoreDistributionTable(data);
+        }
+
+        function renderScoreDistributionTable(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('scoreDistributionTable').innerHTML = '<p class="no-data">No data</p>';
+                return;
+            }
+
+            // Sort by Year DESC, then StoreName, then Auditor
+            const sorted = [...data].sort((a, b) => {
+                if (b.Year !== a.Year) return b.Year - a.Year;
+                if (a.StoreName !== b.StoreName) return a.StoreName.localeCompare(b.StoreName);
+                return (a.Auditors || '').localeCompare(b.Auditors || '');
+            });
+
+            document.getElementById('scoreDistributionTable').innerHTML = \`
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Year</th>
+                            <th>Branch</th>
+                            <th>Auditor</th>
+                            <th>Schema</th>
+                            <th>Pass Grade</th>
+                            <th>Audits</th>
+                            <th>Avg Score</th>
+                            <th>Min</th>
+                            <th>Max</th>
+                            <th>Passed</th>
+                            <th>Failed</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${sorted.map((d, idx) => {
+                            const avgScore = d.AvgScore || 0;
+                            const threshold = d.PassingGrade || 87;
+                            const isPassing = avgScore >= threshold;
+                            const scoreClass = isPassing ? 'pass' : 'fail';
+                            const minClass = (d.MinScore || 0) >= threshold ? 'pass' : 'fail';
+                            const maxClass = (d.MaxScore || 0) >= threshold ? 'pass' : 'fail';
+                            return \`
+                                <tr>
+                                    <td>\${idx + 1}</td>
+                                    <td>\${d.Year}</td>
+                                    <td>\${d.StoreName}</td>
+                                    <td>\${d.Auditors || 'Unknown'}</td>
+                                    <td>\${d.SchemaName || 'N/A'}</td>
+                                    <td>\${threshold}%</td>
+                                    <td>\${d.AuditCount}</td>
+                                    <td class="\${scoreClass}">\${avgScore.toFixed(1)}%</td>
+                                    <td class="\${minClass}">\${(d.MinScore || 0).toFixed(1)}%</td>
+                                    <td class="\${maxClass}">\${(d.MaxScore || 0).toFixed(1)}%</td>
+                                    <td class="pass">\${d.PassedAudits || 0}</td>
+                                    <td class="fail">\${d.FailedAudits || 0}</td>
+                                    <td><span class="badge \${isPassing ? 'badge-pass' : 'badge-fail'}">\${isPassing ? 'PASS' : 'FAIL'}</span></td>
+                                </tr>
+                            \`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            \`;
         }
 
         // ============================================
         // PASS/FAIL TAB
         // ============================================
         function renderPassFailTab() {
-            renderPassFailByAuditorChart();
             renderPassFailByAuditorTable();
             renderPassFailByBranchTable();
-        }
-
-        function renderPassFailByAuditorChart() {
-            const ctx = document.getElementById('passFailAuditorChart').getContext('2d');
-            if (passFailAuditorChart) passFailAuditorChart.destroy();
-
-            const data = perfData.passFailByAuditor || [];
-            const sorted = [...data].sort((a, b) => b.TotalAudits - a.TotalAudits);
-
-            passFailAuditorChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: sorted.map(a => a.Auditors || 'Unknown'),
-                    datasets: [
-                        { label: 'Passed', data: sorted.map(a => a.PassedAudits), backgroundColor: '#10b981' },
-                        { label: 'Failed', data: sorted.map(a => a.FailedAudits), backgroundColor: '#ef4444' }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-                    plugins: { legend: { position: 'top' } }
-                }
-            });
         }
 
         function renderPassFailByAuditorTable() {
@@ -1363,12 +1587,49 @@ class AuditorPerformancePage {
                 return;
             }
 
-            const sorted = [...data].sort((a, b) => a.StoreName.localeCompare(b.StoreName));
+            // Get sort options
+            const sortField = document.getElementById('branchSortField')?.value || 'storeName';
+            const sortOrder = document.getElementById('branchSortOrder')?.value || 'asc';
+            const isAsc = sortOrder === 'asc';
+
+            // Calculate rates for sorting
+            const dataWithRates = data.map(a => ({
+                ...a,
+                passRate: a.TotalAudits > 0 ? (a.PassedAudits / a.TotalAudits) * 100 : 0,
+                failRate: a.TotalAudits > 0 ? (a.FailedAudits / a.TotalAudits) * 100 : 0
+            }));
+
+            // Sort based on selected field and order
+            const sorted = [...dataWithRates].sort((a, b) => {
+                let comparison = 0;
+                switch (sortField) {
+                    case 'storeName':
+                        comparison = a.StoreName.localeCompare(b.StoreName);
+                        break;
+                    case 'total':
+                        comparison = a.TotalAudits - b.TotalAudits;
+                        break;
+                    case 'passRate':
+                        comparison = a.passRate - b.passRate;
+                        break;
+                    case 'failRate':
+                        comparison = a.failRate - b.failRate;
+                        break;
+                    case 'avgScore':
+                        comparison = (a.AvgScore || 0) - (b.AvgScore || 0);
+                        break;
+                    default:
+                        comparison = a.StoreName.localeCompare(b.StoreName);
+                }
+                return isAsc ? comparison : -comparison;
+            });
+
             document.getElementById('passFailBranchTable').innerHTML = \`
                 <table class="data-table">
-                    <thead><tr><th>Store</th><th>Auditor</th><th>Total</th><th>Passed</th><th>Failed</th><th>Pass Rate</th><th>Avg Score</th></tr></thead>
+                    <thead><tr><th>Store</th><th>Auditor</th><th>Total</th><th>Passed</th><th>Failed</th><th>Pass Rate</th><th>Fail Rate</th><th>Avg Score</th></tr></thead>
                     <tbody>\${sorted.map(a => {
-                        const passRate = a.TotalAudits > 0 ? ((a.PassedAudits / a.TotalAudits) * 100).toFixed(1) : 0;
+                        const passRateClass = a.passRate >= 80 ? 'pass' : a.passRate >= 60 ? 'warn' : 'fail';
+                        const failRateClass = a.failRate <= 20 ? 'pass' : a.failRate <= 40 ? 'warn' : 'fail';
                         return \`
                             <tr>
                                 <td>\${a.StoreName}</td>
@@ -1376,7 +1637,8 @@ class AuditorPerformancePage {
                                 <td>\${a.TotalAudits}</td>
                                 <td class="pass">\${a.PassedAudits}</td>
                                 <td class="fail">\${a.FailedAudits}</td>
-                                <td class="\${passRate >= 80 ? 'pass' : passRate >= 60 ? 'warn' : 'fail'}">\${passRate}%</td>
+                                <td class="\${passRateClass}">\${a.passRate.toFixed(1)}%</td>
+                                <td class="\${failRateClass}">\${a.failRate.toFixed(1)}%</td>
                                 <td>\${a.AvgScore ? a.AvgScore.toFixed(1) + '%' : '-'}</td>
                             </tr>
                         \`;
@@ -1391,7 +1653,7 @@ class AuditorPerformancePage {
         function renderDurationTab() {
             renderDurationChart();
             renderDurationVarianceTable();
-            renderDurationDetailTable();
+            renderDeviationSummaryTable();
         }
 
         function renderDurationChart() {
@@ -1430,7 +1692,21 @@ class AuditorPerformancePage {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Minutes' } }
+                        y: { 
+                            beginAtZero: true, 
+                            title: { display: true, text: 'Minutes' },
+                            ticks: {
+                                stepSize: 30,
+                                autoSkip: false,
+                                maxTicksLimit: 20,
+                                callback: function(value) {
+                                    if (value % 30 === 0) {
+                                        return value + ' min';
+                                    }
+                                    return '';
+                                }
+                            }
+                        }
                     },
                     plugins: { legend: { display: false } }
                 }
@@ -1473,30 +1749,54 @@ class AuditorPerformancePage {
             \`;
         }
 
-        function renderDurationDetailTable() {
-            const data = perfData.auditDurations || [];
-            if (data.length === 0) {
-                document.getElementById('durationDetailTable').innerHTML = '<p class="no-data">No duration data</p>';
+        function renderDeviationSummaryTable() {
+            const data = perfData.durationVariance || [];
+            
+            // Filter only records with significant deviations (>10 or <-10 minutes)
+            const deviations = data.filter(d => {
+                if (d.AvgDurationMinutes == null || d.StandardAuditDuration == null) return false;
+                const variance = d.AvgDurationMinutes - d.StandardAuditDuration;
+                return Math.abs(variance) > 10;
+            }).map(d => ({
+                ...d,
+                variance: d.AvgDurationMinutes - d.StandardAuditDuration
+            }));
+
+            if (deviations.length === 0) {
+                document.getElementById('deviationSummaryTable').innerHTML = '<p class="no-data">No significant deviations found (±10 minutes threshold)</p>';
                 return;
             }
 
-            // Show most recent 50
-            const recent = data.slice(0, 50);
-            document.getElementById('durationDetailTable').innerHTML = \`
+            // Sort by absolute variance descending (biggest deviations first)
+            const sorted = [...deviations].sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
+
+            document.getElementById('deviationSummaryTable').innerHTML = \`
                 <table class="data-table">
-                    <thead><tr><th>Date</th><th>Store</th><th>Auditor</th><th>Time In</th><th>Time Out</th><th>Duration</th><th>Score</th></tr></thead>
-                    <tbody>\${recent.map(d => {
-                        const timeIn = d.TimeIn ? new Date(d.TimeIn).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}) : '-';
-                        const timeOut = d.TimeOut ? new Date(d.TimeOut).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}) : '-';
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Branch</th>
+                            <th>Auditor</th>
+                            <th>Audits</th>
+                            <th>Avg Duration</th>
+                            <th>Standard</th>
+                            <th>Variance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>\${sorted.map((d, idx) => {
+                        const varianceClass = d.variance < 0 ? 'variance-fast' : 'variance-slow';
+                        const status = d.variance < 0 ? '🟢 Faster' : '🔴 Slower';
                         return \`
                             <tr>
-                                <td>\${d.AuditDate ? new Date(d.AuditDate).toLocaleDateString() : '-'}</td>
+                                <td>\${idx + 1}</td>
                                 <td>\${d.StoreName}</td>
                                 <td>\${d.Auditors || 'Unknown'}</td>
-                                <td>\${timeIn}</td>
-                                <td>\${timeOut}</td>
-                                <td>\${formatDuration(d.DurationMinutes)}</td>
-                                <td class="\${d.TotalScore >= passingThreshold ? 'pass' : 'fail'}">\${d.TotalScore ? d.TotalScore.toFixed(1) + '%' : '-'}</td>
+                                <td>\${d.AuditCount}</td>
+                                <td>\${formatDuration(d.AvgDurationMinutes)}</td>
+                                <td>\${formatDuration(d.StandardAuditDuration)}</td>
+                                <td class="\${varianceClass}">\${(d.variance > 0 ? '+' : '') + Math.round(d.variance)}m</td>
+                                <td>\${status}</td>
                             </tr>
                         \`;
                     }).join('')}</tbody>
@@ -1691,16 +1991,18 @@ class AuditorPerformancePage {
             const recent = data.slice(0, 50);
             document.getElementById('findingsTable').innerHTML = \`
                 <table class="data-table">
-                    <thead><tr><th>Date</th><th>Document</th><th>Store</th><th>Auditor</th><th>Findings</th><th>Score</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Document</th><th>Store</th><th>Auditor</th><th>Schema</th><th>Findings</th><th>Score</th></tr></thead>
                     <tbody>\${recent.map(d => {
+                        const threshold = d.PassingGrade || 87;
                         return \`
                             <tr>
                                 <td>\${d.AuditDate ? new Date(d.AuditDate).toLocaleDateString() : '-'}</td>
                                 <td>\${d.DocumentNumber}</td>
                                 <td>\${d.StoreName}</td>
                                 <td>\${d.Auditors || 'Unknown'}</td>
+                                <td>\${d.SchemaName || 'N/A'}</td>
                                 <td>\${d.TotalFindings || 0}</td>
-                                <td class="\${d.TotalScore >= passingThreshold ? 'pass' : 'fail'}">\${d.TotalScore ? d.TotalScore.toFixed(1) + '%' : '-'}</td>
+                                <td class="\${d.TotalScore >= threshold ? 'pass' : 'fail'}">\${d.TotalScore ? d.TotalScore.toFixed(1) + '%' : '-'}</td>
                             </tr>
                         \`;
                     }).join('')}</tbody>

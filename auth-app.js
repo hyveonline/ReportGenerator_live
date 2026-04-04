@@ -2276,19 +2276,19 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        const { countries, brands, storeIds, auditors, years, cycles } = req.query;
+        const { countries, brands, storeIds, auditors, years, cycles, schemes } = req.query;
         
-        // Get dynamic threshold
-        let passingThreshold = 87;
-        try {
-            const thresholdResult = await pool.request().query(`
-                SELECT TOP 1 ISNULL(PassingGrade, 87) AS PassingGrade
-                FROM SystemSettings WHERE SettingType = 'Overall'
-            `);
-            if (thresholdResult.recordset.length > 0) {
-                passingThreshold = thresholdResult.recordset[0].PassingGrade;
-            }
-        } catch (e) { /* use default */ }
+        // Get all schema passing grades for frontend reference
+        const schemaThresholdsResult = await pool.request().query(`
+            SELECT asc2.SchemaID, asc2.SchemaName, ISNULL(ss.PassingGrade, 87) as PassingGrade
+            FROM AuditSchemas asc2
+            LEFT JOIN SystemSettings ss ON asc2.SchemaID = ss.SchemaID AND ss.SettingType = 'Overall'
+            WHERE asc2.IsActive = 1
+        `);
+        const schemaThresholds = {};
+        schemaThresholdsResult.recordset.forEach(s => {
+            schemaThresholds[s.SchemaID] = { name: s.SchemaName, passingGrade: s.PassingGrade };
+        });
         
         // Build WHERE clause with all filters
         let whereClause = "WHERE ai.Status = 'Completed'";
@@ -2316,8 +2316,12 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
             const cycleArray = cycles.split(',').filter(c => c.trim()).map(c => `'${c.trim().replace(/'/g, "''")}'`);
             if (cycleArray.length > 0) whereClause += ` AND ai.Cycle IN (${cycleArray.join(',')})`;
         }
+        if (schemes && schemes.trim()) {
+            const schemeArray = schemes.split(',').filter(c => c.trim()).map(c => `'${c.trim().replace(/'/g, "''")}'`);
+            if (schemeArray.length > 0) whereClause += ` AND asch.SchemaName IN (${schemeArray.join(',')})`;
+        }
         
-        // 1. Audit Duration Analysis (Time In/Out)
+        // 1. Audit Duration Analysis (Time In/Out) - with dynamic threshold
         const durationResult = await pool.request().query(`
             SELECT 
                 ai.Auditors,
@@ -2332,9 +2336,13 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
                     ELSE NULL 
                 END as DurationMinutes,
                 s.StandardAuditDuration,
-                ai.TotalScore
+                ai.TotalScore,
+                asch.SchemaName,
+                ISNULL(ss.PassingGrade, 87) as PassingGrade
             FROM AuditInstances ai
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
+            LEFT JOIN SystemSettings ss ON ai.SchemaID = ss.SchemaID AND ss.SettingType = 'Overall'
             ${whereClause}
             ORDER BY ai.Auditors, ai.AuditDate DESC
         `);
@@ -2361,7 +2369,7 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
             ORDER BY ai.Auditors, ai.AuditDate DESC
         `);
         
-        // 3. Findings per store per auditor
+        // 3. Findings per store per auditor - with dynamic threshold
         const findingsResult = await pool.request().query(`
             SELECT 
                 ai.Auditors,
@@ -2369,42 +2377,50 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
                 ai.DocumentNumber,
                 ai.AuditDate,
                 ai.TotalScore,
+                asch.SchemaName,
+                ISNULL(ss.PassingGrade, 87) as PassingGrade,
                 COUNT(ar.ResponseID) as TotalFindings
             FROM AuditInstances ai
             LEFT JOIN AuditResponses ar ON ai.AuditID = ar.AuditID 
                 AND ar.SelectedChoice IN ('No', 'Partially')
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
+            LEFT JOIN SystemSettings ss ON ai.SchemaID = ss.SchemaID AND ss.SettingType = 'Overall'
             ${whereClause}
-            GROUP BY ai.Auditors, ai.StoreName, ai.DocumentNumber, ai.AuditDate, ai.TotalScore
+            GROUP BY ai.Auditors, ai.StoreName, ai.DocumentNumber, ai.AuditDate, ai.TotalScore, asch.SchemaName, ss.PassingGrade
             ORDER BY ai.Auditors, ai.StoreName, ai.AuditDate DESC
         `);
         
-        // 4. Pass/Fail by auditor
+        // 4. Pass/Fail by auditor - using dynamic threshold per schema
         const passFailByAuditorResult = await pool.request().query(`
             SELECT 
                 ai.Auditors,
                 COUNT(*) as TotalAudits,
-                SUM(CASE WHEN ai.TotalScore >= ${passingThreshold} THEN 1 ELSE 0 END) as PassedAudits,
-                SUM(CASE WHEN ai.TotalScore < ${passingThreshold} THEN 1 ELSE 0 END) as FailedAudits,
+                SUM(CASE WHEN ai.TotalScore >= ISNULL(ss.PassingGrade, 87) THEN 1 ELSE 0 END) as PassedAudits,
+                SUM(CASE WHEN ai.TotalScore < ISNULL(ss.PassingGrade, 87) THEN 1 ELSE 0 END) as FailedAudits,
                 AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore
             FROM AuditInstances ai
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
+            LEFT JOIN SystemSettings ss ON ai.SchemaID = ss.SchemaID AND ss.SettingType = 'Overall'
             ${whereClause}
             GROUP BY ai.Auditors
             ORDER BY TotalAudits DESC
         `);
         
-        // 5. Pass/Fail by branch (store)
+        // 5. Pass/Fail by branch (store) - using dynamic threshold per schema
         const passFailByBranchResult = await pool.request().query(`
             SELECT 
                 ai.StoreName,
                 ai.Auditors,
                 COUNT(*) as TotalAudits,
-                SUM(CASE WHEN ai.TotalScore >= ${passingThreshold} THEN 1 ELSE 0 END) as PassedAudits,
-                SUM(CASE WHEN ai.TotalScore < ${passingThreshold} THEN 1 ELSE 0 END) as FailedAudits,
+                SUM(CASE WHEN ai.TotalScore >= ISNULL(ss.PassingGrade, 87) THEN 1 ELSE 0 END) as PassedAudits,
+                SUM(CASE WHEN ai.TotalScore < ISNULL(ss.PassingGrade, 87) THEN 1 ELSE 0 END) as FailedAudits,
                 AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore
             FROM AuditInstances ai
             LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
+            LEFT JOIN SystemSettings ss ON ai.SchemaID = ss.SchemaID AND ss.SettingType = 'Overall'
             ${whereClause}
             GROUP BY ai.StoreName, ai.Auditors
             ORDER BY ai.StoreName, ai.Auditors
@@ -2445,9 +2461,32 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
         `);
         const actualAuditorCount = auditorCountResult.recordset[0]?.AuditorCount || 0;
         
+        // 9. Score distribution by branch, auditor, year, and schema - with dynamic threshold
+        const scoreByBranchAuditorYearResult = await pool.request().query(`
+            SELECT 
+                ai.StoreName,
+                ai.Auditors,
+                ai.Year,
+                asch.SchemaName,
+                ISNULL(ss.PassingGrade, 87) as PassingGrade,
+                COUNT(*) as AuditCount,
+                AVG(CAST(ai.TotalScore as FLOAT)) as AvgScore,
+                MIN(ai.TotalScore) as MinScore,
+                MAX(ai.TotalScore) as MaxScore,
+                SUM(CASE WHEN ai.TotalScore >= ISNULL(ss.PassingGrade, 87) THEN 1 ELSE 0 END) as PassedAudits,
+                SUM(CASE WHEN ai.TotalScore < ISNULL(ss.PassingGrade, 87) THEN 1 ELSE 0 END) as FailedAudits
+            FROM AuditInstances ai
+            LEFT JOIN Stores s ON ai.StoreID = s.StoreID
+            LEFT JOIN AuditSchemas asch ON ai.SchemaID = asch.SchemaID
+            LEFT JOIN SystemSettings ss ON ai.SchemaID = ss.SchemaID AND ss.SettingType = 'Overall'
+            ${whereClause}
+            GROUP BY ai.StoreName, ai.Auditors, ai.Year, asch.SchemaName, ss.PassingGrade
+            ORDER BY ai.Year DESC, ai.StoreName, ai.Auditors
+        `);
+        
         res.json({
             success: true,
-            passingThreshold,
+            schemaThresholds,
             actualAuditorCount,
             auditDurations: durationResult.recordset,
             submissionTimes: submissionResult.recordset,
@@ -2455,7 +2494,8 @@ app.get('/api/admin/auditor-performance', requireAuth, requireRole('Admin', 'Sup
             passFailByAuditor: passFailByAuditorResult.recordset,
             passFailByBranch: passFailByBranchResult.recordset,
             durationVariance: durationVarianceResult.recordset,
-            stores: storesResult.recordset
+            stores: storesResult.recordset,
+            scoreByBranchAuditorYear: scoreByBranchAuditorYearResult.recordset
         });
         
     } catch (error) {
