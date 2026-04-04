@@ -213,6 +213,7 @@ class EscalationJobService {
                         ai.StoreName,
                         ai.StoreCode,
                         ai.AuditDate,
+                        MIN(n.sent_at) as ReportSentDate,
                         dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays) as Deadline,
                         dbo.fn_GetBusinessDaysDiff(GETDATE(), dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays)) as DaysRemaining
                     FROM AuditInstances ai
@@ -260,6 +261,7 @@ class EscalationJobService {
                         ai.StoreName,
                         ai.StoreCode,
                         ai.AuditDate,
+                        MIN(n.sent_at) as ReportSentDate,
                         dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays) as Deadline,
                         dbo.fn_GetBusinessDaysDiff(dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays), GETDATE()) as DaysOverdue
                     FROM AuditInstances ai
@@ -473,6 +475,7 @@ class EscalationJobService {
                     storeName: ap.StoreName,
                     documentNumber: ap.DocumentNumber,
                     auditDate: ap.AuditDate ? new Date(ap.AuditDate).toLocaleDateString('en-GB') : '',
+                    reportSentDate: ap.ReportSentDate ? new Date(ap.ReportSentDate).toLocaleDateString('en-GB') : '',
                     deadline: ap.Deadline ? new Date(ap.Deadline).toLocaleDateString('en-GB') : '',
                     daysRemaining: reminderDays,
                     actionPlanUrl: `https://fsaudit.gmrlapps.com/auditor/action-plan?doc=${ap.DocumentNumber}`,
@@ -536,6 +539,7 @@ class EscalationJobService {
                     storeName: ap.StoreName,
                     documentNumber: ap.DocumentNumber,
                     auditDate: ap.AuditDate ? new Date(ap.AuditDate).toLocaleDateString('en-GB') : '',
+                    reportSentDate: ap.ReportSentDate ? new Date(ap.ReportSentDate).toLocaleDateString('en-GB') : '',
                     deadline: ap.Deadline ? new Date(ap.Deadline).toLocaleDateString('en-GB') : '',
                     daysOverdue: ap.DaysOverdue,
                     storeManagerName: storeManager?.display_name || 'N/A',
@@ -677,6 +681,7 @@ class EscalationJobService {
                         storeName: ap.StoreName,
                         documentNumber: ap.DocumentNumber,
                         auditDate: ap.AuditDate ? new Date(ap.AuditDate).toLocaleDateString('en-GB') : '',
+                        reportSentDate: ap.ReportSentDate ? new Date(ap.ReportSentDate).toLocaleDateString('en-GB') : '',
                         deadline: ap.Deadline ? new Date(ap.Deadline).toLocaleDateString('en-GB') : '',
                         daysRemaining: reminderDays,
                         recipientName: storeManager?.display_name || storeManager?.email || 'Store Manager',
@@ -727,6 +732,7 @@ class EscalationJobService {
                         storeName: ap.StoreName,
                         documentNumber: ap.DocumentNumber,
                         auditDate: ap.AuditDate ? new Date(ap.AuditDate).toLocaleDateString('en-GB') : '',
+                        reportSentDate: ap.ReportSentDate ? new Date(ap.ReportSentDate).toLocaleDateString('en-GB') : '',
                         deadline: ap.Deadline ? new Date(ap.Deadline).toLocaleDateString('en-GB') : '',
                         daysOverdue: ap.DaysOverdue,
                         storeManagerName: storeManager?.display_name || 'N/A',

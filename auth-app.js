@@ -9505,7 +9505,7 @@ app.get('/api/audits/:auditId/department-report/:department/download-word', requ
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Section', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 12, type: WidthType.PERCENTAGE } }),
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Unit', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 20, type: WidthType.PERCENTAGE } }),
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Display (°C)', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 10, type: WidthType.PERCENTAGE } }),
-                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Probe (°C)', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 10, type: WidthType.PERCENTAGE } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Air Temperature', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 10, type: WidthType.PERCENTAGE } }),
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Issue', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 28, type: WidthType.PERCENTAGE } }),
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Picture', bold: true })] })], shading: { fill: 'E5E7EB' }, width: { size: 15, type: WidthType.PERCENTAGE } }),
                     ],

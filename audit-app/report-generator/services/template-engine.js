@@ -521,7 +521,7 @@ class TemplateEngine {
                                 <th>Category</th>
                                 <th>Unit</th>
                                 <th>Display (°C)</th>
-                                <th>Probe (°C)</th>
+                                <th>Air Temperature</th>
                                 <th>Issue</th>
                                 <th>Picture</th>
                             </tr>
@@ -571,7 +571,7 @@ class TemplateEngine {
                                 <th>Category</th>
                                 <th>Unit</th>
                                 <th>Display (°C)</th>
-                                <th>Probe (°C)</th>
+                                <th>Air Temperature</th>
                                 <th>Picture</th>
                             </tr>
                         </thead>

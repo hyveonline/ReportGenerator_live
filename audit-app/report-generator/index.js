@@ -626,7 +626,7 @@ class ReportGenerator {
                                 <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Section</th>
                                 <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Unit</th>
                                 <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Display (°C)</th>
-                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Probe (°C)</th>
+                                <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Air Temperature</th>
                                 <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Issue</th>
                                 <th style="padding:10px;background:#f59e0b;color:white;border:1px solid #d97706;">Picture</th>
                             </tr>
