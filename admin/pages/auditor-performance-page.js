@@ -486,6 +486,59 @@ class AuditorPerformancePage {
             color: white;
         }
 
+        /* Detail Stats Cards */
+        .detail-stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .detail-stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .detail-stat-card .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .detail-stat-card .card-header .icon {
+            font-size: 1rem;
+        }
+
+        .detail-stat-card select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+            background: #f8fafc;
+        }
+
+        .detail-stat-card .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            text-align: center;
+        }
+
+        .detail-stat-card .stat-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+
         /* Tabs */
         .tabs {
             display: flex;
@@ -738,6 +791,34 @@ class AuditorPerformancePage {
             <div class="summary-card">
                 <div class="value" id="avgSendTime">-</div>
                 <div class="label">Avg Send Time (days)</div>
+            </div>
+        </div>
+
+        <!-- Detail Stats Cards with Dropdowns -->
+        <div class="detail-stats-cards">
+            <div class="detail-stat-card">
+                <div class="card-header"><span class="icon">⏱️</span> Avg Duration by Scheme</div>
+                <select id="durationSchemeSelect" onchange="updateDurationByScheme()"></select>
+                <div class="stat-value" id="durationBySchemeValue">-</div>
+                <div class="stat-label">minutes per audit</div>
+            </div>
+            <div class="detail-stat-card">
+                <div class="card-header"><span class="icon">🏪</span> Avg Duration by Branch</div>
+                <select id="durationBranchSelect" onchange="updateDurationByBranch()"></select>
+                <div class="stat-value" id="durationByBranchValue">-</div>
+                <div class="stat-label">minutes per audit</div>
+            </div>
+            <div class="detail-stat-card">
+                <div class="card-header"><span class="icon">👤</span> Avg Duration by Auditor</div>
+                <select id="durationAuditorSelect" onchange="updateDurationByAuditor()"></select>
+                <div class="stat-value" id="durationByAuditorValue">-</div>
+                <div class="stat-label">minutes per audit</div>
+            </div>
+            <div class="detail-stat-card">
+                <div class="card-header"><span class="icon">📧</span> Avg Send Time by Auditor</div>
+                <select id="sendTimeAuditorSelect" onchange="updateSendTimeByAuditor()"></select>
+                <div class="stat-value" id="sendTimeByAuditorValue">-</div>
+                <div class="stat-label">days to send report</div>
             </div>
         </div>
 
@@ -1221,6 +1302,112 @@ class AuditorPerformancePage {
             document.getElementById('failingRate').textContent = failingRate + '%';
             document.getElementById('avgDuration').textContent = formatDuration(avgDuration);
             document.getElementById('avgSendTime').textContent = avgSendTimeDays != null ? avgSendTimeDays.toFixed(1) : '-';
+            
+            // Populate detail stats dropdowns
+            populateDetailStatsDropdowns();
+        }
+
+        // ============================================
+        // DETAIL STATS CARDS (Per-Scheme, Per-Branch, Per-Auditor)
+        // ============================================
+        function populateDetailStatsDropdowns() {
+            const durationData = perfData.auditDurations || [];
+            const sendTimeData = perfData.submissionTimes || [];
+            
+            // Get unique schemes from duration data
+            const schemes = [...new Set(durationData.map(d => d.SchemaName).filter(Boolean))].sort();
+            const schemeSelect = document.getElementById('durationSchemeSelect');
+            schemeSelect.innerHTML = '<option value="">Select Scheme</option>' + 
+                schemes.map(s => '<option value="' + s + '">' + s + '</option>').join('');
+            
+            // Get unique branches from duration data
+            const branches = [...new Set(durationData.map(d => d.StoreName).filter(Boolean))].sort();
+            const branchSelect = document.getElementById('durationBranchSelect');
+            branchSelect.innerHTML = '<option value="">Select Branch</option>' + 
+                branches.map(b => '<option value="' + b + '">' + b + '</option>').join('');
+            
+            // Get unique auditors from duration data
+            const durationAuditors = [...new Set(durationData.map(d => d.Auditors).filter(Boolean))].sort();
+            const durationAuditorSelect = document.getElementById('durationAuditorSelect');
+            durationAuditorSelect.innerHTML = '<option value="">Select Auditor</option>' + 
+                durationAuditors.map(a => '<option value="' + a + '">' + a + '</option>').join('');
+            
+            // Get unique auditors from send time data
+            const sendTimeAuditors = [...new Set(sendTimeData.map(d => d.Auditors).filter(Boolean))].sort();
+            const sendTimeAuditorSelect = document.getElementById('sendTimeAuditorSelect');
+            sendTimeAuditorSelect.innerHTML = '<option value="">Select Auditor</option>' + 
+                sendTimeAuditors.map(a => '<option value="' + a + '">' + a + '</option>').join('');
+            
+            // Reset values
+            document.getElementById('durationBySchemeValue').textContent = '-';
+            document.getElementById('durationByBranchValue').textContent = '-';
+            document.getElementById('durationByAuditorValue').textContent = '-';
+            document.getElementById('sendTimeByAuditorValue').textContent = '-';
+        }
+        
+        function updateDurationByScheme() {
+            const scheme = document.getElementById('durationSchemeSelect').value;
+            if (!scheme) {
+                document.getElementById('durationBySchemeValue').textContent = '-';
+                return;
+            }
+            const durationData = perfData.auditDurations || [];
+            const filtered = durationData.filter(d => d.SchemaName === scheme && d.DurationMinutes != null);
+            if (filtered.length === 0) {
+                document.getElementById('durationBySchemeValue').textContent = '-';
+                return;
+            }
+            const avg = filtered.reduce((sum, d) => sum + d.DurationMinutes, 0) / filtered.length;
+            document.getElementById('durationBySchemeValue').textContent = Math.round(avg);
+        }
+        
+        function updateDurationByBranch() {
+            const branch = document.getElementById('durationBranchSelect').value;
+            if (!branch) {
+                document.getElementById('durationByBranchValue').textContent = '-';
+                return;
+            }
+            const durationData = perfData.auditDurations || [];
+            const filtered = durationData.filter(d => d.StoreName === branch && d.DurationMinutes != null);
+            if (filtered.length === 0) {
+                document.getElementById('durationByBranchValue').textContent = '-';
+                return;
+            }
+            const avg = filtered.reduce((sum, d) => sum + d.DurationMinutes, 0) / filtered.length;
+            document.getElementById('durationByBranchValue').textContent = Math.round(avg);
+        }
+        
+        function updateDurationByAuditor() {
+            const auditor = document.getElementById('durationAuditorSelect').value;
+            if (!auditor) {
+                document.getElementById('durationByAuditorValue').textContent = '-';
+                return;
+            }
+            const durationData = perfData.auditDurations || [];
+            const filtered = durationData.filter(d => d.Auditors === auditor && d.DurationMinutes != null);
+            if (filtered.length === 0) {
+                document.getElementById('durationByAuditorValue').textContent = '-';
+                return;
+            }
+            const avg = filtered.reduce((sum, d) => sum + d.DurationMinutes, 0) / filtered.length;
+            document.getElementById('durationByAuditorValue').textContent = Math.round(avg);
+        }
+        
+        function updateSendTimeByAuditor() {
+            const auditor = document.getElementById('sendTimeAuditorSelect').value;
+            if (!auditor) {
+                document.getElementById('sendTimeByAuditorValue').textContent = '-';
+                return;
+            }
+            const sendTimeData = perfData.submissionTimes || [];
+            const filtered = sendTimeData.filter(d => d.Auditors === auditor && d.HoursToSend != null);
+            if (filtered.length === 0) {
+                document.getElementById('sendTimeByAuditorValue').textContent = '-';
+                return;
+            }
+            const avgHours = filtered.reduce((sum, d) => sum + d.HoursToSend, 0) / filtered.length;
+            const avgDays = avgHours / 24;
+            document.getElementById('sendTimeByAuditorValue').textContent = avgDays.toFixed(1);
         }
 
         // ============================================
