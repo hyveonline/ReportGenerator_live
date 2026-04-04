@@ -737,7 +737,7 @@ class AuditorPerformancePage {
             </div>
             <div class="summary-card">
                 <div class="value" id="avgSendTime">-</div>
-                <div class="label">Avg Send Time (hrs)</div>
+                <div class="label">Avg Send Time (days)</div>
             </div>
         </div>
 
@@ -854,6 +854,10 @@ class AuditorPerformancePage {
                 <!-- Send Time Chart -->
                 <section class="chart-card full-width">
                     <h2>📧 Time to Send Reports (Audit Date → Email Sent)</h2>
+                    <p style="color: #64748b; margin-bottom: 1rem; font-size: 0.875rem;">
+                        Average days to send reports per auditor. The dashed line shows the 5-day target.
+                        <span class="pass">Green</span> = ≤5 days, <span class="warn">Orange</span> = 5-7 days, <span class="fail">Red</span> = >7 days.
+                    </p>
                     <div class="chart-container">
                         <canvas id="sendTimeChart"></canvas>
                     </div>
@@ -862,7 +866,19 @@ class AuditorPerformancePage {
                 <!-- Send Time Table -->
                 <section class="chart-card full-width">
                     <h2>📋 Report Submission Details</h2>
+                    <p style="color: #64748b; margin-bottom: 1rem; font-size: 0.875rem;">
+                        Target: 5 days. Variance shows the difference from the target.
+                    </p>
                     <div id="sendTimeTable" class="data-table-container"></div>
+                </section>
+
+                <!-- Send Time Deviations Table -->
+                <section class="chart-card full-width">
+                    <h2>⚠️ Send Time Deviations (Exceeded 5-Day Target)</h2>
+                    <p style="color: #64748b; margin-bottom: 1rem; font-size: 0.875rem;">
+                        List of reports that exceeded the 5-day target, sorted by variance (biggest delays first).
+                    </p>
+                    <div id="sendTimeDeviationsTable" class="data-table-container"></div>
                 </section>
             </div>
         </div>
@@ -871,18 +887,10 @@ class AuditorPerformancePage {
         <div id="tab-findings" class="tab-content">
             <div class="cards-grid">
                 <!-- Findings by Auditor Chart -->
-                <section class="chart-card">
+                <section class="chart-card full-width">
                     <h2>🔍 Avg Findings per Auditor</h2>
-                    <div class="chart-container small">
+                    <div class="chart-container" style="height: 400px;">
                         <canvas id="findingsAuditorChart"></canvas>
-                    </div>
-                </section>
-
-                <!-- Findings by Store Chart -->
-                <section class="chart-card">
-                    <h2>🏪 Findings by Store</h2>
-                    <div class="chart-container small">
-                        <canvas id="findingsStoreChart"></canvas>
                     </div>
                 </section>
 
@@ -916,7 +924,6 @@ class AuditorPerformancePage {
         let durationChart = null;
         let sendTimeChart = null;
         let findingsAuditorChart = null;
-        let findingsStoreChart = null;
 
         // Data cache
         let perfData = null;
@@ -1195,11 +1202,12 @@ class AuditorPerformancePage {
                 ? durationsWithTime.reduce((sum, d) => sum + d.DurationMinutes, 0) / durationsWithTime.length
                 : null;
 
-            // Calculate avg send time
+            // Calculate avg send time (convert hours to days)
             const sendTimesWithData = sendTimeData.filter(s => s.HoursToSend != null);
-            const avgSendTime = sendTimesWithData.length > 0
+            const avgSendTimeHours = sendTimesWithData.length > 0
                 ? sendTimesWithData.reduce((sum, s) => sum + s.HoursToSend, 0) / sendTimesWithData.length
                 : null;
+            const avgSendTimeDays = avgSendTimeHours != null ? avgSendTimeHours / 24 : null;
 
             // Calculate passing/failing rates
             const passingRate = totalAudits > 0 ? ((passedAudits / totalAudits) * 100).toFixed(1) : 0;
@@ -1212,7 +1220,7 @@ class AuditorPerformancePage {
             document.getElementById('passingRate').textContent = passingRate + '%';
             document.getElementById('failingRate').textContent = failingRate + '%';
             document.getElementById('avgDuration').textContent = formatDuration(avgDuration);
-            document.getElementById('avgSendTime').textContent = avgSendTime != null ? Math.round(avgSendTime) : '-';
+            document.getElementById('avgSendTime').textContent = avgSendTimeDays != null ? avgSendTimeDays.toFixed(1) : '-';
         }
 
         // ============================================
@@ -1810,6 +1818,7 @@ class AuditorPerformancePage {
         function renderSendTimeTab() {
             renderSendTimeChart();
             renderSendTimeTable();
+            renderSendTimeDeviationsTable();
         }
 
         function renderSendTimeChart() {
@@ -1827,27 +1836,80 @@ class AuditorPerformancePage {
             });
 
             const auditors = Object.keys(byAuditor);
-            const avgHours = auditors.map(name => {
+            // Convert hours to days
+            const avgDays = auditors.map(name => {
                 const vals = byAuditor[name];
-                return vals.reduce((a, b) => a + b, 0) / vals.length;
+                const avgHours = vals.reduce((a, b) => a + b, 0) / vals.length;
+                return avgHours / 24; // Convert to days
             });
+
+            // 5-day target trendline
+            const targetLine = auditors.map(() => 5);
 
             sendTimeChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: auditors,
-                    datasets: [{
-                        label: 'Avg Hours to Send',
-                        data: avgHours,
-                        backgroundColor: avgHours.map(h => h <= 24 ? '#10b981' : h <= 48 ? '#f59e0b' : '#ef4444'),
-                        borderRadius: 4
-                    }]
+                    datasets: [
+                        {
+                            label: 'Avg Days to Send',
+                            data: avgDays,
+                            backgroundColor: avgDays.map(d => d <= 5 ? '#10b981' : d <= 7 ? '#f59e0b' : '#ef4444'),
+                            borderRadius: 4,
+                            order: 2
+                        },
+                        {
+                            label: '5-Day Target',
+                            data: targetLine,
+                            type: 'line',
+                            borderColor: '#64748b',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false,
+                            order: 1
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Hours' } } },
-                    plugins: { legend: { display: false } }
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            title: { display: true, text: 'Days' },
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {
+                                    return value + ' days';
+                                }
+                            }
+                        } 
+                    },
+                    plugins: { 
+                        legend: { 
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                filter: function(legendItem) {
+                                    // Only show the target line in legend
+                                    return legendItem.datasetIndex === 1;
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        const days = context.raw;
+                                        const status = days <= 5 ? '✅ On Target' : days <= 7 ? '⚠️ Delayed' : '❌ Late';
+                                        return \`Avg: \${days.toFixed(1)} days \${status}\`;
+                                    }
+                                    return '5-Day Target';
+                                }
+                            }
+                        }
+                    }
                 }
             });
         }
@@ -1859,21 +1921,29 @@ class AuditorPerformancePage {
                 return;
             }
 
+            const targetDays = 5;
             // Show recent 50
             const recent = data.slice(0, 50);
             document.getElementById('sendTimeTable').innerHTML = \`
                 <table class="data-table">
-                    <thead><tr><th>Document</th><th>Store</th><th>Auditor</th><th>Audit Date</th><th>Completed</th><th>Email Sent</th><th>Time to Send</th></tr></thead>
+                    <thead><tr><th>Document</th><th>Store</th><th>Auditor</th><th>Audit Date</th><th>Email Sent</th><th>Days to Send</th><th>Target</th><th>Variance</th></tr></thead>
                     <tbody>\${recent.map(d => {
                         const auditDate = d.AuditDate ? new Date(d.AuditDate).toLocaleDateString() : '-';
-                        const completedAt = d.CompletedAt ? new Date(d.CompletedAt).toLocaleString() : '-';
                         const sentAt = d.FirstNotificationSent ? new Date(d.FirstNotificationSent).toLocaleString() : '<em style="color:#94a3b8">Not sent</em>';
                         const hours = d.HoursToSend;
-                        let hoursClass = '';
-                        if (hours != null) {
-                            if (hours <= 24) hoursClass = 'pass';
-                            else if (hours <= 48) hoursClass = 'warn';
-                            else hoursClass = 'fail';
+                        const days = hours != null ? hours / 24 : null;
+                        const variance = days != null ? days - targetDays : null;
+                        let daysClass = '';
+                        let varianceClass = '';
+                        if (days != null) {
+                            if (days <= 5) daysClass = 'pass';
+                            else if (days <= 7) daysClass = 'warn';
+                            else daysClass = 'fail';
+                        }
+                        if (variance != null) {
+                            if (variance <= 0) varianceClass = 'variance-fast';
+                            else if (variance <= 2) varianceClass = 'variance-normal';
+                            else varianceClass = 'variance-slow';
                         }
                         return \`
                             <tr>
@@ -1881,9 +1951,73 @@ class AuditorPerformancePage {
                                 <td>\${d.StoreName}</td>
                                 <td>\${d.Auditors || 'Unknown'}</td>
                                 <td>\${auditDate}</td>
-                                <td>\${completedAt}</td>
                                 <td>\${sentAt}</td>
-                                <td class="\${hoursClass}">\${formatHours(hours)}</td>
+                                <td class="\${daysClass}">\${days != null ? days.toFixed(1) + ' days' : '-'}</td>
+                                <td>\${targetDays} days</td>
+                                <td class="\${varianceClass}">\${variance != null ? (variance > 0 ? '+' : '') + variance.toFixed(1) + ' days' : '-'}</td>
+                            </tr>
+                        \`;
+                    }).join('')}</tbody>
+                </table>
+            \`;
+        }
+
+        function renderSendTimeDeviationsTable() {
+            const data = perfData.submissionTimes || [];
+            const targetDays = 5;
+            
+            // Filter only records that exceeded the 5-day target
+            const deviations = data.filter(d => {
+                if (d.HoursToSend == null) return false;
+                const days = d.HoursToSend / 24;
+                return days > targetDays;
+            }).map(d => ({
+                ...d,
+                days: d.HoursToSend / 24,
+                variance: (d.HoursToSend / 24) - targetDays
+            }));
+
+            if (deviations.length === 0) {
+                document.getElementById('sendTimeDeviationsTable').innerHTML = '<p class="no-data">No deviations found - all reports sent within 5-day target 🎉</p>';
+                return;
+            }
+
+            // Sort by variance descending (biggest delays first)
+            const sorted = [...deviations].sort((a, b) => b.variance - a.variance);
+
+            document.getElementById('sendTimeDeviationsTable').innerHTML = \`
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Document</th>
+                            <th>Store</th>
+                            <th>Auditor</th>
+                            <th>Audit Date</th>
+                            <th>Email Sent</th>
+                            <th>Days to Send</th>
+                            <th>Target</th>
+                            <th>Variance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>\${sorted.map((d, idx) => {
+                        const auditDate = d.AuditDate ? new Date(d.AuditDate).toLocaleDateString() : '-';
+                        const sentAt = d.FirstNotificationSent ? new Date(d.FirstNotificationSent).toLocaleString() : '-';
+                        const varianceClass = d.variance <= 2 ? 'warn' : 'fail';
+                        const status = d.variance <= 2 ? '⚠️ Delayed' : '🔴 Late';
+                        return \`
+                            <tr>
+                                <td>\${idx + 1}</td>
+                                <td>\${d.DocumentNumber}</td>
+                                <td>\${d.StoreName}</td>
+                                <td>\${d.Auditors || 'Unknown'}</td>
+                                <td>\${auditDate}</td>
+                                <td>\${sentAt}</td>
+                                <td class="\${varianceClass}">\${d.days.toFixed(1)} days</td>
+                                <td>\${targetDays} days</td>
+                                <td class="\${varianceClass}">+\${d.variance.toFixed(1)} days</td>
+                                <td>\${status}</td>
                             </tr>
                         \`;
                     }).join('')}</tbody>
@@ -1896,7 +2030,6 @@ class AuditorPerformancePage {
         // ============================================
         function renderFindingsTab() {
             renderFindingsAuditorChart();
-            renderFindingsStoreChart();
             renderFindingsTable();
         }
 
@@ -1933,48 +2066,6 @@ class AuditorPerformancePage {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: { y: { beginAtZero: true } },
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        function renderFindingsStoreChart() {
-            const ctx = document.getElementById('findingsStoreChart').getContext('2d');
-            if (findingsStoreChart) findingsStoreChart.destroy();
-
-            const data = perfData.findingsPerStore || [];
-            
-            // Group by store
-            const byStore = {};
-            data.forEach(d => {
-                const name = d.StoreName;
-                if (!byStore[name]) byStore[name] = { total: 0, count: 0 };
-                byStore[name].total += d.TotalFindings || 0;
-                byStore[name].count++;
-            });
-
-            const stores = Object.keys(byStore).sort((a, b) => 
-                (byStore[b].total / byStore[b].count) - (byStore[a].total / byStore[a].count)
-            ).slice(0, 10);
-            
-            const avgFindings = stores.map(name => byStore[name].total / byStore[name].count);
-
-            findingsStoreChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: stores,
-                    datasets: [{
-                        label: 'Avg Findings',
-                        data: avgFindings,
-                        backgroundColor: '#ef4444',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    scales: { x: { beginAtZero: true } },
                     plugins: { legend: { display: false } }
                 }
             });
