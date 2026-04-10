@@ -12,6 +12,7 @@ class EscalationJobService {
         this.lastRunTime = null;
         this.nextRunTime = null;
         this.intervalId = null;
+        this.maintenanceIntervalId = null; // For session maintenance
         this.checkIntervalMinutes = 1; // Check every minute if it's time to run
         this.scheduledRunTime = '09:00'; // Default: 9 AM
         this.runOnWeekends = false; // Default: only weekdays
@@ -24,17 +25,20 @@ class EscalationJobService {
             errors: 0
         };
         // System sender email for automated notifications - must have an active session
-        this.systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'spnotification@spinneys-lebanon.com';
+        this.systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'appnotification@gmrlapps.com';
     }
 
     /**
      * Get the access token for the system sender from their session
      * Uses token refresh if needed (delegated permissions)
+     * FIXED: Now looks for ANY session with a refresh token (even if expired)
+     * This allows auto-refresh even after 24-hour session expiry
      */
     async getSystemSenderToken() {
         const pool = await this.getDbPool();
         
-        // Find active session for system sender
+        // Find ANY session for system sender that has a refresh token
+        // DO NOT filter by expires_at - we can refresh even expired sessions
         const result = await pool.request()
             .input('email', sql.NVarChar, this.systemSenderEmail)
             .query(`
@@ -42,7 +46,7 @@ class EscalationJobService {
                 FROM Sessions s
                 INNER JOIN Users u ON s.user_id = u.id
                 WHERE u.email = @email
-                AND s.expires_at > GETDATE()
+                AND s.azure_refresh_token IS NOT NULL
                 ORDER BY s.created_at DESC
             `);
         
@@ -92,9 +96,9 @@ class EscalationJobService {
         const tokenData = await response.json();
         
         // Update the session with new tokens
-        // IMPORTANT: Extend session expiry by 24 hours (not just access token expiry)
-        // This keeps the session alive as long as the refresh token is valid (90 days)
-        const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        // Extend session expiry by 7 days to reduce refresh frequency
+        // Refresh tokens are valid for 90 days of inactivity
+        const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
         await pool.request()
             .input('sessionToken', sql.NVarChar, session.session_token)
             .input('accessToken', sql.NVarChar, tokenData.access_token)
@@ -109,7 +113,7 @@ class EscalationJobService {
                 WHERE session_token = @sessionToken
             `);
         
-        console.log(`[EscalationJob] Token refreshed successfully for ${this.systemSenderEmail}`);
+        console.log(`[EscalationJob] Token refreshed successfully for ${this.systemSenderEmail}, session extended to ${newExpiry.toISOString()}`);
         return tokenData.access_token;
     }
 
@@ -1023,6 +1027,15 @@ class EscalationJobService {
         
         // Also do an immediate check
         this.scheduledCheck();
+        
+        // Start session maintenance - runs every 6 hours to keep system sender session alive
+        console.log(`[EscalationJob] Starting session maintenance for ${this.systemSenderEmail} (runs every 6 hours)`);
+        this.maintenanceIntervalId = setInterval(() => {
+            this.maintainSystemSenderSession();
+        }, 6 * 60 * 60 * 1000); // Every 6 hours
+        
+        // Run immediate session maintenance
+        this.maintainSystemSenderSession();
     }
 
     /**
@@ -1034,6 +1047,64 @@ class EscalationJobService {
             this.intervalId = null;
             this.hasRunToday = false;
             console.log('[EscalationJob] Scheduler stopped');
+        }
+        if (this.maintenanceIntervalId) {
+            clearInterval(this.maintenanceIntervalId);
+            this.maintenanceIntervalId = null;
+            console.log('[EscalationJob] Session maintenance stopped');
+        }
+    }
+
+    /**
+     * Proactively maintain system sender session
+     * Refreshes the session token before it expires to ensure continuous operation
+     * Runs every 6 hours
+     */
+    async maintainSystemSenderSession() {
+        try {
+            console.log(`[EscalationJob] Running session maintenance for ${this.systemSenderEmail}...`);
+            
+            const pool = await this.getDbPool();
+            
+            // Check if session exists and needs refresh (expires within 12 hours)
+            const result = await pool.request()
+                .input('email', sql.NVarChar, this.systemSenderEmail)
+                .query(`
+                    SELECT TOP 1 s.session_token, s.azure_access_token, s.azure_refresh_token, s.expires_at, u.email
+                    FROM Sessions s
+                    INNER JOIN Users u ON s.user_id = u.id
+                    WHERE u.email = @email
+                    AND s.azure_refresh_token IS NOT NULL
+                    ORDER BY s.created_at DESC
+                `);
+            
+            if (result.recordset.length === 0) {
+                console.log(`[EscalationJob] No session found for ${this.systemSenderEmail} - login required`);
+                return { success: false, reason: 'No session found' };
+            }
+            
+            const session = result.recordset[0];
+            const expiresAt = new Date(session.expires_at);
+            const now = new Date();
+            const hoursUntilExpiry = (expiresAt - now) / (1000 * 60 * 60);
+            
+            // If session expires within 12 hours, refresh it proactively
+            if (hoursUntilExpiry < 12) {
+                console.log(`[EscalationJob] Session expires in ${hoursUntilExpiry.toFixed(1)} hours - refreshing proactively...`);
+                
+                // Use getSystemSenderToken which handles the refresh
+                await this.getSystemSenderToken();
+                
+                console.log(`[EscalationJob] Session maintenance completed successfully`);
+                return { success: true, action: 'refreshed' };
+            }
+            
+            console.log(`[EscalationJob] Session healthy (expires in ${hoursUntilExpiry.toFixed(1)} hours)`);
+            return { success: true, action: 'no_action_needed', hoursUntilExpiry };
+            
+        } catch (error) {
+            console.error(`[EscalationJob] Session maintenance error:`, error.message);
+            return { success: false, error: error.message };
         }
     }
 

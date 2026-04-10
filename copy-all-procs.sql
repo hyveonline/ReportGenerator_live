@@ -189,7 +189,11 @@ GO
 CREATE PROCEDURE sp_CleanupExpiredSessions
 AS
 BEGIN
-    DELETE FROM Sessions WHERE expires_at < GETDATE();
+    -- Only delete expired sessions without refresh tokens
+    -- Preserves system sender/service account sessions for auto-refresh
+    DELETE FROM Sessions 
+    WHERE expires_at < GETDATE() 
+    AND (azure_refresh_token IS NULL OR azure_refresh_token = '');
     PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' expired sessions cleaned up';
 END
 GO

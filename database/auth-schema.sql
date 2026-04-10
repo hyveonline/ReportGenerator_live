@@ -201,6 +201,7 @@ GO
 -- =============================================
 -- Stored Procedure: Cleanup Expired Sessions
 -- Run this periodically to remove old sessions
+-- IMPORTANT: Preserves sessions with refresh tokens (for system sender/service accounts)
 -- =============================================
 IF EXISTS (SELECT * FROM sys.procedures WHERE name = 'sp_CleanupExpiredSessions')
 BEGIN
@@ -211,8 +212,13 @@ GO
 CREATE PROCEDURE sp_CleanupExpiredSessions
 AS
 BEGIN
-    DELETE FROM Sessions WHERE expires_at < GETDATE();
-    PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' expired sessions cleaned up';
+    -- Only delete expired sessions that do NOT have a refresh token
+    -- Sessions with refresh tokens (like system sender) are preserved for auto-refresh
+    DELETE FROM Sessions 
+    WHERE expires_at < GETDATE() 
+    AND (azure_refresh_token IS NULL OR azure_refresh_token = '');
+    
+    PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' expired sessions cleaned up (preserved sessions with refresh tokens)';
 END
 GO
 

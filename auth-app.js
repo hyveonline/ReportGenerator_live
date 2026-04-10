@@ -4513,7 +4513,7 @@ app.get('/api/admin/escalation-job/sender-status', requireAuth, requireRole('Adm
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        const systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'spnotification@spinneys-lebanon.com';
+        const systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'appnotification@gmrlapps.com';
         
         const result = await pool.request()
             .input('email', sql.NVarChar, systemSenderEmail)
@@ -5955,14 +5955,14 @@ app.post('/api/audits/action-plan-stats', requireAuth, async (req, res) => {
 
 /**
  * Get system sender token for automated notifications
- * Uses spnotification@spinneys-lebanon.com session
+ * Uses appnotification@gmrlapps.com session
  */
 async function getSystemSenderToken() {
     const sql = require('mssql');
     const dbConfig = require('./config/default').database;
     const pool = await sql.connect(dbConfig);
     
-    const systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'spnotification@spinneys-lebanon.com';
+    const systemSenderEmail = process.env.SYSTEM_SENDER_EMAIL || 'appnotification@gmrlapps.com';
     
     // Find active session for system sender
     const result = await pool.request()

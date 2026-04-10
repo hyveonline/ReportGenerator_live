@@ -127,16 +127,24 @@ class SessionManager {
     
     /**
      * Cleanup expired sessions
+     * IMPORTANT: Sessions with refresh tokens are NOT deleted - they can be refreshed
+     * This allows system sender and service accounts to maintain long-lived sessions
      */
     static async cleanupExpiredSessions() {
         const pool = await sql.connect(config.database);
         
+        // Only delete expired sessions that do NOT have a refresh token
+        // Sessions with refresh tokens (like system sender) are preserved
         const result = await pool.request()
-            .query('DELETE FROM Sessions WHERE expires_at < GETDATE()');
+            .query(`
+                DELETE FROM Sessions 
+                WHERE expires_at < GETDATE() 
+                AND (azure_refresh_token IS NULL OR azure_refresh_token = '')
+            `);
         
         const count = result.rowsAffected[0];
         if (count > 0) {
-            console.log(`✅ Cleaned up ${count} expired session(s)`);
+            console.log(`✅ Cleaned up ${count} expired session(s) (preserved sessions with refresh tokens)`);
         }
         
         return count;
