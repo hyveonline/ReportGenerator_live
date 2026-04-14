@@ -34,7 +34,7 @@ class EscalationJobService {
      * FIXED: Now looks for ANY session with a refresh token (even if expired)
      * This allows auto-refresh even after 24-hour session expiry
      */
-    async getSystemSenderToken() {
+    async getSystemSenderToken(forceRefresh = false) {
         const pool = await this.getDbPool();
         
         // Find ANY session for system sender that has a refresh token
@@ -59,9 +59,14 @@ class EscalationJobService {
         const now = new Date();
         
         // Check if access token is still valid (with 5 min buffer)
-        if (tokenExpiry > new Date(now.getTime() + 5 * 60 * 1000) && session.azure_access_token) {
+        // Skip this check if forceRefresh is true (e.g. after a 401 error)
+        if (!forceRefresh && tokenExpiry > new Date(now.getTime() + 5 * 60 * 1000) && session.azure_access_token) {
             console.log(`[EscalationJob] Using existing access token for ${this.systemSenderEmail}`);
             return session.azure_access_token;
+        }
+        
+        if (forceRefresh) {
+            console.log(`[EscalationJob] Force-refreshing token due to 401 error...`);
         }
         
         // Token expired or about to expire, need to refresh
@@ -96,9 +101,10 @@ class EscalationJobService {
         const tokenData = await response.json();
         
         // Update the session with new tokens
-        // Extend session expiry by 7 days to reduce refresh frequency
-        // Refresh tokens are valid for 90 days of inactivity
-        const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        // Set expiry based on actual access token lifetime (usually ~1 hour)
+        // This ensures we refresh before the token actually expires at Graph API level
+        const expiresInMs = (tokenData.expires_in || 3600) * 1000; // Default 1 hour if not provided
+        const newExpiry = new Date(Date.now() + expiresInMs);
         await pool.request()
             .input('sessionToken', sql.NVarChar, session.session_token)
             .input('accessToken', sql.NVarChar, tokenData.access_token)
@@ -383,9 +389,9 @@ class EscalationJobService {
      * @param {string} htmlBody - HTML email body
      * @param {Array} ccRecipients - Optional array of CC email addresses
      */
-    async sendEmail(to, subject, htmlBody, ccRecipients = []) {
+    async sendEmail(to, subject, htmlBody, ccRecipients = [], _isRetry = false) {
         try {
-            const token = await this.getSystemSenderToken();
+            const token = await this.getSystemSenderToken(_isRetry);
             
             // Use /me/sendMail endpoint with delegated permissions
             const endpoint = 'https://graph.microsoft.com/v1.0/me/sendMail';
@@ -423,6 +429,13 @@ class EscalationJobService {
 
             if (!response.ok) {
                 const errorText = await response.text();
+                
+                // On 401, force-refresh the token and retry once
+                if (response.status === 401 && !_isRetry) {
+                    console.log(`[EscalationJob] Got 401, retrying with refreshed token...`);
+                    return await this.sendEmail(to, subject, htmlBody, ccRecipients, true);
+                }
+                
                 console.error(`[EscalationJob] Email failed: ${response.status} - ${errorText}`);
                 return { success: false, error: `${response.status}: ${errorText}` };
             }
