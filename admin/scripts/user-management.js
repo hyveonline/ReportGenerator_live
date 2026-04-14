@@ -333,6 +333,16 @@ async function editUser(userId) {
             user.assigned_brands = [];
         }
         
+        // Parse assigned_schema_ids from comma-separated string to array of integers
+        if (user.assigned_schema_ids && typeof user.assigned_schema_ids === 'string') {
+            user.assigned_schema_ids = user.assigned_schema_ids
+                .split(',')
+                .map(id => parseInt(id.trim(), 10))
+                .filter(id => !isNaN(id));
+        } else if (!user.assigned_schema_ids) {
+            user.assigned_schema_ids = [];
+        }
+        
         // Show modal with user data
         window.openEditUserModal(user);
         
@@ -451,25 +461,33 @@ function getStatusBadge(user) {
  * Helper: Format assignments based on role type
  */
 function formatAssignments(user) {
-    // HeadOfOperations - show brand assignments
+    // HeadOfOperations - show brand assignments + checklists
     if (user.role === 'HeadOfOperations') {
+        let parts = [];
         if (user.assigned_brands) {
             const brands = user.assigned_brands.split(', ');
-            return `<span class="badge-brands">🏢 ${brands.join(', ')}</span>`;
+            parts.push(`<span class="badge-brands">🏢 ${brands.join(', ')}</span>`);
         }
-        return '<span style="color:#999;">No brands</span>';
+        if (user.assigned_schemas) {
+            parts.push(`<span class="badge-brands">📋 ${user.assigned_schemas}</span>`);
+        }
+        return parts.length > 0 ? parts.join(' ') : '<span style="color:#999;">No brands</span>';
     }
     
-    // AreaManager - show area store assignments
+    // AreaManager - show area store assignments + checklists
     if (user.role === 'AreaManager') {
+        let parts = [];
         if (user.assigned_area_stores) {
             const stores = user.assigned_area_stores.split(', ');
             const display = stores.length > 2 
                 ? `${stores.slice(0, 2).join(', ')} +${stores.length - 2}`
                 : stores.join(', ');
-            return `<span class="badge-areas">📍 ${display}</span>`;
+            parts.push(`<span class="badge-areas">📍 ${display}</span>`);
         }
-        return '<span style="color:#999;">No stores</span>';
+        if (user.assigned_schemas) {
+            parts.push(`<span class="badge-brands">📋 ${user.assigned_schemas}</span>`);
+        }
+        return parts.length > 0 ? parts.join(' ') : '<span style="color:#999;">No stores</span>';
     }
     
     // StoreManager - show assigned stores

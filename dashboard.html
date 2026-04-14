@@ -1603,6 +1603,43 @@
             color: #166534;
         }
 
+        .dashboard-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.08);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dashboard-filters select,
+        .dashboard-filters input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 13px;
+            background: white;
+            color: #374151;
+            min-width: 130px;
+            cursor: pointer;
+        }
+
+        .dashboard-filters select:focus,
+        .dashboard-filters input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
+        }
+
+        .dashboard-filters input[type="text"] {
+            min-width: 160px;
+        }
+
         .my-audits-btn {
             background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
             color: white;
@@ -2718,6 +2755,23 @@
             <div class="card-description">View completed audits, reports, and action plans for your assigned stores</div>
             <div class="card-stores" id="assignedStoresInfo">Loading your assigned stores...</div>
             
+            <!-- Filters -->
+            <div class="dashboard-filters" id="myAuditsFilters" style="display:none;">
+                <select id="myAuditsStoreFilter" onchange="filterMyAudits()">
+                    <option value="">All Stores</option>
+                </select>
+                <select id="myAuditsChecklistFilter" onchange="filterMyAudits()">
+                    <option value="">All Checklists</option>
+                </select>
+                <select id="myAuditsCycleFilter" onchange="filterMyAudits()">
+                    <option value="">All Cycles</option>
+                </select>
+                <select id="myAuditsYearFilter" onchange="filterMyAudits()">
+                    <option value="">All Years</option>
+                </select>
+                <input type="text" id="myAuditsSearch" placeholder="Search..." oninput="filterMyAudits()">
+            </div>
+
             <!-- Inline Audits List -->
             <div class="my-audits-list" id="myAuditsList">
                 <div class="my-audits-loading">Loading audits...</div>
@@ -2731,6 +2785,23 @@
             <div class="card-description">View completed audits and reports for your assigned region (read-only)</div>
             <div class="card-stores" id="assignedRegionInfo">Loading your assigned region...</div>
             
+            <!-- Filters -->
+            <div class="dashboard-filters" id="myRegionFilters" style="display:none;">
+                <select id="myRegionStoreFilter" onchange="filterMyRegionAudits()">
+                    <option value="">All Stores</option>
+                </select>
+                <select id="myRegionChecklistFilter" onchange="filterMyRegionAudits()">
+                    <option value="">All Checklists</option>
+                </select>
+                <select id="myRegionCycleFilter" onchange="filterMyRegionAudits()">
+                    <option value="">All Cycles</option>
+                </select>
+                <select id="myRegionYearFilter" onchange="filterMyRegionAudits()">
+                    <option value="">All Years</option>
+                </select>
+                <input type="text" id="myRegionSearch" placeholder="Search..." oninput="filterMyRegionAudits()">
+            </div>
+
             <!-- Inline Audits List -->
             <div class="my-audits-list" id="myRegionAuditsList">
                 <div class="my-audits-loading">Loading audits...</div>
@@ -3481,6 +3552,10 @@
             }
         }
 
+        // Global storage for loaded audits (for filtering)
+        let _myStoreAudits = [];
+        let _myRegionAuditsData = [];
+
         // Load audits for StoreManager (inline display)
         async function loadMyAudits() {
             const listContainer = document.getElementById('myAuditsList');
@@ -3500,6 +3575,7 @@
 
                 // Filter to only completed audits
                 const completedAudits = data.audits.filter(a => a.Status === 'Completed');
+                _myStoreAudits = completedAudits;
                 
                 if (completedAudits.length === 0) {
                     listContainer.innerHTML = `
@@ -3511,46 +3587,12 @@
                     return;
                 }
 
-                // Render audits grid
-                const auditsHtml = completedAudits.map(audit => {
-                    const score = audit.TotalScore !== null ? Math.round(audit.TotalScore) : null;
-                    const passingGrade = audit.PassingGrade || 83;
-                    const scoreClass = score !== null ? (score >= passingGrade ? 'pass' : 'fail') : '';
-                    const scoreText = score !== null ? `${score}%` : 'N/A';
-                    
-                    return `
-                        <div class="my-audit-item">
-                            <div class="my-audit-header">
-                                <span class="my-audit-doc">${audit.DocumentNumber || '-'}</span>
-                                <span class="my-audit-score ${scoreClass}">${scoreText}</span>
-                            </div>
-                            <div class="my-audit-info">
-                                <div class="my-audit-info-row">
-                                    <span class="label">🏪 Store</span>
-                                    <span class="value">${audit.StoreName || 'Unknown'}</span>
-                                </div>
-                                <div class="my-audit-info-row">
-                                    <span class="label">📅 Cycle</span>
-                                    <span class="value">${audit.AuditCycle || '-'} / ${audit.AuditYear || '-'}</span>
-                                </div>
-                                <div class="my-audit-info-row">
-                                    <span class="label">👤 Auditor</span>
-                                    <span class="value">${(audit.Auditors || '').split(',')[0] || 'N/A'}</span>
-                                </div>
-                            </div>
-                            <div class="my-audit-actions">
-                                <button class="my-audit-btn view-report" onclick="viewReport(${audit.AuditID})">
-                                    📄 View Report
-                                </button>
-                                <button class="my-audit-btn action-plan" onclick="viewActionPlan(${audit.AuditID})">
-                                    🎯 Action Plan
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                // Populate filters
+                populateDashboardFilters(completedAudits, 'myAudits');
+                document.getElementById('myAuditsFilters').style.display = 'flex';
 
-                listContainer.innerHTML = `<div class="my-audits-grid">${auditsHtml}</div>`;
+                // Render audits grid
+                renderMyAuditsGrid(completedAudits);
 
             } catch (error) {
                 console.error('Error loading audits:', error);
@@ -3561,6 +3603,76 @@
                     </div>
                 `;
             }
+        }
+
+        // Render My Store Audits grid
+        function renderMyAuditsGrid(audits) {
+            const listContainer = document.getElementById('myAuditsList');
+            if (audits.length === 0) {
+                listContainer.innerHTML = '<div class="my-audits-empty"><div style="font-size:48px;margin-bottom:10px;">🔍</div><div>No audits match your filters.</div></div>';
+                return;
+            }
+            const html = audits.map(audit => {
+                const score = audit.TotalScore !== null ? Math.round(audit.TotalScore) : null;
+                const passingGrade = audit.PassingGrade || 83;
+                const scoreClass = score !== null ? (score >= passingGrade ? 'pass' : 'fail') : '';
+                const scoreText = score !== null ? score + '%' : 'N/A';
+                return '<div class="my-audit-item">' +
+                    '<div class="my-audit-header">' +
+                        '<span class="my-audit-doc">' + (audit.DocumentNumber || '-') + '</span>' +
+                        '<span class="my-audit-score ' + scoreClass + '">' + scoreText + '</span>' +
+                    '</div>' +
+                    '<div class="my-audit-info">' +
+                        '<div class="my-audit-info-row"><span class="label">\ud83c\udfea Store</span><span class="value">' + (audit.StoreName || 'Unknown') + '</span></div>' +
+                        '<div class="my-audit-info-row"><span class="label">\ud83d\udccb Checklist</span><span class="value">' + (audit.SchemaName || '-') + '</span></div>' +
+                        '<div class="my-audit-info-row"><span class="label">\ud83d\udcc5 Cycle</span><span class="value">' + (audit.AuditCycle || '-') + ' / ' + (audit.AuditYear || '-') + '</span></div>' +
+                        '<div class="my-audit-info-row"><span class="label">\ud83d\udc64 Auditor</span><span class="value">' + ((audit.Auditors || '').split(',')[0] || 'N/A') + '</span></div>' +
+                    '</div>' +
+                    '<div class="my-audit-actions">' +
+                        '<button class="my-audit-btn view-report" onclick="viewReport(' + audit.AuditID + ')">\ud83d\udcc4 View Report</button>' +
+                        '<button class="my-audit-btn action-plan" onclick="viewActionPlan(' + audit.AuditID + ')">\ud83c\udfaf Action Plan</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+            listContainer.innerHTML = '<div class="my-audits-grid">' + html + '</div>';
+        }
+
+        // Filter My Store Audits (client-side)
+        function filterMyAudits() {
+            const store = document.getElementById('myAuditsStoreFilter').value;
+            const checklist = document.getElementById('myAuditsChecklistFilter').value;
+            const cycle = document.getElementById('myAuditsCycleFilter').value;
+            const year = document.getElementById('myAuditsYearFilter').value;
+            const search = document.getElementById('myAuditsSearch').value.toLowerCase();
+            let filtered = _myStoreAudits.filter(a => {
+                if (store && a.StoreName !== store) return false;
+                if (checklist && a.SchemaName !== checklist) return false;
+                if (cycle && a.AuditCycle !== cycle) return false;
+                if (year && String(a.AuditYear) !== year) return false;
+                if (search && !(a.DocumentNumber || '').toLowerCase().includes(search) && !(a.StoreName || '').toLowerCase().includes(search)) return false;
+                return true;
+            });
+            renderMyAuditsGrid(filtered);
+        }
+
+        // Populate dashboard filter dropdowns
+        function populateDashboardFilters(audits, prefix) {
+            const stores = [...new Set(audits.map(a => a.StoreName).filter(Boolean))].sort();
+            const checklists = [...new Set(audits.map(a => a.SchemaName).filter(Boolean))].sort();
+            const cycles = [...new Set(audits.map(a => a.AuditCycle).filter(Boolean))].sort();
+            const years = [...new Set(audits.map(a => a.AuditYear).filter(Boolean))].sort((a,b) => b - a);
+
+            const storeEl = document.getElementById(prefix + 'StoreFilter');
+            if (storeEl) { storeEl.innerHTML = '<option value=\"\">All Stores</option>' + stores.map(s => '<option value=\"' + s + '\">' + s + '</option>').join(''); }
+
+            const clEl = document.getElementById(prefix + 'ChecklistFilter');
+            if (clEl) { clEl.innerHTML = '<option value=\"\">All Checklists</option>' + checklists.map(c => '<option value=\"' + c + '\">' + c + '</option>').join(''); }
+
+            const cyEl = document.getElementById(prefix + 'CycleFilter');
+            if (cyEl) { cyEl.innerHTML = '<option value=\"\">All Cycles</option>' + cycles.map(c => '<option value=\"' + c + '\">' + c + '</option>').join(''); }
+
+            const yrEl = document.getElementById(prefix + 'YearFilter');
+            if (yrEl) { yrEl.innerHTML = '<option value=\"\">All Years</option>' + years.map(y => '<option value=\"' + y + '\">' + y + '</option>').join(''); }
         }
 
         // View Report for an audit
@@ -3639,6 +3751,7 @@
 
                 // Filter to only completed audits
                 const completedAudits = data.audits.filter(a => a.Status === 'Completed');
+                _myRegionAuditsData = completedAudits;
                 
                 if (completedAudits.length === 0) {
                     listContainer.innerHTML = `
@@ -3649,6 +3762,10 @@
                     `;
                     return;
                 }
+
+                // Populate filters
+                populateDashboardFilters(completedAudits, 'myRegion');
+                document.getElementById('myRegionFilters').style.display = 'flex';
 
                 // Get notification statuses, action plan stats, and report views
                 const auditIds = completedAudits.map(a => a.AuditID);
@@ -3693,8 +3810,33 @@
                     console.error('Error fetching notification/action plan/views statuses:', e);
                 }
 
+                // Store globally for re-rendering on filter
+                window._regionNotificationStatuses = notificationStatuses;
+                window._regionActionPlanStats = actionPlanStats;
+                window._regionReportViews = reportViews;
+
                 // Render audits grid with review status
-                const auditsHtml = completedAudits.map(audit => {
+                renderMyRegionAuditsGrid(completedAudits, notificationStatuses, actionPlanStats, reportViews);
+
+            } catch (error) {
+                console.error('Error loading region audits:', error);
+                listContainer.innerHTML = `
+                    <div class="my-audits-empty">
+                        <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
+                        <div>Error loading audits. Please try again.</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Render My Region Audits grid
+        function renderMyRegionAuditsGrid(audits, notificationStatuses, actionPlanStats, reportViews) {
+            const listContainer = document.getElementById('myRegionAuditsList');
+            if (audits.length === 0) {
+                listContainer.innerHTML = '<div class="my-audits-empty"><div style="font-size:48px;margin-bottom:10px;">🔍</div><div>No audits match your filters.</div></div>';
+                return;
+            }
+            const auditsHtml = audits.map(audit => {
                     const score = audit.TotalScore !== null ? Math.round(audit.TotalScore) : null;
                     const passingGrade = audit.PassingGrade || 83;
                     const scoreClass = score !== null ? (score >= passingGrade ? 'pass' : 'fail') : '';
@@ -3793,6 +3935,10 @@
                                     <span class="value">${audit.StoreName || 'Unknown'}</span>
                                 </div>
                                 <div class="my-audit-info-row">
+                                    <span class="label">📋 Checklist</span>
+                                    <span class="value">${audit.SchemaName || '-'}</span>
+                                </div>
+                                <div class="my-audit-info-row">
                                     <span class="label">📅 Cycle</span>
                                     <span class="value">${audit.AuditCycle || '-'} / ${audit.AuditYear || '-'}</span>
                                 </div>
@@ -3816,16 +3962,24 @@
                 }).join('');
 
                 listContainer.innerHTML = `<div class="my-audits-grid">${auditsHtml}</div>`;
+        }
 
-            } catch (error) {
-                console.error('Error loading region audits:', error);
-                listContainer.innerHTML = `
-                    <div class="my-audits-empty">
-                        <div style="font-size: 48px; margin-bottom: 10px;">⚠️</div>
-                        <div>Error loading audits. Please try again.</div>
-                    </div>
-                `;
-            }
+        // Filter My Region Audits (client-side)
+        function filterMyRegionAudits() {
+            const store = document.getElementById('myRegionStoreFilter').value;
+            const checklist = document.getElementById('myRegionChecklistFilter').value;
+            const cycle = document.getElementById('myRegionCycleFilter').value;
+            const year = document.getElementById('myRegionYearFilter').value;
+            const search = document.getElementById('myRegionSearch').value.toLowerCase();
+            let filtered = _myRegionAuditsData.filter(a => {
+                if (store && a.StoreName !== store) return false;
+                if (checklist && a.SchemaName !== checklist) return false;
+                if (cycle && a.AuditCycle !== cycle) return false;
+                if (year && String(a.AuditYear) !== year) return false;
+                if (search && !(a.DocumentNumber || '').toLowerCase().includes(search) && !(a.StoreName || '').toLowerCase().includes(search)) return false;
+                return true;
+            });
+            renderMyRegionAuditsGrid(filtered, window._regionNotificationStatuses || {}, window._regionActionPlanStats || {}, window._regionReportViews || {});
         }
 
         // ==========================================

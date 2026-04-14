@@ -5799,6 +5799,16 @@ app.get('/api/audits/list', requireAuth, requireRole('Admin', 'SuperAuditor', 'Q
             }
         }
         
+        // Filter by assigned schemas/checklists for HeadOfOperations and AreaManager
+        if (user && ['HeadOfOperations', 'AreaManager'].includes(user.role) && !user._isImpersonating) {
+            const schemaAssignments = await StoreService.getSchemaAssignmentsForUser(user.id);
+            if (schemaAssignments.length > 0) {
+                const assignedSchemaIds = schemaAssignments.map(s => s.schemaId);
+                audits = audits.filter(audit => assignedSchemaIds.includes(audit.SchemaID));
+            }
+            // If no schemas assigned, don't filter (show all checklists for backward compatibility)
+        }
+        
         res.json({ success: true, audits });
     } catch (error) {
         console.error('Error getting audits list:', error);

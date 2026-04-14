@@ -82,6 +82,18 @@ window.openEditUserModal = async function(user) {
                     </div>
                 </div>
 
+                <!-- Checklist/Schema Assignment (for HeadOfOperations and AreaManager) -->
+                <div class="form-section" id="schemaAssignmentSection" style="display: ${['HeadOfOperations', 'AreaManager'].includes(user.role) ? 'block' : 'none'};">
+                    <h3>Checklist Assignment</h3>
+                    <div class="form-group">
+                        <label>Assigned Checklists *</label>
+                        <div id="schemaCheckboxes" class="checkbox-group">
+                            <p class="loading-text">Loading checklists...</p>
+                        </div>
+                        <small class="form-hint">Select which checklists (audit types) this user is responsible for</small>
+                    </div>
+                </div>
+
                 <!-- Store Assignment (only for StoreManager) -->
                 <div class="form-section" id="storeAssignmentSection" style="display: ${user.role === 'StoreManager' ? 'block' : 'none'};">
                     <h3>Store Assignment</h3>
@@ -150,6 +162,9 @@ window.openEditUserModal = async function(user) {
         
         // Load brands for HeadOfOperations
         await loadBrandsForModal(user);
+        
+        // Load schemas/checklists for HeadOfOperations and AreaManager
+        await loadSchemasForModal(user);
         
         // Load area stores if AreaManager
         if (user.role === 'AreaManager') {
@@ -268,6 +283,46 @@ async function loadBrandsForModal(user) {
 }
 
 /**
+ * Load schemas/checklists for HeadOfOperations and AreaManager
+ */
+async function loadSchemasForModal(user) {
+    try {
+        const response = await fetch('/api/audit/schemas');
+        if (!response.ok) {
+            throw new Error('Failed to fetch schemas');
+        }
+        
+        const schemas = await response.json();
+        
+        // Parse user's assigned schema IDs
+        const userSchemaIds = user.assigned_schema_ids || [];
+        
+        const schemaCheckboxes = document.getElementById('schemaCheckboxes');
+        if (schemaCheckboxes) {
+            if (!schemas || schemas.length === 0) {
+                schemaCheckboxes.innerHTML = '<p class="form-hint">No checklists available.</p>';
+            } else {
+                schemaCheckboxes.innerHTML = schemas.map(schema => `
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="assigned_schemas" value="${schema.schemaId}" 
+                            ${userSchemaIds.includes(schema.schemaId) ? 'checked' : ''}>
+                        <span>📋 ${escapeHtml(schema.schemaName)}</span>
+                        <small style="color:#666; margin-left:0.5rem;">(${schema.sectionCount || 0} sections)</small>
+                    </label>
+                `).join('');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error loading schemas:', error);
+        const schemaCheckboxes = document.getElementById('schemaCheckboxes');
+        if (schemaCheckboxes) {
+            schemaCheckboxes.innerHTML = '<p class="form-hint text-error">Failed to load checklists</p>';
+        }
+    }
+}
+
+/**
  * Handle role change (show/hide relevant sections)
  */
 window.handleRoleChange = function() {
@@ -290,6 +345,12 @@ window.handleRoleChange = function() {
         if (role === 'AreaManager') {
             loadAreaStoresForModal('', window.currentEditingUser);
         }
+    }
+    
+    // Show/hide checklist/schema assignment (for HeadOfOperations and AreaManager)
+    const schemaSection = document.getElementById('schemaAssignmentSection');
+    if (schemaSection) {
+        schemaSection.style.display = ['HeadOfOperations', 'AreaManager'].includes(role) ? 'block' : 'none';
     }
     
     // Show/hide department assignment
@@ -446,12 +507,17 @@ window.handleSubmitEditUser = async function(event, userId) {
                 .map(cb => parseInt(cb.value));
         }
         
+        // Get selected schemas/checklists (for HeadOfOperations and AreaManager)
+        const selectedSchemas = Array.from(form.querySelectorAll('input[name="assigned_schemas"]:checked'))
+            .map(cb => parseInt(cb.value));
+        
         // Build update payload
         const updateData = {
             role: formData.get('role'),
             assigned_stores: selectedStores.length > 0 ? JSON.stringify(selectedStores) : null,
             assigned_brands: selectedBrands.length > 0 ? JSON.stringify(selectedBrands) : null,
             assigned_area_stores: selectedAreaStores.length > 0 ? JSON.stringify(selectedAreaStores) : null,
+            assigned_schemas: selectedSchemas.length > 0 ? JSON.stringify(selectedSchemas) : null,
             assigned_department: formData.get('assigned_department') || null,
             is_approved: form.querySelector('#isApproved').checked,
             is_active: form.querySelector('#isActive').checked

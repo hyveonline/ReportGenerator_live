@@ -691,6 +691,62 @@ class StoreService {
             throw error;
         }
     }
+
+    // ==========================================
+    // User-Schema Assignment Methods (for HeadOfOperations / AreaManager)
+    // ==========================================
+
+    /**
+     * Get schema (checklist) assignments for a user
+     */
+    async getSchemaAssignmentsForUser(userId) {
+        try {
+            const pool = await this.getPool();
+            const result = await pool.request()
+                .input('UserID', sql.Int, userId)
+                .query(`
+                    SELECT usa.SchemaID, s.SchemaName
+                    FROM UserSchemaAssignments usa
+                    INNER JOIN AuditSchemas s ON usa.SchemaID = s.SchemaID
+                    WHERE usa.UserID = @UserID AND s.IsActive = 1
+                `);
+            return result.recordset.map(row => ({
+                schemaId: row.SchemaID,
+                schemaName: row.SchemaName
+            }));
+        } catch (error) {
+            console.error('Error getting schema assignments for user:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Set schema (checklist) assignments for a user (replaces existing)
+     */
+    async setSchemaAssignmentsForUser(userId, schemaIds, createdBy = null) {
+        try {
+            const pool = await this.getPool();
+
+            // Delete existing assignments
+            await pool.request()
+                .input('UserID', sql.Int, userId)
+                .query('DELETE FROM UserSchemaAssignments WHERE UserID = @UserID');
+
+            // Insert new assignments
+            for (const schemaId of schemaIds) {
+                await pool.request()
+                    .input('UserID', sql.Int, userId)
+                    .input('SchemaID', sql.Int, parseInt(schemaId))
+                    .input('CreatedBy', sql.NVarChar(255), createdBy)
+                    .query('INSERT INTO UserSchemaAssignments (UserID, SchemaID, CreatedBy) VALUES (@UserID, @SchemaID, @CreatedBy)');
+            }
+
+            return { success: true, schemasAssigned: schemaIds.length };
+        } catch (error) {
+            console.error('Error setting schema assignments:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = new StoreService();

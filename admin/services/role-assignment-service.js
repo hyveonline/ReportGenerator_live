@@ -34,7 +34,9 @@ class RoleAssignmentService {
                     u.updated_at,
                     (SELECT STRING_AGG(uba.Brand, ', ') FROM UserBrandAssignments uba WHERE uba.UserID = u.id) as assigned_brands,
                     (SELECT STRING_AGG(s.StoreCode, ', ') FROM UserAreaAssignments uaa JOIN Stores s ON uaa.StoreID = s.StoreID WHERE uaa.UserID = u.id) as assigned_area_stores,
-                    (SELECT STRING_AGG(CAST(uaa.StoreID AS VARCHAR), ',') FROM UserAreaAssignments uaa WHERE uaa.UserID = u.id) as assigned_area_store_ids
+                    (SELECT STRING_AGG(CAST(uaa.StoreID AS VARCHAR), ',') FROM UserAreaAssignments uaa WHERE uaa.UserID = u.id) as assigned_area_store_ids,
+                    (SELECT STRING_AGG(CAST(usa.SchemaID AS VARCHAR), ',') FROM UserSchemaAssignments usa WHERE usa.UserID = u.id) as assigned_schema_ids,
+                    (SELECT STRING_AGG(asc2.SchemaName, ', ') FROM UserSchemaAssignments usa2 JOIN AuditSchemas asc2 ON usa2.SchemaID = asc2.SchemaID WHERE usa2.UserID = u.id) as assigned_schemas
                 FROM Users u
                 ORDER BY 
                     CASE 

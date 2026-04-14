@@ -1270,6 +1270,12 @@
                 </select>
             </div>
             <div class="filter-group">
+                <label>Checklist</label>
+                <select id="checklistFilter" onchange="applyFilters()">
+                    <option value="">All Checklists</option>
+                </select>
+            </div>
+            <div class="filter-group">
                 <label>Search</label>
                 <input type="text" id="searchInput" placeholder="Document # or Store" oninput="applyFilters()">
             </div>
@@ -1413,6 +1419,16 @@
                 option.value = year;
                 option.textContent = year;
                 yearSelect.appendChild(option);
+            });
+
+            // Populate checklists
+            const checklists = [...new Set(allAudits.map(a => a.SchemaName).filter(Boolean))].sort();
+            const checklistSelect = document.getElementById('checklistFilter');
+            checklists.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                checklistSelect.appendChild(option);
             });
         }
 
@@ -1609,6 +1625,7 @@
             const store = document.getElementById('storeFilter').value;
             const year = document.getElementById('yearFilter').value;
             const cycle = document.getElementById('cycleFilter').value;
+            const checklist = document.getElementById('checklistFilter').value;
             const search = document.getElementById('searchInput').value.toLowerCase();
 
             // For special filters, we need notification statuses first
@@ -1640,6 +1657,7 @@
                 if (store && audit.StoreName !== store) return false;
                 if (year && audit.AuditYear != year) return false;
                 if (cycle && audit.AuditCycle !== cycle) return false;
+                if (checklist && audit.SchemaName !== checklist) return false;
                 if (search) {
                     const matchesDoc = audit.DocumentNumber?.toLowerCase().includes(search);
                     const matchesStore = audit.StoreName?.toLowerCase().includes(search);

@@ -374,6 +374,16 @@ class AuthServer {
                     console.log(`[API] Set area store assignments for AreaManager user ${userId}: ${storeIds.length} stores`);
                 }
                 
+                // Handle schema/checklist assignments (for HeadOfOperations and AreaManager)
+                if (['HeadOfOperations', 'AreaManager'].includes(updateData.role) && updateData.assigned_schemas) {
+                    const StoreService = require('../audit-app/services/store-service');
+                    const schemaIds = typeof updateData.assigned_schemas === 'string' 
+                        ? JSON.parse(updateData.assigned_schemas) 
+                        : updateData.assigned_schemas;
+                    await StoreService.setSchemaAssignmentsForUser(userId, schemaIds, req.currentUser.email);
+                    console.log(`[API] Set schema assignments for user ${userId}: ${schemaIds.length} checklists`);
+                }
+                
                 // Log action
                 await RoleAssignmentService.logAction(
                     req.currentUser.id,
