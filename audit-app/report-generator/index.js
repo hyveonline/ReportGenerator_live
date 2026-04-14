@@ -156,7 +156,7 @@ class ReportGenerator {
 
             // 7.9 Fetch cycle definitions for this schema's cycle type
             console.log('📅 Step 7.9: Fetching cycle definitions...');
-            const cycleDefinitions = await this.dataService.getCycleDefinitions(auditData.schemaId);
+            const cycleDefinitions = await this.dataService.getCycleDefinitions(auditData.schemaId, auditData.cycleTypeId);
 
             // 8. Build report data structure
             console.log('📦 Step 8: Building report data...');

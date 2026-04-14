@@ -36,12 +36,12 @@ class DataService {
                 .query(`
                     SELECT a.*, s.SchemaName, s.Description as SchemaDescription,
                            s.ReportTitle, s.DocumentPrefix, s.Edition, s.CreationDate, s.RevisionDate,
-                           s.CycleTypeID, ct.TypeName as CycleTypeName, ct.TypeCode as CycleTypeCode,
+                           ISNULL(a.CycleTypeID, s.CycleTypeID) AS CycleTypeID, ct.TypeName as CycleTypeName, ct.TypeCode as CycleTypeCode,
                            cd.CycleName as CycleDisplayName
                     FROM AuditInstances a
                     INNER JOIN AuditSchemas s ON a.SchemaID = s.SchemaID
-                    LEFT JOIN CycleTypes ct ON s.CycleTypeID = ct.CycleTypeID
-                    LEFT JOIN CycleDefinitions cd ON ct.CycleTypeID = cd.CycleTypeID 
+                    LEFT JOIN CycleTypes ct ON ISNULL(a.CycleTypeID, s.CycleTypeID) = ct.CycleTypeID
+                    LEFT JOIN CycleDefinitions cd ON ISNULL(a.CycleTypeID, s.CycleTypeID) = cd.CycleTypeID 
                         AND cd.CycleNumber = a.Cycle
                     WHERE a.AuditID = @AuditID
                 `);
@@ -80,6 +80,7 @@ class DataService {
                 cycle: audit.Cycle,
                 cycleDisplay: cycleDisplay,  // New field with full display name
                 cycleTypeName: audit.CycleTypeName,
+                cycleTypeId: audit.CycleTypeID,
                 year: audit.Year,
                 auditors: audit.Auditors,
                 accompaniedBy: audit.AccompaniedBy,
@@ -861,19 +862,35 @@ class DataService {
     /**
      * Get cycle definitions for a schema's cycle type
      * @param {number} schemaId - Schema ID
+     * @param {number} [cycleTypeId] - Optional explicit cycle type ID (overrides schema's)
      * @returns {Promise<Object>} - Map of cycle number to display name { 'C1': 'January', 'C2': 'February', ... }
      */
-    async getCycleDefinitions(schemaId) {
+    async getCycleDefinitions(schemaId, cycleTypeId = null) {
         try {
-            const result = await this.pool.request()
-                .input('schemaId', sql.Int, schemaId)
-                .query(`
-                    SELECT cd.CycleNumber, cd.CycleName
-                    FROM AuditSchemas s
-                    INNER JOIN CycleDefinitions cd ON s.CycleTypeID = cd.CycleTypeID
-                    WHERE s.SchemaID = @schemaId AND cd.IsActive = 1
-                    ORDER BY cd.DisplayOrder
-                `);
+            let result;
+            const parsedCycleTypeId = cycleTypeId ? parseInt(cycleTypeId) : null;
+            if (parsedCycleTypeId) {
+                // Use explicit cycle type ID (from audit)
+                result = await this.pool.request()
+                    .input('cycleTypeId', sql.Int, parsedCycleTypeId)
+                    .query(`
+                        SELECT cd.CycleNumber, cd.CycleName
+                        FROM CycleDefinitions cd
+                        WHERE cd.CycleTypeID = @cycleTypeId AND cd.IsActive = 1
+                        ORDER BY cd.DisplayOrder
+                    `);
+            } else {
+                // Fall back to schema's cycle type
+                result = await this.pool.request()
+                    .input('schemaId', sql.Int, schemaId)
+                    .query(`
+                        SELECT cd.CycleNumber, cd.CycleName
+                        FROM AuditSchemas s
+                        INNER JOIN CycleDefinitions cd ON s.CycleTypeID = cd.CycleTypeID
+                        WHERE s.SchemaID = @schemaId AND cd.IsActive = 1
+                        ORDER BY cd.DisplayOrder
+                    `);
+            }
 
             // Build map: { 'C1': 'January', 'C2': 'February', ... }
             const cycleMap = {};

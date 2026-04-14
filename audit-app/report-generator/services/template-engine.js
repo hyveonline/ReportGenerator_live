@@ -1595,12 +1595,27 @@ class TemplateEngine {
             ? parseInt(rawCycle.replace(/[^0-9]/g, '')) || 1
             : rawCycle;
         
-        // Always show cycles 1-6 in order
-        const cyclesToShow = [1, 2, 3, 4, 5, 6];
-
         // Cycle definitions for display names (e.g., C1 -> "January")
         // Display format: "C1 (January)" or just "C1" if no definition
         const cycleDefinitions = data.cycleDefinitions || {};
+
+        // Build cyclesToShow dynamically from cycle definitions
+        const totalCycles = Object.keys(cycleDefinitions).length || 6;
+        let cyclesToShow;
+        if (totalCycles <= 6) {
+            // Show all cycles (Quarterly=4, Bi-Monthly=6)
+            cyclesToShow = Array.from({length: totalCycles}, (_, i) => i + 1);
+        } else {
+            // For types with many cycles (Monthly=12, Bi-Weekly=24), show a window of 6 around current
+            const half = 3;
+            let start = Math.max(1, currentCycle - half + 1);
+            let end = start + 5;
+            if (end > totalCycles) {
+                end = totalCycles;
+                start = Math.max(1, end - 5);
+            }
+            cyclesToShow = Array.from({length: end - start + 1}, (_, i) => start + i);
+        }
         const getCycleDisplayName = (cycleNum) => {
             const cycleName = cycleDefinitions[`C${cycleNum}`];
             return cycleName ? `C${cycleNum} (${cycleName})` : `C${cycleNum}`;
