@@ -6544,35 +6544,42 @@ app.post('/api/email/compose-data', requireAuth, async (req, res) => {
         
         // Get audit info if not provided
         let storeId = null;
+        let schemaId = null;
         let auditStoreName = storeName;
         let auditDocNumber = documentNumber;
         
         if (auditId) {
             const auditResult = await pool.request()
                 .input('auditId', sql.Int, auditId)
-                .query('SELECT StoreID, StoreName, DocumentNumber FROM AuditInstances WHERE AuditID = @auditId');
+                .query('SELECT StoreID, StoreName, DocumentNumber, SchemaID FROM AuditInstances WHERE AuditID = @auditId');
             
             if (auditResult.recordset.length > 0) {
                 storeId = auditResult.recordset[0].StoreID;
+                schemaId = auditResult.recordset[0].SchemaID;
                 auditStoreName = auditStoreName || auditResult.recordset[0].StoreName;
                 auditDocNumber = auditDocNumber || auditResult.recordset[0].DocumentNumber;
             }
         }
         
-        // Get TO recipients: Store Managers assigned to this store
+        // Get TO recipients: Store Managers assigned to this store AND this checklist
         const toRecipients = [];
         
-        // Method 1: Check StoreManagerAssignments table
         if (storeId) {
             const smResult = await pool.request()
                 .input('storeId', sql.Int, storeId)
+                .input('schemaId', sql.Int, schemaId)
                 .query(`
                     SELECT DISTINCT u.id, u.email, u.display_name, u.role
                     FROM Users u
                     INNER JOIN StoreManagerAssignments sma ON u.id = sma.UserId
                     WHERE sma.StoreId = @storeId
+                    AND u.role = 'StoreManager'
                     AND u.is_active = 1
                     AND u.email IS NOT NULL
+                    AND (@schemaId IS NULL OR EXISTS (
+                        SELECT 1 FROM UserSchemaAssignments usa
+                        WHERE usa.UserID = u.id AND usa.SchemaID = @schemaId
+                    ))
                 `);
             
             for (const row of smResult.recordset) {
@@ -6586,102 +6593,31 @@ app.post('/api/email/compose-data', requireAuth, async (req, res) => {
             }
         }
         
-        // Method 2: Check Users with assigned_stores JSON column
-        const assignedStoresResult = await pool.request()
-            .input('storeName', sql.NVarChar, auditStoreName || '')
-            .query(`
-                SELECT id, email, display_name, role, assigned_stores
-                FROM Users
-                WHERE is_active = 1
-                AND email IS NOT NULL
-                AND assigned_stores IS NOT NULL
-                AND role IN ('StoreManager', 'AreaManager')
-            `);
+        // Get CC recipients: HeadOfOperations and AreaManagers responsible for this checklist
+        const ccRecipients = [];
         
-        for (const row of assignedStoresResult.recordset) {
-            try {
-                const assignedStores = JSON.parse(row.assigned_stores || '[]');
-                const storeMatch = assignedStores.some(s => 
-                    s.toLowerCase().includes((auditStoreName || '').toLowerCase()) ||
-                    (auditStoreName || '').toLowerCase().includes(s.toLowerCase())
-                );
-                
-                if (storeMatch && !toRecipients.find(r => r.email === row.email)) {
-                    toRecipients.push({
+        if (schemaId) {
+            const ccResult = await pool.request()
+                .input('schemaId', sql.Int, schemaId)
+                .query(`
+                    SELECT DISTINCT u.id, u.email, u.display_name, u.role
+                    FROM Users u
+                    INNER JOIN UserSchemaAssignments usa ON u.id = usa.UserID
+                    WHERE usa.SchemaID = @schemaId
+                    AND u.role IN ('HeadOfOperations', 'AreaManager', 'SuperAuditor', 'QualitySuperAuditor')
+                    AND u.is_active = 1
+                    AND u.email IS NOT NULL
+                `);
+            
+            for (const row of ccResult.recordset) {
+                if (!toRecipients.find(r => r.email === row.email)) {
+                    ccRecipients.push({
                         id: row.id,
                         email: row.email,
                         name: row.display_name || row.email,
                         role: row.role,
-                        source: 'AssignedStores'
+                        source: 'SchemaAssignment'
                     });
-                }
-            } catch (e) {
-                // Invalid JSON, skip
-            }
-        }
-        
-        // Get CC recipients: Area Managers, Head of Operations based on store's area/brand
-        const ccRecipients = [];
-        
-        if (storeId) {
-            // Get store's brand
-            const storeInfoResult = await pool.request()
-                .input('storeId', sql.Int, storeId)
-                .query('SELECT Brand FROM Stores WHERE StoreID = @storeId');
-            
-            if (storeInfoResult.recordset.length > 0) {
-                const { Brand } = storeInfoResult.recordset[0];
-                
-                // Get users assigned to the same stores (Area Managers via UserAreaAssignments)
-                const areaManagersResult = await pool.request()
-                    .input('storeId', sql.Int, storeId)
-                    .query(`
-                        SELECT DISTINCT u.id, u.email, u.display_name, u.role
-                        FROM Users u
-                        INNER JOIN UserAreaAssignments uaa ON u.id = uaa.UserID
-                        WHERE uaa.StoreID = @storeId
-                        AND u.is_active = 1
-                        AND u.email IS NOT NULL
-                        AND u.role IN ('AreaManager', 'HeadOfOperations')
-                    `);
-                
-                for (const row of areaManagersResult.recordset) {
-                    if (!toRecipients.find(r => r.email === row.email)) {
-                        ccRecipients.push({
-                            id: row.id,
-                            email: row.email,
-                            name: row.display_name || row.email,
-                            role: row.role,
-                            source: 'AreaAssignment'
-                        });
-                    }
-                }
-                
-                // Get Brand Managers for this brand
-                if (Brand) {
-                    const brandManagersResult = await pool.request()
-                        .input('brand', sql.NVarChar, Brand)
-                        .query(`
-                            SELECT DISTINCT u.id, u.email, u.display_name, u.role
-                            FROM Users u
-                            INNER JOIN UserBrandAssignments uba ON u.id = uba.UserID
-                            WHERE uba.Brand = @brand
-                            AND u.is_active = 1
-                            AND u.email IS NOT NULL
-                        `);
-                    
-                    for (const row of brandManagersResult.recordset) {
-                        if (!toRecipients.find(r => r.email === row.email) &&
-                            !ccRecipients.find(r => r.email === row.email)) {
-                            ccRecipients.push({
-                                id: row.id,
-                                email: row.email,
-                                name: row.display_name || row.email,
-                                role: row.role,
-                                source: 'BrandAssignment'
-                            });
-                        }
-                    }
                 }
             }
         }
