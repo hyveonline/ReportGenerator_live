@@ -82,8 +82,8 @@ window.openEditUserModal = async function(user) {
                     </div>
                 </div>
 
-                <!-- Checklist/Schema Assignment (for HeadOfOperations and AreaManager) -->
-                <div class="form-section" id="schemaAssignmentSection" style="display: ${['HeadOfOperations', 'AreaManager'].includes(user.role) ? 'block' : 'none'};">
+                <!-- Checklist/Schema Assignment (for HeadOfOperations, AreaManager, and StoreManager) -->
+                <div class="form-section" id="schemaAssignmentSection" style="display: ${['HeadOfOperations', 'AreaManager', 'StoreManager'].includes(user.role) ? 'block' : 'none'};">
                     <h3>Checklist Assignment</h3>
                     <div class="form-group">
                         <label>Assigned Checklists *</label>
@@ -347,10 +347,10 @@ window.handleRoleChange = function() {
         }
     }
     
-    // Show/hide checklist/schema assignment (for HeadOfOperations and AreaManager)
+    // Show/hide checklist/schema assignment (for HeadOfOperations, AreaManager, and StoreManager)
     const schemaSection = document.getElementById('schemaAssignmentSection');
     if (schemaSection) {
-        schemaSection.style.display = ['HeadOfOperations', 'AreaManager'].includes(role) ? 'block' : 'none';
+        schemaSection.style.display = ['HeadOfOperations', 'AreaManager', 'StoreManager'].includes(role) ? 'block' : 'none';
     }
     
     // Show/hide department assignment
