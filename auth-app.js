@@ -6565,6 +6565,7 @@ app.post('/api/email/compose-data', requireAuth, async (req, res) => {
         const toRecipients = [];
         
         if (storeId) {
+            // Method 1: StoreManagerAssignments table
             const smResult = await pool.request()
                 .input('storeId', sql.Int, storeId)
                 .input('schemaId', sql.Int, schemaId)
@@ -6590,6 +6591,45 @@ app.post('/api/email/compose-data', requireAuth, async (req, res) => {
                     role: row.role,
                     source: 'StoreAssignment'
                 });
+            }
+            
+            // Method 2: Users with assigned_stores JSON column + schema assignment
+            const storeCodeResult = await pool.request()
+                .input('storeId2', sql.Int, storeId)
+                .query('SELECT StoreCode FROM Stores WHERE StoreID = @storeId2');
+            
+            const storeCode = storeCodeResult.recordset.length > 0 ? storeCodeResult.recordset[0].StoreCode : null;
+            
+            if (storeCode) {
+                const jsonStoreResult = await pool.request()
+                    .input('schemaId2', sql.Int, schemaId)
+                    .query(`
+                        SELECT u.id, u.email, u.display_name, u.role, u.assigned_stores
+                        FROM Users u
+                        WHERE u.role = 'StoreManager'
+                        AND u.is_active = 1
+                        AND u.email IS NOT NULL
+                        AND u.assigned_stores IS NOT NULL
+                        AND (@schemaId2 IS NULL OR EXISTS (
+                            SELECT 1 FROM UserSchemaAssignments usa
+                            WHERE usa.UserID = u.id AND usa.SchemaID = @schemaId2
+                        ))
+                    `);
+                
+                for (const row of jsonStoreResult.recordset) {
+                    try {
+                        const assignedStores = JSON.parse(row.assigned_stores || '[]');
+                        if (assignedStores.some(s => s === storeCode) && !toRecipients.find(r => r.email === row.email)) {
+                            toRecipients.push({
+                                id: row.id,
+                                email: row.email,
+                                name: row.display_name || row.email,
+                                role: row.role,
+                                source: 'AssignedStoresJSON'
+                            });
+                        }
+                    } catch (e) { /* invalid JSON, skip */ }
+                }
             }
         }
         
