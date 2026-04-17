@@ -373,7 +373,7 @@ class EscalationJobService {
                 INNER JOIN UserAreaAssignments uaa ON u.id = uaa.UserID
                 INNER JOIN Stores s ON uaa.StoreID = s.StoreID
                 WHERE s.StoreCode = @storeCode
-                AND u.role IN ('AreaManager', 'HeadOfOperations')
+                AND u.role = 'AreaManager'
                 AND u.is_active = 1
                 AND (@schemaId IS NULL OR EXISTS (
                     SELECT 1 FROM UserSchemaAssignments usa
