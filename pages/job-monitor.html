@@ -1090,13 +1090,13 @@
                 <thead>
                     <tr>
                         <th>Time</th>
-                        <th>Job Run</th>
                         <th>Event</th>
                         <th>Document</th>
                         <th>Store</th>
-                        <th>Recipient</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>CC</th>
                         <th>Status</th>
-                        <th>Details</th>
                     </tr>
                 </thead>
                 <tbody id="logsBody">
@@ -1703,18 +1703,26 @@
                 return;
             }
 
-            tbody.innerHTML = logs.map(log => `
+            tbody.innerHTML = logs.map(log => {
+                // Extract CC from ErrorMessage (format: "CC: email1, email2")
+                let ccList = '-';
+                if (log.ErrorMessage && log.ErrorMessage.startsWith('CC:')) {
+                    ccList = log.ErrorMessage.replace('CC: ', '').split(', ').map(e => `<small>${e}</small>`).join('<br>');
+                }
+                const senderEmail = 'appnotification@gmrlapps.com';
+                return `
                 <tr>
                     <td class="timestamp">${formatDateTime(log.CreatedAt)}</td>
-                    <td class="job-run-id">${(log.JobRunID || '').substring(0, 8)}...</td>
                     <td><span class="event-badge ${log.EventType}">${log.EventType}</span></td>
                     <td>${log.DocumentNumber || '-'}</td>
                     <td>${log.StoreName || '-'}</td>
+                    <td><small>${log.RecipientEmail ? senderEmail : '-'}</small></td>
                     <td>${log.RecipientEmail ? `${log.RecipientEmail}<br><small>(${log.RecipientRole || ''})</small>` : '-'}</td>
+                    <td>${ccList}</td>
                     <td><span class="status-badge ${log.Status}">${log.Status}</span></td>
-                    <td class="error-msg" title="${log.ErrorMessage || ''}">${log.ErrorMessage || '-'}</td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
         }
 
         // Filter logs
