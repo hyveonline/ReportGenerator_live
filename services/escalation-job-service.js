@@ -368,7 +368,7 @@ class EscalationJobService {
             .input('storeCode', sql.NVarChar, storeCode)
             .input('schemaId', sql.Int, schemaId)
             .query(`
-                SELECT u.id, u.email, u.display_name
+                SELECT u.id, u.email, u.display_name, u.role
                 FROM Users u
                 INNER JOIN UserAreaAssignments uaa ON u.id = uaa.UserID
                 INNER JOIN Stores s ON uaa.StoreID = s.StoreID
@@ -635,7 +635,7 @@ class EscalationJobService {
                         documentNumber: ap.DocumentNumber,
                         storeName: ap.StoreName,
                         recipientEmail: areaManager.email,
-                        recipientRole: 'AreaManager',
+                        recipientRole: areaManager.role || 'AreaManager',
                         emailTemplate: 'action_plan_escalation',
                         ccRecipients: escalationCcRecipients.join(', '),
                         status: result.success ? 'Success' : 'Error',
@@ -832,7 +832,7 @@ class EscalationJobService {
                         recipient: areaManager ? {
                             email: areaManager.email,
                             name: areaManager.display_name,
-                            role: 'AreaManager'
+                            role: areaManager.role || 'AreaManager'
                         } : null,
                         ccRecipients: escalationCcRecipients,
                         emailPreview: escalationEmailPreview,
