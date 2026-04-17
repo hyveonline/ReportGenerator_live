@@ -222,6 +222,7 @@ class EscalationJobService {
                         ai.DocumentNumber,
                         ai.StoreName,
                         ai.StoreCode,
+                        ai.SchemaID,
                         ai.AuditDate,
                         MIN(n.sent_at) as ReportSentDate,
                         dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays) as Deadline,
@@ -238,7 +239,7 @@ class EscalationJobService {
                         AND n2.notification_type = 'ActionPlanSubmitted'
                         AND n2.status = 'Sent'
                     )
-                    GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.AuditDate, es.DeadlineDays
+                    GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.SchemaID, ai.AuditDate, es.DeadlineDays
                 )
                 SELECT * FROM AuditDeadlines
                 WHERE DaysRemaining = @reminderDays
@@ -270,6 +271,7 @@ class EscalationJobService {
                         ai.DocumentNumber,
                         ai.StoreName,
                         ai.StoreCode,
+                        ai.SchemaID,
                         ai.AuditDate,
                         MIN(n.sent_at) as ReportSentDate,
                         dbo.fn_AddBusinessDays(MIN(n.sent_at), es.DeadlineDays) as Deadline,
@@ -286,7 +288,7 @@ class EscalationJobService {
                         AND n2.notification_type = 'ActionPlanSubmitted'
                         AND n2.status = 'Sent'
                     )
-                    GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.AuditDate, es.DeadlineDays
+                    GROUP BY ai.AuditID, ai.DocumentNumber, ai.StoreName, ai.StoreCode, ai.SchemaID, ai.AuditDate, es.DeadlineDays
                 )
                 SELECT * FROM AuditDeadlines
                 WHERE DATEADD(HOUR, @gracePeriodHours, Deadline) < GETDATE()
@@ -303,37 +305,80 @@ class EscalationJobService {
     }
 
     /**
-     * Get Store Manager for a store
+     * Get Store Manager for a store, filtered by checklist and excluding duty managers
      */
-    async getStoreManager(storeCode) {
+    async getStoreManager(storeCode, schemaId = null) {
         const pool = await this.getDbPool();
+        
+        // Method 1: StoreManagerAssignments table
         const result = await pool.request()
             .input('storeCode', sql.NVarChar, storeCode)
+            .input('schemaId', sql.Int, schemaId)
             .query(`
                 SELECT u.id, u.email, u.display_name
                 FROM Users u
                 INNER JOIN StoreManagerAssignments sma ON u.id = sma.UserId
                 INNER JOIN Stores s ON sma.StoreId = s.StoreID
                 WHERE s.StoreCode = @storeCode
+                AND u.role = 'StoreManager'
                 AND u.is_active = 1
+                AND u.email NOT LIKE '%DutyManager%'
+                AND (@schemaId IS NULL OR EXISTS (
+                    SELECT 1 FROM UserSchemaAssignments usa
+                    WHERE usa.UserID = u.id AND usa.SchemaID = @schemaId
+                ))
             `);
-        return result.recordset.length > 0 ? result.recordset[0] : null;
+        
+        if (result.recordset.length > 0) return result.recordset[0];
+        
+        // Method 2: Fallback to assigned_stores JSON column
+        if (storeCode) {
+            const jsonResult = await pool.request()
+                .input('schemaId2', sql.Int, schemaId)
+                .query(`
+                    SELECT u.id, u.email, u.display_name, u.assigned_stores
+                    FROM Users u
+                    WHERE u.role = 'StoreManager'
+                    AND u.is_active = 1
+                    AND u.email NOT LIKE '%DutyManager%'
+                    AND u.assigned_stores IS NOT NULL
+                    AND (@schemaId2 IS NULL OR EXISTS (
+                        SELECT 1 FROM UserSchemaAssignments usa
+                        WHERE usa.UserID = u.id AND usa.SchemaID = @schemaId2
+                    ))
+                `);
+            
+            for (const row of jsonResult.recordset) {
+                try {
+                    const stores = JSON.parse(row.assigned_stores || '[]');
+                    if (stores.some(s => s === storeCode)) return row;
+                } catch (e) { /* skip */ }
+            }
+        }
+        
+        return null;
     }
 
     /**
-     * Get Area Manager for a store
+     * Get Area Manager for a store, filtered by checklist assignment
      */
-    async getAreaManager(storeCode) {
+    async getAreaManager(storeCode, schemaId = null) {
         const pool = await this.getDbPool();
         const result = await pool.request()
             .input('storeCode', sql.NVarChar, storeCode)
+            .input('schemaId', sql.Int, schemaId)
             .query(`
                 SELECT u.id, u.email, u.display_name
                 FROM Users u
                 INNER JOIN UserAreaAssignments uaa ON u.id = uaa.UserID
                 INNER JOIN Stores s ON uaa.StoreID = s.StoreID
                 WHERE s.StoreCode = @storeCode
+                AND u.role IN ('AreaManager', 'HeadOfOperations')
                 AND u.is_active = 1
+                AND (@schemaId IS NULL OR EXISTS (
+                    SELECT 1 FROM UserSchemaAssignments usa
+                    WHERE usa.UserID = u.id AND usa.SchemaID = @schemaId
+                ))
             `);
         return result.recordset.length > 0 ? result.recordset[0] : null;
     }
@@ -476,7 +521,7 @@ class EscalationJobService {
         let sentCount = 0;
         for (const ap of actionPlans) {
             try {
-                const storeManager = await this.getStoreManager(ap.StoreCode);
+                const storeManager = await this.getStoreManager(ap.StoreCode, ap.SchemaID);
                 if (!storeManager) {
                     await this.logActivity(jobRunId, 'Reminder', {
                         documentNumber: ap.DocumentNumber,
@@ -549,8 +594,8 @@ class EscalationJobService {
         let sentCount = 0;
         for (const ap of overdueAPs) {
             try {
-                const storeManager = await this.getStoreManager(ap.StoreCode);
-                const areaManager = await this.getAreaManager(ap.StoreCode);
+                const storeManager = await this.getStoreManager(ap.StoreCode, ap.SchemaID);
+                const areaManager = await this.getAreaManager(ap.StoreCode, ap.SchemaID);
 
                 const templateData = {
                     storeName: ap.StoreName,
@@ -691,7 +736,7 @@ class EscalationJobService {
                 const actionPlans = await this.getActionPlansNeedingReminders(reminderDays);
                 
                 for (const ap of actionPlans) {
-                    const storeManager = await this.getStoreManager(ap.StoreCode);
+                    const storeManager = await this.getStoreManager(ap.StoreCode, ap.SchemaID);
                     
                     // Build template data
                     const templateData = {
@@ -740,8 +785,8 @@ class EscalationJobService {
                 const superAuditors = await this.getSuperAuditors();
 
                 for (const ap of overdueAPs) {
-                    const storeManager = await this.getStoreManager(ap.StoreCode);
-                    const areaManager = await this.getAreaManager(ap.StoreCode);
+                    const storeManager = await this.getStoreManager(ap.StoreCode, ap.SchemaID);
+                    const areaManager = await this.getAreaManager(ap.StoreCode, ap.SchemaID);
                     const auditCreator = await this.getAuditCreator(ap.DocumentNumber);
 
                     // Build template data
