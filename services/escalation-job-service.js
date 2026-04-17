@@ -438,6 +438,26 @@ class EscalationJobService {
         try {
             const token = await this.getSystemSenderToken(_isRetry);
             
+            // SECURITY: Verify token belongs to the correct system sender
+            const meResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!meResponse.ok) {
+                if (meResponse.status === 401 && !_isRetry) {
+                    console.log(`[EscalationJob] Got 401 on /me check, retrying with refreshed token...`);
+                    return await this.sendEmail(to, subject, htmlBody, ccRecipients, true);
+                }
+                return { success: false, error: `Token verification failed: ${meResponse.status}` };
+            }
+            
+            const meData = await meResponse.json();
+            const tokenOwner = (meData.mail || meData.userPrincipalName || '').toLowerCase();
+            
+            if (tokenOwner !== this.systemSenderEmail.toLowerCase()) {
+                console.error(`[EscalationJob] ❌ SENDER MISMATCH! Token belongs to ${tokenOwner}, expected ${this.systemSenderEmail}. Email NOT sent.`);
+                return { success: false, error: `Sender mismatch: token belongs to ${tokenOwner}, not ${this.systemSenderEmail}. Please re-login with appnotification account.` };
+            }
             // Use /me/sendMail endpoint with delegated permissions
             const endpoint = 'https://graph.microsoft.com/v1.0/me/sendMail';
             
