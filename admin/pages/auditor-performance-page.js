@@ -18,6 +18,7 @@ class AuditorPerformancePage {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auditor Performance - Food Safety Audit System</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
         * {
             margin: 0;
@@ -1000,6 +1001,9 @@ class AuditorPerformancePage {
         let sendTimeChart = null;
         let findingsAuditorChart = null;
 
+        // Register datalabels plugin
+        Chart.register(ChartDataLabels);
+
         // Data cache
         let perfData = null;
         let analyticsData = null;
@@ -1529,6 +1533,7 @@ class AuditorPerformancePage {
                     },
                     plugins: {
                         legend: { display: false },
+                        datalabels: { display: false },
                         annotation: {
                             annotations: {
                                 line1: {
@@ -1560,7 +1565,7 @@ class AuditorPerformancePage {
                         backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#6366f1', '#14b8a6']
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' }, datalabels: { display: false } } }
             });
         }
 
@@ -1626,7 +1631,7 @@ class AuditorPerformancePage {
                     scales: {
                         y: { 
                             min: 0, 
-                            max: 100, 
+                            max: 105, 
                             title: { display: true, text: 'Score (%)' }
                         },
                         x: { 
@@ -1642,6 +1647,20 @@ class AuditorPerformancePage {
                         legend: { 
                             display: true, 
                             position: 'top'
+                        },
+                        datalabels: {
+                            display: function(context) {
+                                return context.datasetIndex === 0;
+                            },
+                            anchor: 'end',
+                            align: 'top',
+                            color: function(context) {
+                                return context.dataset.backgroundColor[context.dataIndex];
+                            },
+                            font: { weight: 'bold', size: 11 },
+                            formatter: function(value) {
+                                return value ? value.toFixed(1) + '%' : '';
+                            }
                         },
                         tooltip: {
                             callbacks: {
@@ -1898,7 +1917,7 @@ class AuditorPerformancePage {
                             }
                         }
                     },
-                    plugins: { legend: { display: false } }
+                    plugins: { legend: { display: false }, datalabels: { display: false } }
                 }
             });
         }
@@ -2069,6 +2088,7 @@ class AuditorPerformancePage {
                         } 
                     },
                     plugins: { 
+                        datalabels: { display: false },
                         legend: { 
                             display: true,
                             position: 'top',
@@ -2248,7 +2268,7 @@ class AuditorPerformancePage {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: { y: { beginAtZero: true } },
-                    plugins: { legend: { display: false } }
+                    plugins: { legend: { display: false }, datalabels: { display: false } }
                 }
             });
         }
