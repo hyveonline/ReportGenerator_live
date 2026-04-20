@@ -824,10 +824,9 @@ class AuditorPerformancePage {
 
         <!-- Tabs Navigation -->
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('overview')">📊 Overview</button>
-            <button class="tab" onclick="switchTab('passFail')">✅ Pass/Fail Analysis</button>
+            <button class="tab active" onclick="switchTab('overview')">📊 Auditor Performance Overview</button>
             <button class="tab" onclick="switchTab('duration')">⏱️ Audit Duration</button>
-            <button class="tab" onclick="switchTab('sendTime')">📧 Report Send Time</button>
+            <button class="tab" onclick="switchTab('sendTime')">📧 Report Submission Time</button>
             <button class="tab" onclick="switchTab('findings')">🔍 Findings Analysis</button>
             <button class="tab" onclick="switchTab('settings')">⚙️ Settings</button>
         </div>
@@ -861,12 +860,7 @@ class AuditorPerformancePage {
                     <h2>📋 Auditor Performance Overview</h2>
                     <div id="auditorOverviewTable" class="data-table-container"></div>
                 </section>
-            </div>
-        </div>
 
-        <!-- Tab: Pass/Fail Analysis -->
-        <div id="tab-passFail" class="tab-content">
-            <div class="cards-grid">
                 <!-- Pass/Fail by Auditor -->
                 <section class="chart-card full-width">
                     <h2>✅ Pass/Fail by Auditor</h2>
@@ -1233,7 +1227,6 @@ class AuditorPerformancePage {
                 // Render all components
                 renderSummaryCards();
                 renderOverviewTab();
-                renderPassFailTab();
                 renderDurationTab();
                 renderSendTimeTab();
                 renderFindingsTab();
@@ -1418,6 +1411,8 @@ class AuditorPerformancePage {
             renderAuditsCountChart(auditors);
             renderScoreDistributionChart();
             renderAuditorOverviewTable();
+            renderPassFailByAuditorTable();
+            renderPassFailByBranchTable();
         }
 
         function renderAuditorOverviewTable() {
