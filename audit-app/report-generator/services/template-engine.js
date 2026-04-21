@@ -1398,7 +1398,7 @@ class TemplateEngine {
             
             const totalEarned = matchedSections.reduce((sum, s) => sum + (s.earnedScore || 0), 0);
             const totalMax = matchedSections.reduce((sum, s) => sum + (s.maxScore || 0), 0);
-            return totalMax > 0 ? Math.round((totalEarned / totalMax) * 100) : 0;
+            return totalMax > 0 ? parseFloat(((totalEarned / totalMax) * 100).toFixed(2)) : 0;
         };
 
         // Build chart data with categories first, then sections
