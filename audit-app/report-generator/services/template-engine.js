@@ -520,8 +520,8 @@ class TemplateEngine {
                                 <th>Section</th>
                                 <th>Category</th>
                                 <th>Unit</th>
-                                <th>Display (°C)</th>
-                                <th>Air Temperature</th>
+                                <th>Display Temperature °C</th>
+                                <th>Air Temperature °C</th>
                                 <th>Issue</th>
                                 <th>Picture</th>
                             </tr>
@@ -570,8 +570,8 @@ class TemplateEngine {
                                 <th>Section</th>
                                 <th>Category</th>
                                 <th>Unit</th>
-                                <th>Display (°C)</th>
-                                <th>Air Temperature</th>
+                                <th>Display Temperature °C</th>
+                                <th>Air Temperature °C</th>
                                 <th>Picture</th>
                             </tr>
                         </thead>
