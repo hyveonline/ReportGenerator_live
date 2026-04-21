@@ -1392,22 +1392,33 @@ class AnalyticsPage {
                 });
             });
 
-            // Add target line datasets (dashed horizontal line for each brand)
-            colorIndex = 0;
+            // Add target line datasets - group by passing grade
+            const gradeGroups = {};
             trendsByBrand.forEach(brand => {
-                const color = brandColors[brand.brand] || defaultColors[colorIndex % defaultColors.length];
-                colorIndex++;
+                const grade = brand.passingGrade;
+                if (!gradeGroups[grade]) gradeGroups[grade] = [];
+                gradeGroups[grade].push(brand.brand);
+            });
+
+            // One dashed line per unique passing grade
+            const targetColors = ['#64748b', '#e11d48', '#7c3aed', '#0891b2'];
+            let gradeIndex = 0;
+            Object.keys(gradeGroups).forEach(grade => {
+                const brands = gradeGroups[grade];
+                const color = targetColors[gradeIndex % targetColors.length];
+                gradeIndex++;
                 datasets.push({
-                    label: brand.brand + ' Target (' + brand.passingGrade + '%)',
-                    data: sortedPeriods.map(() => brand.passingGrade),
+                    label: 'Target ' + grade + '% (' + brands.join(', ') + ')',
+                    data: sortedPeriods.map(() => parseFloat(grade)),
                     type: 'line',
-                    borderColor: color.target || color.bar,
+                    borderColor: color,
                     borderDash: [8, 4],
                     borderWidth: 2,
                     pointRadius: 0,
                     fill: false,
                     tension: 0,
-                    order: 1
+                    order: 1,
+                    _isTarget: true
                 });
             });
 
@@ -1454,10 +1465,9 @@ class AnalyticsPage {
                                 generateLabels: function(chart) {
                                     const datasets = chart.data.datasets;
                                     return datasets.map((dataset, i) => {
-                                        const label = dataset.label || '';
-                                        const isTarget = label.includes('Target');
+                                        const isTarget = dataset._isTarget === true;
                                         return {
-                                            text: label,
+                                            text: dataset.label || '',
                                             fillStyle: isTarget ? 'transparent' : dataset.backgroundColor,
                                             strokeStyle: isTarget ? dataset.borderColor : dataset.borderColor,
                                             lineWidth: isTarget ? 2 : 1,
@@ -1492,7 +1502,7 @@ class AnalyticsPage {
                                     if (!context.parsed || context.parsed.y === null || context.parsed.y === undefined) {
                                         return label + ': No data';
                                     }
-                                    if (label.includes('Target')) {
+                                    if (context.dataset._isTarget) {
                                         return '🎯 ' + label;
                                     }
                                     const passingGrade = context.dataset.passingGrade || 87;
@@ -1504,8 +1514,7 @@ class AnalyticsPage {
                                     if (!tooltipItems) return [];
                                     // Find bars only (not target lines)
                                     const bars = tooltipItems.filter(item => {
-                                        const label = item.dataset.label || '';
-                                        return !label.includes('Target') && item.parsed && item.parsed.y !== null;
+                                        return !item.dataset._isTarget && item.parsed && item.parsed.y !== null;
                                     });
                                     if (bars.length > 1) {
                                         const scores = bars.map(b => b.parsed.y);
