@@ -270,7 +270,7 @@ class AnalyticsPage {
                 <div class="card-icon">📋</div>
                 <div class="card-content">
                     <h3 id="actionPlansSubmitted">-</h3>
-                    <p>Number of Action Plans Submitted</p>
+                    <p>Number of Action Plans Submitted out of the Total Audits</p>
                 </div>
             </div>
             <div class="summary-card clickable" onclick="showUnsolvedActionPlans()" title="Click to view unsolved items">
@@ -283,7 +283,7 @@ class AnalyticsPage {
             </div>
             ${canSeeReviewedCard ? `
             <div class="summary-card reviewed clickable" onclick="showReviewedActionPlans()" title="Click to view reviewed action plans">
-                <div class="card-icon">✅</div>
+                <div class="card-icon">📝</div>
                 <div class="card-content">
                     <h3 id="actionPlansReviewed">-</h3>
                     <p>Action Plans Reviewed</p>
@@ -1588,6 +1588,7 @@ class AnalyticsPage {
             if (!failingBranches || failingBranches.length === 0) {
                 failingContainer.innerHTML = '<p class="no-data">No failing branches found 🎉</p>';
             } else {
+                const sortedFailing = [...failingBranches].sort((a, b) => b.avgScore - a.avgScore);
                 failingContainer.innerHTML = \`
                     <table class="data-table compact">
                         <thead>
@@ -1599,7 +1600,7 @@ class AnalyticsPage {
                             </tr>
                         </thead>
                         <tbody>
-                            \${failingBranches.map(b => \`
+                            \${sortedFailing.map(b => \`
                                 <tr>
                                     <td>\${b.storeName}</td>
                                     <td><span class="scheme-badge">\${b.brand || '-'}</span></td>
