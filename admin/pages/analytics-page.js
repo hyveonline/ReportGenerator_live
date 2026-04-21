@@ -1670,7 +1670,7 @@ class AnalyticsPage {
             // Sort by average score (weakest first)
             const sorted = [...categories].sort((a, b) => a.avgScore - b.avgScore);
             
-            const labels = sorted.map(c => c.categoryName + ' (' + c.schemaName + ')');
+            const labels = sorted.map(c => c.categoryName);
             const scores = sorted.map(c => c.avgScore);
             const colors = scores.map(s => s >= 83 ? '#10b981' : '#ef4444');
             
