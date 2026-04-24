@@ -696,6 +696,16 @@
             box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
         }
 
+        .action-btn.edit-date {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 10px 12px;
+        }
+
+        .action-btn.edit-date:hover {
+            background: #fde68a;
+        }
+
         .action-btn.delete {
             background: #fee2e2;
             color: #991b1b;
@@ -704,6 +714,81 @@
 
         .action-btn.delete:hover {
             background: #fecaca;
+        }
+
+        /* Edit Date Modal */
+        .edit-date-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9998;
+            justify-content: center;
+            align-items: center;
+        }
+        .edit-date-modal-overlay.active {
+            display: flex;
+        }
+        .edit-date-modal {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            width: 400px;
+            max-width: 90vw;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .edit-date-modal h3 {
+            margin: 0 0 8px 0;
+            color: #1e293b;
+        }
+        .edit-date-modal .doc-number {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        .edit-date-modal label {
+            font-weight: 600;
+            color: #334155;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .edit-date-modal input[type="date"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        .edit-date-modal input[type="date"]:focus {
+            border-color: #3b82f6;
+            outline: none;
+        }
+        .edit-date-modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+        .edit-date-modal-actions button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .edit-date-modal-actions .cancel-btn {
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .edit-date-modal-actions .save-btn {
+            background: #3b82f6;
+            color: white;
+        }
+        .edit-date-modal-actions .save-btn:hover {
+            background: #2563eb;
         }
 
         .action-btn.reaudit {
@@ -1870,6 +1955,13 @@
                     </div>
                 ` : '';
                 
+                // Edit date button for Admin only on completed audits
+                const editDateHtml = (currentUserRole === 'Admin') ? `
+                    <button class="action-btn edit-date" onclick="openEditDateModal(${audit.AuditID}, '${audit.DocumentNumber}', '${audit.AuditDate ? audit.AuditDate.substring(0,10) : ''}', '${audit.TimeIn || ''}', '${audit.TimeOut || ''}'); event.stopPropagation();" title="Edit Date & Time">
+                        📅
+                    </button>
+                ` : '';
+
                 // Delete button for Admin/SuperAuditor only on completed audits
                 const deleteCompletedHtml = (currentUserRole === 'Admin' || currentUserRole === 'SuperAuditor') ? `
                     <button class="action-btn delete" onclick="deleteCompletedAudit(${audit.AuditID}, '${audit.DocumentNumber}'); event.stopPropagation();" title="Delete Audit">
@@ -1903,6 +1995,7 @@
                     </button>
                     ${deptReportsHtml}
                     ${reauditHtml}
+                    ${editDateHtml}
                     ${deleteCompletedHtml}
                 `;
             } else {
@@ -2865,6 +2958,77 @@
         loadUnreadCount();
         // Refresh count every 30 seconds
         setInterval(loadUnreadCount, 30000);
+    </script>
+
+    <!-- Edit Date/Time Modal -->
+    <div id="editDateModalOverlay" class="edit-date-modal-overlay" onclick="if(event.target===this) closeEditDateModal()">
+        <div class="edit-date-modal">
+            <h3>📅 Edit Audit Date & Time</h3>
+            <div class="doc-number" id="editDateDocNumber"></div>
+            <label for="editDateInput">Audit Date</label>
+            <input type="date" id="editDateInput" />
+            <div style="display: flex; gap: 12px; margin-top: 14px;">
+                <div style="flex: 1;">
+                    <label for="editTimeInInput">Time In</label>
+                    <input type="time" id="editTimeInInput" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 1rem; box-sizing: border-box;" />
+                </div>
+                <div style="flex: 1;">
+                    <label for="editTimeOutInput">Time Out</label>
+                    <input type="time" id="editTimeOutInput" style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 1rem; box-sizing: border-box;" />
+                </div>
+            </div>
+            <input type="hidden" id="editDateAuditId" />
+            <div class="edit-date-modal-actions">
+                <button class="cancel-btn" onclick="closeEditDateModal()">Cancel</button>
+                <button class="save-btn" onclick="saveEditDate()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openEditDateModal(auditId, documentNumber, currentDate, timeIn, timeOut) {
+            document.getElementById('editDateAuditId').value = auditId;
+            document.getElementById('editDateDocNumber').textContent = documentNumber;
+            document.getElementById('editDateInput').value = currentDate;
+            document.getElementById('editTimeInInput').value = timeIn || '';
+            document.getElementById('editTimeOutInput').value = timeOut || '';
+            document.getElementById('editDateModalOverlay').classList.add('active');
+        }
+
+        function closeEditDateModal() {
+            document.getElementById('editDateModalOverlay').classList.remove('active');
+        }
+
+        async function saveEditDate() {
+            const auditId = document.getElementById('editDateAuditId').value;
+            const newDate = document.getElementById('editDateInput').value;
+            const timeIn = document.getElementById('editTimeInInput').value;
+            const timeOut = document.getElementById('editTimeOutInput').value;
+            const docNumber = document.getElementById('editDateDocNumber').textContent;
+
+            if (!newDate) {
+                alert('Please select a date.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/audits/${auditId}/date`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auditDate: newDate, timeIn: timeIn, timeOut: timeOut })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to update');
+
+                alert(`Audit ${docNumber} updated successfully.`);
+                closeEditDateModal();
+                await loadAudits();
+            } catch (error) {
+                console.error('Error updating audit:', error);
+                alert('Failed to update: ' + error.message);
+            }
+        }
     </script>
 </body>
 </html>

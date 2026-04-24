@@ -933,6 +933,8 @@ class AuditService {
                     a.SchemaID,
                     s.SchemaName,
                     a.AuditDate,
+                    a.TimeIn,
+                    a.TimeOut,
                     a.Cycle AS AuditCycle,
                     a.Year AS AuditYear,
                     cd.CycleName AS AuditCycleName,

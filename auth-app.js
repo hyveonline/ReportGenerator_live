@@ -8930,6 +8930,74 @@ app.get('/api/storage/stats', requireAuth, requireRole('Admin'), async (req, res
     }
 });
 
+// Update audit date/time (Admin only)
+app.patch('/api/audits/:auditId/date', requireAuth, requireRole('Admin'), async (req, res) => {
+    try {
+        const sql = require('mssql');
+        const dbConfig = require('./config/default').database;
+        const auditId = parseInt(req.params.auditId);
+        const { auditDate, timeIn, timeOut } = req.body;
+
+        if (!auditDate) {
+            return res.status(400).json({ success: false, error: 'Audit date is required' });
+        }
+
+        // Validate date format
+        const parsedDate = new Date(auditDate);
+        if (isNaN(parsedDate.getTime())) {
+            return res.status(400).json({ success: false, error: 'Invalid date format' });
+        }
+
+        // Validate time format (HH:MM)
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+        if (timeIn && !timeRegex.test(timeIn)) {
+            return res.status(400).json({ success: false, error: 'Invalid Time In format (use HH:MM)' });
+        }
+        if (timeOut && !timeRegex.test(timeOut)) {
+            return res.status(400).json({ success: false, error: 'Invalid Time Out format (use HH:MM)' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+
+        // Verify audit exists
+        const auditCheck = await pool.request()
+            .input('auditId', sql.Int, auditId)
+            .query('SELECT AuditID, DocumentNumber, AuditDate, TimeIn, TimeOut FROM AuditInstances WHERE AuditID = @auditId');
+
+        if (auditCheck.recordset.length === 0) {
+            return res.status(404).json({ success: false, error: 'Audit not found' });
+        }
+
+        const old = auditCheck.recordset[0];
+        const docNumber = old.DocumentNumber;
+
+        // Build dynamic update
+        const request = pool.request()
+            .input('auditId', sql.Int, auditId)
+            .input('auditDate', sql.Date, parsedDate);
+
+        let setClauses = ['AuditDate = @auditDate'];
+
+        if (timeIn !== undefined) {
+            request.input('timeIn', sql.NVarChar, timeIn || null);
+            setClauses.push('TimeIn = @timeIn');
+        }
+        if (timeOut !== undefined) {
+            request.input('timeOut', sql.NVarChar, timeOut || null);
+            setClauses.push('TimeOut = @timeOut');
+        }
+
+        await request.query(`UPDATE AuditInstances SET ${setClauses.join(', ')} WHERE AuditID = @auditId`);
+
+        console.log(`[EDIT AUDIT] User ${req.currentUser.email} updated ${docNumber}: Date ${old.AuditDate} -> ${auditDate}, TimeIn ${old.TimeIn} -> ${timeIn || 'unchanged'}, TimeOut ${old.TimeOut} -> ${timeOut || 'unchanged'}`);
+
+        res.json({ success: true, message: 'Audit updated successfully', documentNumber: docNumber });
+    } catch (error) {
+        console.error('Error updating audit date:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Delete audit (Admin and SuperAuditor only)
 app.delete('/api/audits/:auditId', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
     try {
