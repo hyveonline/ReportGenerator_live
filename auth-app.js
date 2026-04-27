@@ -2604,44 +2604,20 @@ app.get('/api/admin/head-of-operations', requireAuth, requireRole('Admin', 'Supe
         const pool = await sql.connect(dbConfig);
         
         const result = await pool.request().query(`
-            SELECT DISTINCT u.id, u.display_name, u.email
+            SELECT DISTINCT u.id, u.display_name, u.email, u.role
             FROM Users u
-            WHERE u.role = 'HeadOfOperations' AND u.is_active = 1
-            ORDER BY u.display_name
+            WHERE u.role IN ('HeadOfOperations', 'AreaManager') AND u.is_active = 1
+            ORDER BY u.role, u.display_name
         `);
         
         res.json(result.recordset.map(r => ({
             id: r.id,
             displayName: r.display_name,
-            email: r.email
+            email: r.email,
+            role: r.role
         })));
     } catch (error) {
-        console.error('Error getting head of operations:', error);
-        res.status(500).json([]);
-    }
-});
-
-// Get Area Managers for analytics filter
-app.get('/api/admin/area-managers', requireAuth, requireRole('Admin', 'SuperAuditor'), async (req, res) => {
-    try {
-        const sql = require('mssql');
-        const dbConfig = require('./config/default').database;
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request().query(`
-            SELECT DISTINCT u.id, u.display_name, u.email
-            FROM Users u
-            WHERE u.role = 'AreaManager' AND u.is_active = 1
-            ORDER BY u.display_name
-        `);
-        
-        res.json(result.recordset.map(r => ({
-            id: r.id,
-            displayName: r.display_name,
-            email: r.email
-        })));
-    } catch (error) {
-        console.error('Error getting area managers:', error);
+        console.error('Error getting management users:', error);
         res.status(500).json([]);
     }
 });
@@ -2670,7 +2646,7 @@ app.get('/api/admin/auditors', requireAuth, requireRole('Admin', 'SuperAuditor')
 
 // Shared helper: Build WHERE clause from analytics filter query params
 function buildAnalyticsWhereClause(query, passingThreshold) {
-    const { countries, brands, storeIds, headOfOpsIds, areaManagerIds, auditors, results, years, months, cycles } = query;
+    const { countries, brands, storeIds, managementIds, headOfOpsIds, areaManagerIds, auditors, results, years, months, cycles } = query;
     let whereClause = "WHERE ai.Status = 'Completed'";
     
     if (countries && countries.trim()) {
@@ -2685,9 +2661,14 @@ function buildAnalyticsWhereClause(query, passingThreshold) {
         const storeIdArray = storeIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
         if (storeIdArray.length > 0) whereClause += ` AND ai.StoreID IN (${storeIdArray.join(',')})`;
     }
-    if (headOfOpsIds && headOfOpsIds.trim()) {
-        const hopIdArray = headOfOpsIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
-        if (hopIdArray.length > 0) whereClause += ` AND s.Brand IN (SELECT Brand FROM UserBrandAssignments WHERE UserID IN (${hopIdArray.join(',')}))`;
+    // Management filter (combined Head of Operations + Area Managers)
+    const mgmtIds = managementIds || headOfOpsIds;
+    if (mgmtIds && mgmtIds.trim()) {
+        const mgmtIdArray = mgmtIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
+        if (mgmtIdArray.length > 0) {
+            whereClause += ` AND (s.Brand IN (SELECT Brand FROM UserBrandAssignments WHERE UserID IN (${mgmtIdArray.join(',')}))`;
+            whereClause += ` OR ai.StoreID IN (SELECT StoreID FROM UserAreaAssignments WHERE UserID IN (${mgmtIdArray.join(',')})))`;
+        }
     }
     if (areaManagerIds && areaManagerIds.trim()) {
         const amIdArray = areaManagerIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
@@ -2726,10 +2707,10 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
         const dbConfig = require('./config/default').database;
         const pool = await sql.connect(dbConfig);
         
-        const { countries, brands, storeIds, headOfOpsIds, areaManagerIds, results, years, months, cycles } = req.query;
+        const { countries, brands, storeIds, managementIds, headOfOpsIds, results, years, months, cycles } = req.query;
         
         // Debug: Log received filters
-        console.log('📊 [Analytics] Filters received:', { countries, brands, storeIds, headOfOpsIds, areaManagerIds, results, years, months, cycles });
+        console.log('📊 [Analytics] Filters received:', { countries, brands, storeIds, managementIds, results, years, months, cycles });
         
         // Get dynamic threshold for passing score from SystemSettings
         let passingThreshold = 87; // default
@@ -2774,19 +2755,13 @@ app.get('/api/admin/analytics', requireAuth, requireRole('Admin', 'SuperAuditor'
             }
         }
         
-        // Handle Head of Operations filter - get stores in their assigned brands
-        if (headOfOpsIds && headOfOpsIds.trim()) {
-            const hopIdArray = headOfOpsIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
-            if (hopIdArray.length > 0) {
-                whereClause += ` AND s.Brand IN (SELECT Brand FROM UserBrandAssignments WHERE UserID IN (${hopIdArray.join(',')}))`;
-            }
-        }
-        
-        // Handle Area Manager filter - get stores they manage
-        if (areaManagerIds && areaManagerIds.trim()) {
-            const amIdArray = areaManagerIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
-            if (amIdArray.length > 0) {
-                whereClause += ` AND ai.StoreID IN (SELECT StoreID FROM UserAreaAssignments WHERE UserID IN (${amIdArray.join(',')}))`;
+        // Handle Management filter (combined Head of Operations + Area Managers)
+        const mgmtIds = managementIds || headOfOpsIds;
+        if (mgmtIds && mgmtIds.trim()) {
+            const mgmtIdArray = mgmtIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id) && id > 0);
+            if (mgmtIdArray.length > 0) {
+                whereClause += ` AND (s.Brand IN (SELECT Brand FROM UserBrandAssignments WHERE UserID IN (${mgmtIdArray.join(',')}))`;
+                whereClause += ` OR ai.StoreID IN (SELECT StoreID FROM UserAreaAssignments WHERE UserID IN (${mgmtIdArray.join(',')})))`;
             }
         }
         

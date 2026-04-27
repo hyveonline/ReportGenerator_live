@@ -124,18 +124,6 @@ class AnalyticsPage {
             </div>
             <div class="filter-row">
                 <div class="filter-group">
-                    <label>Area Managers:</label>
-                    <div class="multi-select-dropdown" id="areaManagerDropdown">
-                        <div class="multi-select-header" onclick="toggleDropdown('areaManagerDropdown')">
-                            <span class="selected-text">All Area Managers</span>
-                            <span class="dropdown-arrow">▼</span>
-                        </div>
-                        <div class="multi-select-options" id="areaManagerOptions">
-                            <!-- Options populated dynamically -->
-                        </div>
-                    </div>
-                </div>
-                <div class="filter-group">
                     <label>Year:</label>
                     <div class="multi-select-dropdown" id="yearDropdown">
                         <div class="multi-select-header" onclick="toggleDropdown('yearDropdown')">
@@ -834,8 +822,7 @@ class AnalyticsPage {
 
         // Global store list for filtering
         let allStores = [];
-        let allHeadOfOps = [];
-        let allAreaManagers = [];
+        let allManagement = [];
 
         // Initialize filter dropdowns
         async function initFilters() {
@@ -875,26 +862,15 @@ class AnalyticsPage {
                     console.error('Failed to load stores:', await storesResponse.text());
                 }
 
-                // Load Head of Operations
+                // Load Management (Head of Operations + Area Managers)
                 try {
-                    const headOfOpsResponse = await fetch('/api/admin/head-of-operations');
-                    if (headOfOpsResponse.ok) {
-                        allHeadOfOps = await headOfOpsResponse.json();
-                        populateHeadOfOpsDropdown(allHeadOfOps);
+                    const managementResponse = await fetch('/api/admin/head-of-operations');
+                    if (managementResponse.ok) {
+                        allManagement = await managementResponse.json();
+                        populateManagementDropdown(allManagement);
                     }
                 } catch (e) {
-                    console.warn('Could not load Head of Operations:', e);
-                }
-
-                // Load Area Managers
-                try {
-                    const areaManagersResponse = await fetch('/api/admin/area-managers');
-                    if (areaManagersResponse.ok) {
-                        allAreaManagers = await areaManagersResponse.json();
-                        populateAreaManagerDropdown(allAreaManagers);
-                    }
-                } catch (e) {
-                    console.warn('Could not load Area Managers:', e);
+                    console.warn('Could not load Management:', e);
                 }
 
                 // Load Cycles from cycle management
@@ -983,38 +959,23 @@ class AnalyticsPage {
             updateDropdownText('cycleDropdown');
         }
 
-        // Populate Head of Operations dropdown
-        function populateHeadOfOpsDropdown(headOfOps) {
+        // Populate Management dropdown (Head of Operations + Area Managers)
+        function populateManagementDropdown(management) {
             const options = document.getElementById('headOfOpsOptions');
             options.innerHTML = '';
-            headOfOps.forEach(person => {
+            management.forEach(person => {
                 const label = document.createElement('label');
                 label.className = 'checkbox-option';
                 const name = person.display_name || person.displayName || person.name || 'Unknown';
                 const id = person.id || person.user_id || person.userId;
+                const role = person.role || 'HeadOfOperations';
+                const roleTag = role === 'AreaManager' ? 'AM' : 'HoO';
                 label.innerHTML = \`
-                    <input type="checkbox" value="\${id}" onchange="updateDropdownText('headOfOpsDropdown'); refreshAnalytics()"> \${name}
+                    <input type="checkbox" value="\${id}" onchange="updateDropdownText('headOfOpsDropdown'); refreshAnalytics()"> \${name} <span style="color:#94a3b8;font-size:0.8em;">(\${roleTag})</span>
                 \`;
                 options.appendChild(label);
             });
             updateDropdownText('headOfOpsDropdown');
-        }
-
-        // Populate Area Manager dropdown
-        function populateAreaManagerDropdown(areaManagers) {
-            const options = document.getElementById('areaManagerOptions');
-            options.innerHTML = '';
-            areaManagers.forEach(person => {
-                const label = document.createElement('label');
-                label.className = 'checkbox-option';
-                const name = person.display_name || person.displayName || person.name || 'Unknown';
-                const id = person.id || person.user_id || person.userId;
-                label.innerHTML = \`
-                    <input type="checkbox" value="\${id}" onchange="updateDropdownText('areaManagerDropdown'); refreshAnalytics()"> \${name}
-                \`;
-                options.appendChild(label);
-            });
-            updateDropdownText('areaManagerDropdown');
         }
 
         // Populate store dropdown with filtered stores
@@ -1080,7 +1041,7 @@ class AnalyticsPage {
             });
             
             // Reset dropdown texts
-            ['countryDropdown', 'schemeDropdown', 'storeDropdown', 'headOfOpsDropdown', 'areaManagerDropdown', 
+            ['countryDropdown', 'schemeDropdown', 'storeDropdown', 'headOfOpsDropdown', 
              'resultDropdown', 'yearDropdown', 'monthDropdown', 'cycleDropdown'].forEach(id => {
                 updateDropdownText(id);
             });
@@ -1105,13 +1066,9 @@ class AnalyticsPage {
             const storeCheckboxes = document.querySelectorAll('#storeOptions input[type="checkbox"]:checked');
             const selectedStores = Array.from(storeCheckboxes).map(cb => cb.value);
             
-            // Get multiple selected Head of Operations
-            const headOfOpsCheckboxes = document.querySelectorAll('#headOfOpsOptions input[type="checkbox"]:checked');
-            const selectedHeadOfOps = Array.from(headOfOpsCheckboxes).map(cb => cb.value);
-            
-            // Get multiple selected Area Managers
-            const areaManagerCheckboxes = document.querySelectorAll('#areaManagerOptions input[type="checkbox"]:checked');
-            const selectedAreaManagers = Array.from(areaManagerCheckboxes).map(cb => cb.value);
+            // Get multiple selected Management (Head of Operations + Area Managers)
+            const managementCheckboxes = document.querySelectorAll('#headOfOpsOptions input[type="checkbox"]:checked');
+            const selectedManagement = Array.from(managementCheckboxes).map(cb => cb.value);
             
             // Get multiple selected results
             const resultCheckboxes = document.querySelectorAll('#resultOptions input[type="checkbox"]:checked');
@@ -1133,8 +1090,7 @@ class AnalyticsPage {
                 countries: selectedCountries.join(','),
                 brands: selectedSchemes.join(','),  // API still uses 'brands' param
                 storeIds: selectedStores.join(','),
-                headOfOpsIds: selectedHeadOfOps.join(','),
-                areaManagerIds: selectedAreaManagers.join(','),
+                managementIds: selectedManagement.join(','),
                 results: selectedResults.join(','),
                 years: selectedYears.join(','),
                 months: selectedMonths.join(','),
@@ -1169,8 +1125,7 @@ class AnalyticsPage {
                 'countryDropdown': 'All Countries',
                 'schemeDropdown': 'All Schemes',
                 'storeDropdown': 'All Stores',
-                'headOfOpsDropdown': 'All Head of Ops',
-                'areaManagerDropdown': 'All Area Managers',
+                'headOfOpsDropdown': 'All Management',
                 'resultDropdown': 'All Results',
                 'yearDropdown': 'All Years',
                 'monthDropdown': 'All Months',
